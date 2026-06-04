@@ -141,6 +141,18 @@
         - `matchedCodeAssistantOfflineCount=0`
         - `matchedStreamCodeAssistantOfflineGenerationCount=0`
       - 因此这次 live probe 证明历史登录态已经失效，不能把 live steady-state 任务勾选完成
+      - 随后在 heavy-task lease 下又尝试旧 object store 中剩余三份历史 AIStudio `storage-state.json`：
+        - `historical-aistudio-web-live-account-a-cdp`
+        - `historical-aistudio-web-live-account-b-cdp`
+        - `historical-aistudio-web-live-cookie-refresh`
+      - 三份历史状态的 probe 结果同样为 `ok=false`：
+        - account A / account B 均跳转到 Google account chooser
+        - cookie-refresh 进入 Google challenge
+        - 三者均只捕获到 `ActiveTrigger`
+        - 三者均为 `capturedTargetRpcContract=false`
+        - 三者均为 `matchedCodeAssistantOfflineCount=0`
+        - 三者均为 `matchedStreamCodeAssistantOfflineGenerationCount=0`
+      - 因此当前仓内和旧 `NeuroPlatform` runtime 中未发现可复用的 AIStudio 已登录态
       - 下一轮需要刷新可用 AIStudio 登录态 / browser profile 后重跑同一 probe，直到捕获
         `CodeAssistantOffline` 与 `StreamCodeAssistantOfflineGeneration` 双 RPC
 - 当前明确不在做的内容：

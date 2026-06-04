@@ -212,6 +212,24 @@
   - 归档文件：
     - `.runtime/aistudio-live-probe/phase3-20260604-continue/summary.json`
     - `.runtime/aistudio-live-probe/phase3-20260604-continue/target-rpc-summary.json`
+  - 随后在 heavy-task lease 下又尝试旧 object store 中剩余三份历史 AIStudio
+    `storage-state.json`：
+    - `historical-aistudio-web-live-account-a-cdp`
+      - 归档目录：`.runtime/aistudio-live-probe/phase3-20260604-historical-historical-aistudio-web-live-account-a-cdp`
+      - 最终跳转到 Google account chooser
+    - `historical-aistudio-web-live-account-b-cdp`
+      - 归档目录：`.runtime/aistudio-live-probe/phase3-20260604-historical-historical-aistudio-web-live-account-b-cdp`
+      - 最终跳转到 Google account chooser
+    - `historical-aistudio-web-live-cookie-refresh`
+      - 归档目录：`.runtime/aistudio-live-probe/phase3-20260604-historical-historical-aistudio-web-live-cookie-refresh`
+      - 最终进入 Google challenge
+  - 三份历史状态的 probe 结果同样为 `ok=false`
+  - 三份历史状态均只捕获到 `ActiveTrigger`
+  - 三份历史状态均未捕获目标双 RPC 合同：
+    - `capturedTargetRpcContract=false`
+    - `matchedCodeAssistantOfflineCount=0`
+    - `matchedStreamCodeAssistantOfflineGenerationCount=0`
+  - 因此当前仓内和旧 `NeuroPlatform` runtime 中未发现可复用的 AIStudio 已登录态
 
 因此当前不能把 live steady-state 任务勾选完成。下一轮需要先刷新可用
 AIStudio 登录态 / browser profile，再重跑同一 probe，直到捕获
