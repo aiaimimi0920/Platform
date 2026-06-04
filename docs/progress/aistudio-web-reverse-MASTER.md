@@ -122,7 +122,8 @@
     - 未抓全 target contract 时，stdout summary 仍会给出
       `targetRpcSummaryPath` 与 `normalizedTargetRpcContractPath`
     - `capturedTargetRpcContract=true` 必须同时捕获 `CodeAssistantOffline`
-      与 `StreamCodeAssistantOfflineGeneration`，单个目标 RPC 不再算完整合同
+      与 `StreamCodeAssistantOfflineGeneration` 的 request + response pair，
+      单个目标 RPC 或只有 request 的半截 RPC 不再算完整合同
     - 当前脚本测试覆盖 `Gateway/scripts/tests/*.test.mjs = 20 passed` 与
       `Gateway/tests/python = 7 passed`
   - `text / stream/tools` 当前已统一走 `generateContent request plan -> browser request spec` 抽象
