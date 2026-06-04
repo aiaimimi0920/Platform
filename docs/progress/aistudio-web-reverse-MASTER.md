@@ -113,6 +113,13 @@
     - `capture_contract`
     - `pure_http_material`
     - 从 `storage-state + sidecar contract + cloudApiKey` 组装 AIStudio pure-http 发送材料
+  - live probe/capture plumbing 已继续硬化：
+    - 失败路径不再直接 `process.exit(...)`，避免绕过 `finally` 清理
+    - `captureDir` 已知后的失败会稳定写出 `summary.json`、`target-rpc-summary.json`
+      与 `normalized-target-rpc-contract.json`
+    - 显式 `captureDir` 下的输入校验失败也会留下同一组诊断 artifact
+    - 当前脚本测试覆盖 `Gateway/scripts/tests/*.test.mjs = 17 passed` 与
+      `Gateway/tests/python = 7 passed`
   - `text / stream/tools` 当前已统一走 `generateContent request plan -> browser request spec` 抽象
   - 一般文本热路径代码侧默认已提升为 `CodeAssistantOffline -> StreamCodeAssistantOfflineGeneration` program-owned pure-http first：
     - 不再需要 `AISTUDIO_PROGRAM_OWNED_TEXT_HTTP_FIRST`

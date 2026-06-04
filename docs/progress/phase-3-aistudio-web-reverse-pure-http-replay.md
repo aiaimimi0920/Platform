@@ -127,11 +127,19 @@
     - `01-code_assistant_offline.json`
     - `02-stream_code_assistant_offline_generation.json`
     - 以及更多 numbered pair files
+  - 若在 `captureDir` 已知后失败，会稳定输出：
+    - `summary.json`
+    - `target-rpc-summary.json`
+    - `normalized-target-rpc-contract.json`
+    - stdout JSON 与 `summary.json` 保持一致
+  - 若调用方显式传入 `captureDir`，即使输入校验提前失败，也会落同一组诊断 artifact
+  - 失败路径不再直接 `process.exit(...)`，而是设置 `process.exitCode`，避免绕过 `finally` 清理浏览器 / context / local websocket server
 
 当前作用：
 
 - 把 `ActiveTrigger` 之类噪音请求和目标双 RPC 合同显式区分
 - 为下一轮一般文本 replay 提供真实 request/response 样本
+- 防止 live sweep 中途失败时留下空归档目录或缺少目标 RPC 空摘要
 - 已把归一化合同 mirror 到 object storage sidecar：
   - `aistudio-target-rpc-contract.json`
 - 不再把“只抓到普通 AI Studio 流量”误报成“已经抓到 steady-state 文本合同”
@@ -170,6 +178,9 @@
 - `CARGO_TARGET_DIR=C:\t\cargo-aistudio-phase3-default cargo test --manifest-path Gateway/Cargo.toml aistudio -- --nocapture`
 - `CARGO_TARGET_DIR=C:\t\cargo-aistudio-phase3-default cargo check --manifest-path Gateway/Cargo.toml`
 - `node --check Gateway/scripts/probe-aistudio-live-request.mjs`
+- `node --test Gateway/scripts/tests/probe-aistudio-live-request.test.mjs`
+- `node --test Gateway/scripts/tests/*.test.mjs`
+- `python -m unittest discover -s Gateway/tests/python -p "test_*.py" -v`
 - `node Gateway/scripts/probe-aistudio-live-request.mjs` with:
   - `runtimeStateObjectKey=credential-runtime/aistudio-web-live-account-a-cdp-refresh-20260515-v1/storage-state.json`
   - `captureDir=.runtime/aistudio-live-probe/phase3-20260604-continue`
@@ -194,6 +205,14 @@
   - `pure_http_material`
   - 默认 `program-owned pure-http first` 代码路径
 - probe 脚本语法检查已通过，capture plumbing 改动未引入 JS 语法错误
+- probe 脚本测试当前覆盖：
+  - 失败路径不直接调用 `process.exit(...)`
+  - `captureDir` 已知后的失败会写 `summary.json`
+  - 失败路径会同时写 `target-rpc-summary.json` 与
+    `normalized-target-rpc-contract.json`
+  - 显式 `captureDir` 下的输入校验失败也会留下同一组诊断 artifact
+  - `Gateway/scripts/tests/*.test.mjs` 当前为 `17 passed`
+  - `Gateway/tests/python` 当前为 `7 passed`
 - 已尝试补 live steady-state 证据：
   - 从旧 `NeuroPlatform/.runtime/ai-gateway-objects` 只读复制历史
     `storage-state.json` 到当前 `Neuro/.runtime/ai-gateway-objects`
