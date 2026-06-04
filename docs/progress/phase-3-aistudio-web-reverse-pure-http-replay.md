@@ -230,6 +230,42 @@
     - `matchedCodeAssistantOfflineCount=0`
     - `matchedStreamCodeAssistantOfflineGenerationCount=0`
   - 因此当前仓内和旧 `NeuroPlatform` runtime 中未发现可复用的 AIStudio 已登录态
+  - 2026-06-05 又补做本机浏览器 profile sweep，全部只使用 `.runtime`
+    下的隔离复制件，不直接改动 live Chrome / Edge profile：
+    - Edge `Default` live profile copy 因 `Network\Cookies` / `Sessions`
+      被运行中的 Edge 锁定，不能作为有效登录态证据继续使用
+    - Chrome active `Profile` 复制件：
+      - 归档目录：`.runtime/aistudio-live-probe/phase3-20260605-chrome-active-profile-copy`
+      - `ok=false`
+      - 最终跳转到 Google sign-in identifier
+      - 只捕获到 `ActiveTrigger`
+      - `capturedTargetRpcContract=false`
+      - `matchedCodeAssistantOfflineCount=0`
+      - `matchedStreamCodeAssistantOfflineGenerationCount=0`
+    - Chrome `Default` 复制件：
+      - 归档目录：`.runtime/aistudio-live-probe/phase3-20260605-chrome-default-profile-copy`
+      - `ok=false`
+      - 最终跳转到 Google sign-in identifier
+      - 只捕获到 `ActiveTrigger`
+      - `capturedTargetRpcContract=false`
+      - `matchedCodeAssistantOfflineCount=0`
+      - `matchedStreamCodeAssistantOfflineGenerationCount=0`
+    - Chrome `Profile 2` 复制件：
+      - 归档目录：`.runtime/aistudio-live-probe/phase3-20260605-chrome-profile-2-copy`
+      - `ok=false`
+      - 最终跳转到 Google sign-in identifier
+      - 只捕获到 `ActiveTrigger`
+      - `capturedTargetRpcContract=false`
+      - `matchedCodeAssistantOfflineCount=0`
+      - `matchedStreamCodeAssistantOfflineGenerationCount=0`
+    - Chrome `Profile 1` 复制件：
+      - 归档目录：`.runtime/aistudio-live-probe/phase3-20260605-chrome-profile-1-copy-debug`
+      - 未生成 target summary
+      - `stdout.log` 记录 `page.goto: net::ERR_SOCKET_NOT_CONNECTED`
+      - 也未产生 `CodeAssistantOffline` / `StreamCodeAssistantOfflineGeneration`
+        捕获证据
+  - 因此当前仓内、旧 `NeuroPlatform` runtime、本机可安全复制的 Chrome
+    profile 中，仍未发现可复用的 AIStudio 已登录态 / target RPC capture source
 
 因此当前不能把 live steady-state 任务勾选完成。下一轮需要先刷新可用
 AIStudio 登录态 / browser profile，再重跑同一 probe，直到捕获
