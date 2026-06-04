@@ -106,6 +106,15 @@ describe("monorepo structure", () => {
     }
   });
 
+  it("keeps root runtime capture artifacts local", () => {
+    const gitignorePath = join(rootDir, "..", ".gitignore");
+    const contents = readFileSync(gitignorePath, "utf8");
+    assert(
+      /^\/\.runtime\/$/m.test(contents),
+      "root .runtime capture artifacts must stay ignored and local",
+    );
+  });
+
   it("keeps Platform-local operational helper entrypoints", () => {
     const helperPaths = [
       "deploy/claim-heavy-task.ps1",

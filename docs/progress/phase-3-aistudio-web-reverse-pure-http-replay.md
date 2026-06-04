@@ -170,10 +170,14 @@
 - `CARGO_TARGET_DIR=C:\t\cargo-aistudio-phase3-default cargo test --manifest-path Gateway/Cargo.toml aistudio -- --nocapture`
 - `CARGO_TARGET_DIR=C:\t\cargo-aistudio-phase3-default cargo check --manifest-path Gateway/Cargo.toml`
 - `node --check Gateway/scripts/probe-aistudio-live-request.mjs`
+- `node Gateway/scripts/probe-aistudio-live-request.mjs` with:
+  - `runtimeStateObjectKey=credential-runtime/aistudio-web-live-account-a-cdp-refresh-20260515-v1/storage-state.json`
+  - `captureDir=.runtime/aistudio-live-probe/phase3-20260604-continue`
+  - `failUnlessTargetRpcCaptured=true`
 
 当前结果：
 
-- 四条命令均已通过
+- 四条静态 / focused 验证命令均已通过
 - `aistudio` focused tests 当前为 `33 passed`
 - 本轮新增 focused 覆盖：
   - `program-owned text replay plan`
@@ -190,4 +194,25 @@
   - `pure_http_material`
   - 默认 `program-owned pure-http first` 代码路径
 - probe 脚本语法检查已通过，capture plumbing 改动未引入 JS 语法错误
-- 当前未运行 live probe：仓内与默认 `~/.neuro` 未发现可用 `runtimeStateObjectKey` / `storage-state.json`，因此 live steady-state 证据仍待补齐
+- 已尝试补 live steady-state 证据：
+  - 从旧 `NeuroPlatform/.runtime/ai-gateway-objects` 只读复制历史
+    `storage-state.json` 到当前 `Neuro/.runtime/ai-gateway-objects`
+  - probe 能启动 Chrome 并进入目标 `appUrl`
+  - 最终页面跳转到 Google account chooser：
+    - `finalUrl=https://accounts.google.com/v3/signin/accountchooser?...`
+    - `final-page.title=登录 - Google 账号`
+  - 只捕获到 `ActiveTrigger` 检测流量：
+    - `matchedRequestCount=1`
+    - `matchedResponseCount=1`
+    - `firstMatchedUrl=https://generativelanguage.googleapis.com/v1beta/models?key=ActiveTrigger`
+  - 未捕获目标双 RPC 合同：
+    - `capturedTargetRpcContract=false`
+    - `matchedCodeAssistantOfflineCount=0`
+    - `matchedStreamCodeAssistantOfflineGenerationCount=0`
+  - 归档文件：
+    - `.runtime/aistudio-live-probe/phase3-20260604-continue/summary.json`
+    - `.runtime/aistudio-live-probe/phase3-20260604-continue/target-rpc-summary.json`
+
+因此当前不能把 live steady-state 任务勾选完成。下一轮需要先刷新可用
+AIStudio 登录态 / browser profile，再重跑同一 probe，直到捕获
+`CodeAssistantOffline` 与 `StreamCodeAssistantOfflineGeneration` 双 RPC。

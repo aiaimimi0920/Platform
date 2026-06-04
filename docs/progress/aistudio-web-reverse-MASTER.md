@@ -126,6 +126,23 @@
     - focused `cargo test --manifest-path Gateway/Cargo.toml aistudio -- --nocapture` = `33 passed`
     - `cargo check --manifest-path Gateway/Cargo.toml` 通过（仍存在既有 warning）
     - `node --check Gateway/scripts/probe-aistudio-live-request.mjs` 通过
+    - 已补做一次 live probe 归档尝试：
+      - 归档目录：`.runtime/aistudio-live-probe/phase3-20260604-continue`
+      - 使用从旧 `NeuroPlatform/.runtime/ai-gateway-objects` 只读复制到当前 `Neuro/.runtime/ai-gateway-objects` 的历史 `storage-state.json`
+      - probe 能启动 Chrome 并进入目标 `appUrl`，但最终跳转到 Google account chooser：
+        - `finalUrl=https://accounts.google.com/v3/signin/accountchooser?...`
+        - `final-page.title=登录 - Google 账号`
+      - 本轮只捕获到 `ActiveTrigger` 检测流量：
+        - `matchedRequestCount=1`
+        - `matchedResponseCount=1`
+        - `firstMatchedUrl=https://generativelanguage.googleapis.com/v1beta/models?key=ActiveTrigger`
+      - 未捕获目标双 RPC 合同：
+        - `capturedTargetRpcContract=false`
+        - `matchedCodeAssistantOfflineCount=0`
+        - `matchedStreamCodeAssistantOfflineGenerationCount=0`
+      - 因此这次 live probe 证明历史登录态已经失效，不能把 live steady-state 任务勾选完成
+      - 下一轮需要刷新可用 AIStudio 登录态 / browser profile 后重跑同一 probe，直到捕获
+        `CodeAssistantOffline` 与 `StreamCodeAssistantOfflineGeneration` 双 RPC
 - 当前明确不在做的内容：
   - JS/browser worker 逻辑扩张
   - 新能力 claim
