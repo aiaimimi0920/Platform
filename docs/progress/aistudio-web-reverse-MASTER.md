@@ -124,7 +124,10 @@
     - `capturedTargetRpcContract=true` 必须同时捕获 `CodeAssistantOffline`
       与 `StreamCodeAssistantOfflineGeneration` 的 request + response pair，
       单个目标 RPC 或只有 request 的半截 RPC 不再算完整合同
-    - 当前脚本测试覆盖 `Gateway/scripts/tests/*.test.mjs = 20 passed` 与
+    - `normalized-target-rpc-contract.json` 现在会优先选用各目标 RPC
+      的完整 request + response pair；若前面存在 orphan / partial pair，
+      不会再让归一化合同误降级为不完整
+    - 当前脚本测试覆盖 `Gateway/scripts/tests/*.test.mjs = 21 passed` 与
       `Gateway/tests/python = 7 passed`
   - `text / stream/tools` 当前已统一走 `generateContent request plan -> browser request spec` 抽象
   - 一般文本热路径代码侧默认已提升为 `CodeAssistantOffline -> StreamCodeAssistantOfflineGeneration` program-owned pure-http first：

@@ -150,6 +150,9 @@
   - `CodeAssistantOffline` 的 request + response pair
   - `StreamCodeAssistantOfflineGeneration` 的 request + response pair
   单个目标 RPC、或只有 request 没有 response 的半截 RPC，不再被误报为完整 target contract
+- `normalized-target-rpc-contract.json` 现在会优先选用各目标 RPC 的完整
+  request + response pair；若前面存在 orphan / partial pair，不会再让归一化
+  合同误降级为不完整
 - 已把归一化合同 mirror 到 object storage sidecar：
   - `aistudio-target-rpc-contract.json`
 - 不再把“只抓到普通 AI Studio 流量”误报成“已经抓到 steady-state 文本合同”
@@ -224,9 +227,11 @@
   - 浏览器启动失败等 capture 初始化之后的异常也会留下 `capture.json`
   - 单个目标 RPC 不会把 `capturedTargetRpcContract` 误置为 true，必须双 RPC
     都出现且各自具备 request + response pair
+  - 归一化合同会优先选中完整 pair，而不是被更早出现的 orphan / partial
+    pair 抢占
   - 未抓全 target contract 时，stdout summary 仍会给出 target / normalized
     diagnostic artifact 路径
-  - `Gateway/scripts/tests/*.test.mjs` 当前为 `20 passed`
+  - `Gateway/scripts/tests/*.test.mjs` 当前为 `21 passed`
   - `Gateway/tests/python` 当前为 `7 passed`
 - 已尝试补 live steady-state 证据：
   - 从旧 `NeuroPlatform/.runtime/ai-gateway-objects` 只读复制历史
