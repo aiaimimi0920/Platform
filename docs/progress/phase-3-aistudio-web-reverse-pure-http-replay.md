@@ -142,6 +142,10 @@
 - 为下一轮一般文本 replay 提供真实 request/response 样本
 - 防止 live sweep 中途失败时留下空归档目录或缺少目标 RPC 空摘要
 - 防止浏览器启动 / 页面阶段失败时丢失已经初始化的 capture 上下文
+- stdout `summary` 即使未抓全双 RPC，也会暴露：
+  - `targetRpcSummaryPath`
+  - `normalizedTargetRpcContractPath`
+  这样下一轮 live sweep 只看 stdout 也能定位诊断 artifact
 - `capturedTargetRpcContract=true` 现在必须同时捕获：
   - `CodeAssistantOffline`
   - `StreamCodeAssistantOfflineGeneration`
@@ -219,7 +223,9 @@
   - 显式 `captureDir` 下的输入校验失败也会留下同一组诊断 artifact
   - 浏览器启动失败等 capture 初始化之后的异常也会留下 `capture.json`
   - 单个目标 RPC 不会把 `capturedTargetRpcContract` 误置为 true，必须双 RPC 都出现
-  - `Gateway/scripts/tests/*.test.mjs` 当前为 `19 passed`
+  - 未抓全 target contract 时，stdout summary 仍会给出 target / normalized
+    diagnostic artifact 路径
+  - `Gateway/scripts/tests/*.test.mjs` 当前为 `20 passed`
   - `Gateway/tests/python` 当前为 `7 passed`
 - 已尝试补 live steady-state 证据：
   - 从旧 `NeuroPlatform/.runtime/ai-gateway-objects` 只读复制历史
