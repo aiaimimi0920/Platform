@@ -128,6 +128,7 @@
     - `02-stream_code_assistant_offline_generation.json`
     - 以及更多 numbered pair files
   - 若在 `captureDir` 已知后失败，会稳定输出：
+    - `capture.json`（若失败发生在 capture 初始化之后）
     - `summary.json`
     - `target-rpc-summary.json`
     - `normalized-target-rpc-contract.json`
@@ -140,6 +141,11 @@
 - 把 `ActiveTrigger` 之类噪音请求和目标双 RPC 合同显式区分
 - 为下一轮一般文本 replay 提供真实 request/response 样本
 - 防止 live sweep 中途失败时留下空归档目录或缺少目标 RPC 空摘要
+- 防止浏览器启动 / 页面阶段失败时丢失已经初始化的 capture 上下文
+- `capturedTargetRpcContract=true` 现在必须同时捕获：
+  - `CodeAssistantOffline`
+  - `StreamCodeAssistantOfflineGeneration`
+  单个目标 RPC 不再被误报为完整 target contract
 - 已把归一化合同 mirror 到 object storage sidecar：
   - `aistudio-target-rpc-contract.json`
 - 不再把“只抓到普通 AI Studio 流量”误报成“已经抓到 steady-state 文本合同”
@@ -211,7 +217,9 @@
   - 失败路径会同时写 `target-rpc-summary.json` 与
     `normalized-target-rpc-contract.json`
   - 显式 `captureDir` 下的输入校验失败也会留下同一组诊断 artifact
-  - `Gateway/scripts/tests/*.test.mjs` 当前为 `17 passed`
+  - 浏览器启动失败等 capture 初始化之后的异常也会留下 `capture.json`
+  - 单个目标 RPC 不会把 `capturedTargetRpcContract` 误置为 true，必须双 RPC 都出现
+  - `Gateway/scripts/tests/*.test.mjs` 当前为 `19 passed`
   - `Gateway/tests/python` 当前为 `7 passed`
 - 已尝试补 live steady-state 证据：
   - 从旧 `NeuroPlatform/.runtime/ai-gateway-objects` 只读复制历史

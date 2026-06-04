@@ -117,8 +117,11 @@
     - 失败路径不再直接 `process.exit(...)`，避免绕过 `finally` 清理
     - `captureDir` 已知后的失败会稳定写出 `summary.json`、`target-rpc-summary.json`
       与 `normalized-target-rpc-contract.json`
+    - 浏览器启动 / 页面阶段失败时，若 capture 已初始化，也会保留 `capture.json`
     - 显式 `captureDir` 下的输入校验失败也会留下同一组诊断 artifact
-    - 当前脚本测试覆盖 `Gateway/scripts/tests/*.test.mjs = 17 passed` 与
+    - `capturedTargetRpcContract=true` 必须同时捕获 `CodeAssistantOffline`
+      与 `StreamCodeAssistantOfflineGeneration`，单个目标 RPC 不再算完整合同
+    - 当前脚本测试覆盖 `Gateway/scripts/tests/*.test.mjs = 19 passed` 与
       `Gateway/tests/python = 7 passed`
   - `text / stream/tools` 当前已统一走 `generateContent request plan -> browser request spec` 抽象
   - 一般文本热路径代码侧默认已提升为 `CodeAssistantOffline -> StreamCodeAssistantOfflineGeneration` program-owned pure-http first：
