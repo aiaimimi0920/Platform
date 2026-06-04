@@ -1,0 +1,5 @@
+# Platform-local generated outputs.
+# Keep package source under src/ as TypeScript; build outputs belong in dist/.
+packages/contracts/src/*.d.ts
+packages/contracts/src/*.js
+packages/contracts/src/*.js.map

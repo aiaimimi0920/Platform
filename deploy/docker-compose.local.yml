@@ -1,0 +1,450 @@
+services:
+  postgres:
+    image: postgres:16-bookworm
+    cpus: 1.00
+    mem_limit: 768m
+    environment:
+      POSTGRES_DB: neuroloom
+      POSTGRES_USER: neuroloom
+      POSTGRES_PASSWORD: neuroloom
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U neuroloom -d neuroloom"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  valkey:
+    image: valkey/valkey:8.1-alpine
+    cpus: 0.50
+    mem_limit: 256m
+    command: ["valkey-server", "--save", "60", "1", "--appendonly", "yes"]
+    ports:
+      - "6379:6379"
+    volumes:
+      - valkey-data:/data
+    healthcheck:
+      test: ["CMD", "valkey-cli", "ping"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  minio:
+    image: minio/minio:RELEASE.2025-07-23T15-54-02Z
+    cpus: 1.50
+    mem_limit: 768m
+    command: ["server", "/data", "--console-address", ":9001"]
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio-data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  minio-init:
+    image: minio/mc:RELEASE.2025-07-21T05-28-08Z
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        mc alias set local http://minio:9000 minioadmin minioadmin
+        mc mb --ignore-existing local/neuroloom-dev
+        mc anonymous set download local/neuroloom-dev
+
+  migrate:
+    build:
+      context: ..
+      dockerfile: deploy/docker/core.Dockerfile
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio-init:
+        condition: service_completed_successfully
+    environment:
+      PORT: 4000
+      CORE_PUBLIC_BASE_URL: http://localhost:4000
+      DATABASE_URL: postgres://neuroloom:neuroloom@postgres:5432/neuroloom
+      REDIS_URL: redis://valkey:6379
+      INTERNAL_API_TOKEN: local-internal-token
+      PLATFORM_OPERATOR_USER_IDS: local-operator,local-dev-account
+      OAUTH_CLIENT_ID: local-client
+      OAUTH_CLIENT_SECRET: local-secret
+      NEXTAUTH_SECRET: local-nextauth-secret
+      OBJECT_STORAGE_DRIVER: s3-compatible
+      OBJECT_STORAGE_BUCKET: neuroloom-dev
+      OBJECT_STORAGE_REGION: us-east-1
+      OBJECT_STORAGE_ENDPOINT: http://minio:9000
+      OBJECT_STORAGE_ACCESS_KEY_ID: minioadmin
+      OBJECT_STORAGE_SECRET_ACCESS_KEY: minioadmin
+      OBJECT_STORAGE_FORCE_PATH_STYLE: "true"
+      OBJECT_STORAGE_SIGNED_URL_TTL_SECONDS: "900"
+      S3_PUBLIC_BASE_URL: http://localhost:9000/neuroloom-dev
+      ARBITRATION_EVIDENCE_REMOTE_UPLOAD_STRATEGY: prepared_remote_put
+    command: ["npm", "run", "db:migrate"]
+
+  account-migrate:
+    build:
+      context: ..
+      dockerfile: deploy/docker/account-api.Dockerfile
+    depends_on:
+      postgres:
+        condition: service_healthy
+      valkey:
+        condition: service_healthy
+      minio-init:
+        condition: service_completed_successfully
+      migrate:
+        condition: service_completed_successfully
+    environment:
+      PLATFORM_INTERNAL_URL: http://core:4000
+      DATABASE_URL: postgres://neuroloom:neuroloom@postgres:5432/neuroloom
+      ACCOUNT_DATABASE_URL: postgres://neuroloom:neuroloom@postgres:5432/neuroloom
+      REDIS_URL: redis://valkey:6379
+      ACCOUNT_REDIS_URL: redis://valkey:6379
+      INTERNAL_API_TOKEN: local-internal-token
+      PLATFORM_OPERATOR_USER_IDS: local-operator,local-dev-account
+      OAUTH_CLIENT_ID: local-client
+      OAUTH_CLIENT_SECRET: local-secret
+      NEXTAUTH_SECRET: local-nextauth-secret
+      OBJECT_STORAGE_DRIVER: s3-compatible
+      OBJECT_STORAGE_BUCKET: neuroloom-dev
+      OBJECT_STORAGE_REGION: us-east-1
+      OBJECT_STORAGE_ENDPOINT: http://minio:9000
+      OBJECT_STORAGE_ACCESS_KEY_ID: minioadmin
+      OBJECT_STORAGE_SECRET_ACCESS_KEY: minioadmin
+      OBJECT_STORAGE_FORCE_PATH_STYLE: "true"
+      OBJECT_STORAGE_SIGNED_URL_TTL_SECONDS: "900"
+      S3_PUBLIC_BASE_URL: http://localhost:9000/neuroloom-dev
+      ARBITRATION_EVIDENCE_REMOTE_UPLOAD_STRATEGY: prepared_remote_put
+    command:
+      [
+        "/bin/sh",
+        "-c",
+        "cd /app && npm run db:migrate --workspace @neuro/ai-gateway-domain && npm run db:migrate --workspace @neuro/account-domain"
+      ]
+
+  core:
+    build:
+      context: ..
+      dockerfile: deploy/docker/core.Dockerfile
+    cpus: 1.50
+    mem_limit: 768m
+    depends_on:
+      postgres:
+        condition: service_healthy
+      valkey:
+        condition: service_healthy
+      minio-init:
+        condition: service_completed_successfully
+      migrate:
+        condition: service_completed_successfully
+    environment:
+      PORT: 4000
+      CORE_PUBLIC_BASE_URL: http://localhost:4000
+      DATABASE_URL: postgres://neuroloom:neuroloom@postgres:5432/neuroloom
+      REDIS_URL: redis://valkey:6379
+      INTERNAL_API_TOKEN: local-internal-token
+      PLATFORM_OPERATOR_USER_IDS: local-operator,local-dev-account
+      OAUTH_CLIENT_ID: local-client
+      OAUTH_CLIENT_SECRET: local-secret
+      NEXTAUTH_SECRET: local-nextauth-secret
+      OBJECT_STORAGE_DRIVER: s3-compatible
+      OBJECT_STORAGE_BUCKET: neuroloom-dev
+      OBJECT_STORAGE_REGION: us-east-1
+      OBJECT_STORAGE_ENDPOINT: http://minio:9000
+      OBJECT_STORAGE_ACCESS_KEY_ID: minioadmin
+      OBJECT_STORAGE_SECRET_ACCESS_KEY: minioadmin
+      OBJECT_STORAGE_FORCE_PATH_STYLE: "true"
+      OBJECT_STORAGE_SIGNED_URL_TTL_SECONDS: "900"
+      S3_PUBLIC_BASE_URL: http://localhost:9000/neuroloom-dev
+      ARBITRATION_EVIDENCE_REMOTE_UPLOAD_STRATEGY: prepared_remote_put
+    ports:
+      - "4028:4000"
+
+  account-api:
+    build:
+      context: ..
+      dockerfile: deploy/docker/account-api.Dockerfile
+    cpus: 1.50
+    mem_limit: 768m
+    depends_on:
+      postgres:
+        condition: service_healthy
+      valkey:
+        condition: service_healthy
+      core:
+        condition: service_started
+      migrate:
+        condition: service_completed_successfully
+      account-migrate:
+        condition: service_completed_successfully
+    environment:
+      PORT: 4000
+      PLATFORM_INTERNAL_URL: http://core:4000
+      DATABASE_URL: postgres://neuroloom:neuroloom@postgres:5432/neuroloom
+      ACCOUNT_DATABASE_URL: postgres://neuroloom:neuroloom@postgres:5432/neuroloom
+      REDIS_URL: redis://valkey:6379
+      ACCOUNT_REDIS_URL: redis://valkey:6379
+      INTERNAL_API_TOKEN: local-internal-token
+      BENEFIT_SERVICE_API_KEY_SECRET: local-benefit-api-secret
+      AI_GATEWAY_API_KEY_SECRET: local-benefit-api-secret
+      AI_GATEWAY_INTERNAL_URL: http://gateway:4200
+      AI_GATEWAY_MANAGEMENT_TOKEN: local-internal-token
+      BENEFIT_SERVICE_API_PUBLIC_BASE_URL: http://localhost:4226
+      AI_GATEWAY_PUBLIC_BASE_URL: http://localhost:4226
+      AI_GATEWAY_COMPATIBILITY_BASE_URL: http://localhost:4226/v1/new-api
+      PLATFORM_OPERATOR_USER_IDS: local-operator,local-dev-account
+      OAUTH_CLIENT_ID: local-client
+      OAUTH_CLIENT_SECRET: local-secret
+      NEXTAUTH_SECRET: local-nextauth-secret
+      OBJECT_STORAGE_DRIVER: s3-compatible
+      OBJECT_STORAGE_BUCKET: neuroloom-dev
+      OBJECT_STORAGE_REGION: us-east-1
+      OBJECT_STORAGE_ENDPOINT: http://minio:9000
+      OBJECT_STORAGE_ACCESS_KEY_ID: minioadmin
+      OBJECT_STORAGE_SECRET_ACCESS_KEY: minioadmin
+      OBJECT_STORAGE_FORCE_PATH_STYLE: "true"
+      OBJECT_STORAGE_SIGNED_URL_TTL_SECONDS: "900"
+      S3_PUBLIC_BASE_URL: http://localhost:9000/neuroloom-dev
+      ARBITRATION_EVIDENCE_REMOTE_UPLOAD_STRATEGY: prepared_remote_put
+    ports:
+      - "4128:4000"
+
+  gateway:
+    build:
+      context: ../../Gateway
+      dockerfile: Dockerfile
+    cpus: 2.50
+    mem_limit: 1536m
+    depends_on:
+      postgres:
+        condition: service_healthy
+      valkey:
+        condition: service_healthy
+      minio-init:
+        condition: service_completed_successfully
+      account-migrate:
+        condition: service_completed_successfully
+    environment:
+      PORT: 4200
+      GATEWAY_RUNTIME_ROLE: splitter
+      GATEWAY_SPLITTER_INITIAL_WORKER_PORT: 4201
+      GATEWAY_DATABASE_URL: postgres://neuroloom:neuroloom@postgres:5432/neuroloom
+      GATEWAY_REDIS_URL: redis://valkey:6379
+      GATEWAY_API_KEY_SECRET: local-benefit-api-secret
+      GATEWAY_MANAGEMENT_TOKEN: local-internal-token
+      GATEWAY_DEFAULT_PROJECT_ID: platform-default-project
+      OBJECT_STORAGE_DRIVER: s3-compatible
+      OBJECT_STORAGE_BUCKET: neuroloom-dev
+      OBJECT_STORAGE_REGION: us-east-1
+      OBJECT_STORAGE_ENDPOINT: http://minio:9000
+      OBJECT_STORAGE_ACCESS_KEY_ID: minioadmin
+      OBJECT_STORAGE_SECRET_ACCESS_KEY: minioadmin
+      OBJECT_STORAGE_FORCE_PATH_STYLE: "true"
+      S3_PUBLIC_BASE_URL: http://localhost:9000/neuroloom-dev
+      AI_GATEWAY_PUBLIC_BASE_URL: http://localhost:4226
+      AI_GATEWAY_COMPATIBILITY_BASE_URL: http://localhost:4226/v1/new-api
+      GATEWAY_BROWSER_EXECUTOR_BASE_URL: ${GATEWAY_BROWSER_EXECUTOR_BASE_URL:-}
+      GATEWAY_BROWSER_EXECUTOR_BEARER_TOKEN: ${GATEWAY_BROWSER_EXECUTOR_BEARER_TOKEN:-local-browser-executor-token}
+      UDIO_BROWSER_HEADLESS: "true"
+      SUNO_BROWSER_CDP_URL: ${SUNO_BROWSER_CDP_URL:-}
+      SUNO_BROWSER_CDP_TARGET_URL: ${SUNO_BROWSER_CDP_TARGET_URL:-https://suno.com/create}
+      GATEWAY_PROVIDER_CREDENTIAL_FOLDER_SYNC_ENABLED: ${GATEWAY_PROVIDER_CREDENTIAL_FOLDER_SYNC_ENABLED:-false}
+      GATEWAY_PROVIDER_CREDENTIAL_FOLDER_SYNC_ROOT_DIR: ${GATEWAY_PROVIDER_CREDENTIAL_FOLDER_SYNC_ROOT_DIR:-/root/.neuro}
+      GATEWAY_PROVIDER_CREDENTIAL_FOLDER_SYNC_INTERVAL_SECS: ${GATEWAY_PROVIDER_CREDENTIAL_FOLDER_SYNC_INTERVAL_SECS:-30}
+      GATEWAY_PROVIDER_CREDENTIAL_FOLDER_SYNC_IMPORT_ENABLED: ${GATEWAY_PROVIDER_CREDENTIAL_FOLDER_SYNC_IMPORT_ENABLED:-true}
+      GATEWAY_PROVIDER_CREDENTIAL_FOLDER_SYNC_EXPORT_ENABLED: ${GATEWAY_PROVIDER_CREDENTIAL_FOLDER_SYNC_EXPORT_ENABLED:-true}
+      GATEWAY_PROVIDER_CREDENTIAL_FOLDER_SYNC_DELETE_MISSING: ${GATEWAY_PROVIDER_CREDENTIAL_FOLDER_SYNC_DELETE_MISSING:-false}
+      RUST_LOG: info
+    ports:
+      - "4226:4200"
+    volumes:
+      - "${USERPROFILE}/.neuro:/root/.neuro"
+
+  web:
+    build:
+      context: ..
+      dockerfile: deploy/docker/web.Dockerfile
+    cpus: 1.50
+    mem_limit: 768m
+    depends_on:
+      core:
+        condition: service_started
+      account-api:
+        condition: service_started
+      gateway:
+        condition: service_started
+    environment:
+      PORT: 3000
+      ACCOUNT_INTERNAL_URL: http://account-api:4000
+      ACCOUNT_WORKER_INTERNAL_URL: http://account-worker:7303
+      AI_GATEWAY_INTERNAL_URL: http://gateway:4200
+      AI_GATEWAY_MANAGEMENT_TOKEN: local-internal-token
+      CORE_INTERNAL_URL: http://core:4000
+      INTERNAL_API_TOKEN: local-internal-token
+      PLATFORM_OPERATOR_USER_IDS: local-operator,local-dev-account
+      OAUTH_CLIENT_ID: local-client
+      OAUTH_CLIENT_SECRET: local-secret
+      NEXTAUTH_SECRET: local-nextauth-secret
+      NEXTAUTH_URL: http://localhost:${WEB_HOST_PORT:-3028}
+      NEXT_PUBLIC_APP_URL: http://localhost:${WEB_HOST_PORT:-3028}
+      ENABLE_FIGMA_CAPTURE: "true"
+      DEV_AUTH_BYPASS_ENABLED: "true"
+      DEV_AUTH_BYPASS_PROVIDER_USER_ID: local-dev-account
+      DEV_AUTH_BYPASS_USERNAME: local-dev
+      DEV_AUTH_BYPASS_NAME: Local Dev
+      DEV_AUTH_BYPASS_EMAIL: local-dev@example.test
+      DEV_AUTH_BYPASS_TRUST_LEVEL: "4"
+    ports:
+      - "${WEB_HOST_PORT:-3028}:3000"
+
+  worker:
+    build:
+      context: ..
+      dockerfile: deploy/docker/worker.Dockerfile
+    cpus: 1.50
+    mem_limit: 768m
+    depends_on:
+      postgres:
+        condition: service_healthy
+      valkey:
+        condition: service_healthy
+      core:
+        condition: service_started
+      migrate:
+        condition: service_completed_successfully
+    environment:
+      DATABASE_URL: postgres://neuroloom:neuroloom@postgres:5432/neuroloom
+      REDIS_URL: redis://valkey:6379
+      WORKER_HEALTH_PORT: 7301
+
+  account-worker:
+    build:
+      context: ..
+      dockerfile: deploy/docker/account-worker.Dockerfile
+    cpus: 1.50
+    mem_limit: 1024m
+    depends_on:
+      postgres:
+        condition: service_healthy
+      valkey:
+        condition: service_healthy
+      account-api:
+        condition: service_started
+      migrate:
+        condition: service_completed_successfully
+      account-migrate:
+        condition: service_completed_successfully
+    environment:
+      DATABASE_URL: postgres://neuroloom:neuroloom@postgres:5432/neuroloom
+      ACCOUNT_DATABASE_URL: postgres://neuroloom:neuroloom@postgres:5432/neuroloom
+      REDIS_URL: redis://valkey:6379
+      ACCOUNT_REDIS_URL: redis://valkey:6379
+      INTERNAL_API_TOKEN: local-internal-token
+      PLATFORM_OPERATOR_USER_IDS: local-operator,local-dev-account
+      OAUTH_CLIENT_ID: local-client
+      OAUTH_CLIENT_SECRET: local-secret
+      NEXTAUTH_SECRET: local-nextauth-secret
+      OBJECT_STORAGE_DRIVER: s3-compatible
+      OBJECT_STORAGE_BUCKET: neuroloom-dev
+      OBJECT_STORAGE_REGION: us-east-1
+      OBJECT_STORAGE_ENDPOINT: http://minio:9000
+      OBJECT_STORAGE_ACCESS_KEY_ID: minioadmin
+      OBJECT_STORAGE_SECRET_ACCESS_KEY: minioadmin
+      OBJECT_STORAGE_FORCE_PATH_STYLE: "true"
+      OBJECT_STORAGE_SIGNED_URL_TTL_SECONDS: "900"
+      S3_PUBLIC_BASE_URL: http://localhost:9000/neuroloom-dev
+      ARBITRATION_EVIDENCE_REMOTE_UPLOAD_STRATEGY: prepared_remote_put
+      PRODUCT_SHADOW_SYNC_INTERVAL_MS: "30000"
+      AI_GATEWAY_ANOMALY_SWEEP_ENABLED: "true"
+      AI_GATEWAY_ANOMALY_SWEEP_INTERVAL_MS: "30000"
+      AI_GATEWAY_ANOMALY_SWEEP_LIMIT: "20"
+      AI_GATEWAY_ANOMALY_SWEEP_LOCK_KEY: account-worker:gateway-anomaly-policy-sweep:lock
+      AI_GATEWAY_ANOMALY_SWEEP_LOCK_TTL_MS: "120000"
+      AI_GATEWAY_ANOMALY_ALERT_DISPATCH_ENABLED: "true"
+      AI_GATEWAY_ANOMALY_ALERT_DISPATCH_INTERVAL_MS: "30000"
+      AI_GATEWAY_ANOMALY_ALERT_DISPATCH_LIMIT: "20"
+      AI_GATEWAY_ANOMALY_ALERT_DISPATCH_LOCK_KEY: account-worker:gateway-anomaly-alert-dispatch:lock
+      AI_GATEWAY_ANOMALY_ALERT_DISPATCH_LOCK_TTL_MS: "120000"
+      AI_GATEWAY_ANOMALY_AUTO_REMEDIATION_ENABLED: "true"
+      AI_GATEWAY_ANOMALY_AUTO_REMEDIATION_INTERVAL_MS: "30000"
+      AI_GATEWAY_ANOMALY_AUTO_REMEDIATION_LIMIT: "10"
+      AI_GATEWAY_ANOMALY_AUTO_REMEDIATION_LOCK_KEY: account-worker:gateway-anomaly-auto-remediation:lock
+      AI_GATEWAY_ANOMALY_AUTO_REMEDIATION_LOCK_TTL_MS: "120000"
+      AI_GATEWAY_ANOMALY_REMEDIATION_IMPACT_CAPTURE_ENABLED: "true"
+      AI_GATEWAY_ANOMALY_REMEDIATION_IMPACT_CAPTURE_INTERVAL_MS: "30000"
+      AI_GATEWAY_ANOMALY_REMEDIATION_IMPACT_CAPTURE_LIMIT: "10"
+      AI_GATEWAY_ANOMALY_REMEDIATION_IMPACT_CAPTURE_WINDOW_MINUTES: "180"
+      AI_GATEWAY_ANOMALY_REMEDIATION_IMPACT_CAPTURE_LOOKBACK_HOURS: "72"
+      AI_GATEWAY_ANOMALY_REMEDIATION_IMPACT_CAPTURE_LOCK_KEY: account-worker:gateway-anomaly-remediation-impact-capture:lock
+      AI_GATEWAY_ANOMALY_REMEDIATION_IMPACT_CAPTURE_LOCK_TTL_MS: "120000"
+      AI_GATEWAY_ANOMALY_REMEDIATION_EFFECTIVENESS_SNAPSHOT_ENABLED: "true"
+      AI_GATEWAY_ANOMALY_REMEDIATION_EFFECTIVENESS_SNAPSHOT_INTERVAL_MS: "900000"
+      AI_GATEWAY_ANOMALY_REMEDIATION_EFFECTIVENESS_SNAPSHOT_LIMIT: "100"
+      AI_GATEWAY_ANOMALY_REMEDIATION_EFFECTIVENESS_SNAPSHOT_WINDOW_MINUTES: "180"
+      AI_GATEWAY_ANOMALY_REMEDIATION_EFFECTIVENESS_SNAPSHOT_LOOKBACK_HOURS: "168"
+      AI_GATEWAY_ANOMALY_REMEDIATION_EFFECTIVENESS_SNAPSHOT_LOCK_KEY: account-worker:gateway-anomaly-remediation-effectiveness-snapshot:lock
+      AI_GATEWAY_ANOMALY_REMEDIATION_EFFECTIVENESS_SNAPSHOT_LOCK_TTL_MS: "120000"
+      AI_GATEWAY_ANOMALY_REMEDIATION_EFFECTIVENESS_ANOMALY_SNAPSHOT_ENABLED: "true"
+      AI_GATEWAY_ANOMALY_REMEDIATION_EFFECTIVENESS_ANOMALY_SNAPSHOT_INTERVAL_MS: "1800000"
+      AI_GATEWAY_ANOMALY_REMEDIATION_EFFECTIVENESS_ANOMALY_SNAPSHOT_LIMIT: "10"
+      AI_GATEWAY_ANOMALY_REMEDIATION_EFFECTIVENESS_ANOMALY_SNAPSHOT_LOOKBACK_HOURS: "168"
+      AI_GATEWAY_ANOMALY_REMEDIATION_EFFECTIVENESS_ANOMALY_SNAPSHOT_PROFILE_KEY: balanced
+      AI_GATEWAY_ANOMALY_REMEDIATION_EFFECTIVENESS_ANOMALY_SNAPSHOT_MAILBOX_COOLDOWN_MINUTES: "180"
+      AI_GATEWAY_ANOMALY_REMEDIATION_EFFECTIVENESS_ANOMALY_SNAPSHOT_MAILBOX_MAX_DELIVERIES_PER_INCIDENT: "6"
+      AI_GATEWAY_ANOMALY_REMEDIATION_EFFECTIVENESS_ANOMALY_SNAPSHOT_LOCK_KEY: account-worker:gateway-anomaly-remediation-effectiveness-anomaly-snapshot:lock
+      AI_GATEWAY_ANOMALY_REMEDIATION_EFFECTIVENESS_ANOMALY_SNAPSHOT_LOCK_TTL_MS: "120000"
+      AI_GATEWAY_RATE_LIMIT_HOTSPOT_SNAPSHOT_ENABLED: "true"
+      AI_GATEWAY_RATE_LIMIT_HOTSPOT_SNAPSHOT_INTERVAL_MS: "900000"
+      AI_GATEWAY_RATE_LIMIT_HOTSPOT_SNAPSHOT_LIMIT: "1000"
+      AI_GATEWAY_RATE_LIMIT_HOTSPOT_SNAPSHOT_LOOKBACK_HOURS: "168"
+      AI_GATEWAY_RATE_LIMIT_HOTSPOT_SNAPSHOT_LOCK_KEY: account-worker:gateway-rate-limit-hotspot-snapshot:lock
+      AI_GATEWAY_RATE_LIMIT_HOTSPOT_SNAPSHOT_LOCK_TTL_MS: "120000"
+      AI_GATEWAY_RATE_LIMIT_HOTSPOT_ANOMALY_SNAPSHOT_ENABLED: "true"
+      AI_GATEWAY_RATE_LIMIT_HOTSPOT_ANOMALY_SNAPSHOT_INTERVAL_MS: "1800000"
+      AI_GATEWAY_RATE_LIMIT_HOTSPOT_ANOMALY_SNAPSHOT_LIMIT: "10"
+      AI_GATEWAY_RATE_LIMIT_HOTSPOT_ANOMALY_SNAPSHOT_LOOKBACK_HOURS: "168"
+      AI_GATEWAY_RATE_LIMIT_HOTSPOT_ANOMALY_SNAPSHOT_PROFILE_KEY: balanced
+      AI_GATEWAY_RATE_LIMIT_HOTSPOT_ANOMALY_SNAPSHOT_MAILBOX_COOLDOWN_MINUTES: "180"
+      AI_GATEWAY_RATE_LIMIT_HOTSPOT_ANOMALY_SNAPSHOT_MAILBOX_MAX_DELIVERIES_PER_INCIDENT: "6"
+      AI_GATEWAY_RATE_LIMIT_HOTSPOT_ANOMALY_SNAPSHOT_LOCK_KEY: account-worker:gateway-rate-limit-hotspot-anomaly-snapshot:lock
+      AI_GATEWAY_RATE_LIMIT_HOTSPOT_ANOMALY_SNAPSHOT_LOCK_TTL_MS: "120000"
+      WORKER_HEALTH_PORT: 7303
+
+  executor:
+    build:
+      context: ..
+      dockerfile: deploy/docker/executor.Dockerfile
+    cpus: 1.00
+    mem_limit: 512m
+    depends_on:
+      core:
+        condition: service_started
+      migrate:
+        condition: service_completed_successfully
+    environment:
+      CORE_INTERNAL_URL: http://core:4000
+      INTERNAL_API_TOKEN: local-internal-token
+      EXECUTOR_HEALTH_PORT: 7302
+      EXECUTOR_DISCOUNT_CODE_HISTORY_ARCHIVE_INTERVAL_MS: 300000
+      EXECUTOR_DISCOUNT_CODE_HISTORY_ARCHIVE_LIMIT: 10
+      EXECUTOR_DISCOUNT_CODE_HISTORY_ARCHIVE_CLEANUP_INTERVAL_MS: 600000
+      EXECUTOR_DISCOUNT_CODE_HISTORY_ARCHIVE_CLEANUP_LIMIT: 20
+
+volumes:
+  postgres-data:
+  valkey-data:
+  minio-data:

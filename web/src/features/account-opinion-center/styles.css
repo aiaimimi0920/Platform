@@ -1,0 +1,20 @@
+.account-opinion-center-shell {
+  display: grid;
+  gap: 16px;
+}
+
+.account-opinion-center-shell__header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.account-opinion-center-shell__tag-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 10px;
+}
+
+.account-opinion-center-shell__tag-grid button {
+  text-align: center;
+}

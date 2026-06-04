@@ -1,0 +1,5 @@
+export const BENEFIT_POLL_INTERVAL_MS = 30_000;
+
+export const BENEFIT_CENTER_UNAVAILABLE_MESSAGE = "羊毛派暂时不可用。";
+export const BENEFIT_SERVICE_SUMMARY_UNAVAILABLE_MESSAGE = "无法加载服务凭证。";
+export const BENEFIT_SERVICE_ROTATE_UNAVAILABLE_MESSAGE = "无法轮换当前服务凭证。";

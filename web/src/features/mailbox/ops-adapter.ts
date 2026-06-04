@@ -1,0 +1,15 @@
+export {
+  cancelOperatorMailboxOpsCampaign,
+  createOperatorMailboxOpsCampaign,
+  deleteOperatorMailboxOpsRecipientBatch,
+  deleteOperatorMailboxOpsTemplate,
+  dispatchOperatorMailboxOpsCampaign,
+  duplicateOperatorMailboxOpsCampaign,
+  listOperatorMailboxOpsCampaignDeliveries,
+  listOperatorMailboxOpsCampaigns,
+  listOperatorMailboxOpsRecipientBatches,
+  listOperatorMailboxOpsTemplates,
+  saveOperatorMailboxOpsRecipientBatch,
+  saveOperatorMailboxOpsTemplate,
+  updateOperatorMailboxOpsCampaign,
+} from "./account-adapter";

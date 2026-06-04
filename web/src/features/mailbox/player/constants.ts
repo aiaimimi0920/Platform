@@ -1,0 +1,2 @@
+export const MAILBOX_POLL_INTERVAL_MS = 30_000;
+export const MAILBOX_STORAGE_LIMIT = 200;

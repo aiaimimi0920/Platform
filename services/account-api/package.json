@@ -1,0 +1,29 @@
+{
+  "name": "@neuro/account-api",
+  "version": "0.1.0",
+  "private": true,
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "prebuild": "npm run build --workspace @neuro/account-domain",
+    "pretypecheck": "npm run build --workspace @neuro/account-domain",
+    "build": "tsc -p tsconfig.json && tsc-alias -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "start": "node dist/index.js",
+    "dev": "tsx watch src/index.ts"
+  },
+  "dependencies": {
+    "@fastify/cors": "^11.1.0",
+    "@fastify/multipart": "^9.2.1",
+    "@neuro/account-domain": "*",
+    "@neuro/backend-foundation": "*",
+    "@neuro/contracts": "*",
+    "drizzle-orm": "^0.44.2",
+    "fastify": "^5.6.1"
+  },
+  "devDependencies": {
+    "@types/node": "^20.19.27",
+    "tsx": "^4.20.6",
+    "typescript": "^5.8.3"
+  }
+}

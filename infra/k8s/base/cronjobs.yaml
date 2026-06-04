@@ -1,0 +1,275 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: neuroloom-reconcile-due
+spec:
+  schedule: "*/15 * * * *"
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          restartPolicy: OnFailure
+          containers:
+            - name: task
+              image: ghcr.io/example/neuroloom-executor:latest
+              imagePullPolicy: IfNotPresent
+              command: ["/bin/sh", "-c"]
+              args: ["npm run run-task -- reconcile-due"]
+              envFrom:
+                - configMapRef:
+                    name: neuroloom-executor-config
+                - secretRef:
+                    name: neuroloom-executor-secret
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: neuroloom-manual-review-release-stale
+spec:
+  schedule: "*/10 * * * *"
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          restartPolicy: OnFailure
+          containers:
+            - name: task
+              image: ghcr.io/example/neuroloom-executor:latest
+              imagePullPolicy: IfNotPresent
+              command: ["/bin/sh", "-c"]
+              args: ["npm run run-task -- manual-review-release-stale"]
+              envFrom:
+                - configMapRef:
+                    name: neuroloom-executor-config
+                - secretRef:
+                    name: neuroloom-executor-secret
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: neuroloom-manual-review-rebalance-auto
+spec:
+  schedule: "*/15 * * * *"
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          restartPolicy: OnFailure
+          containers:
+            - name: task
+              image: ghcr.io/example/neuroloom-executor:latest
+              imagePullPolicy: IfNotPresent
+              command: ["/bin/sh", "-c"]
+              args: ["npm run run-task -- manual-review-rebalance-auto"]
+              envFrom:
+                - configMapRef:
+                    name: neuroloom-executor-config
+                - secretRef:
+                    name: neuroloom-executor-secret
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: neuroloom-manual-review-auto-assign-sla
+spec:
+  schedule: "*/10 * * * *"
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          restartPolicy: OnFailure
+          containers:
+            - name: task
+              image: ghcr.io/example/neuroloom-executor:latest
+              imagePullPolicy: IfNotPresent
+              command: ["/bin/sh", "-c"]
+              args: ["npm run run-task -- manual-review-auto-assign-sla"]
+              envFrom:
+                - configMapRef:
+                    name: neuroloom-executor-config
+                - secretRef:
+                    name: neuroloom-executor-secret
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: neuroloom-manual-review-sync-sla-anomalies
+spec:
+  schedule: "*/20 * * * *"
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          restartPolicy: OnFailure
+          containers:
+            - name: task
+              image: ghcr.io/example/neuroloom-executor:latest
+              imagePullPolicy: IfNotPresent
+              command: ["/bin/sh", "-c"]
+              args: ["npm run run-task -- manual-review-sync-sla-anomalies"]
+              envFrom:
+                - configMapRef:
+                    name: neuroloom-executor-config
+                - secretRef:
+                    name: neuroloom-executor-secret
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: neuroloom-fulfillment-anomalies-escalate
+spec:
+  schedule: "*/20 * * * *"
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          restartPolicy: OnFailure
+          containers:
+            - name: task
+              image: ghcr.io/example/neuroloom-executor:latest
+              imagePullPolicy: IfNotPresent
+              command: ["/bin/sh", "-c"]
+              args: ["npm run run-task -- fulfillment-anomalies-escalate"]
+              envFrom:
+                - configMapRef:
+                    name: neuroloom-executor-config
+                - secretRef:
+                    name: neuroloom-executor-secret
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: neuroloom-arbitration-release-stale
+spec:
+  schedule: "*/15 * * * *"
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          restartPolicy: OnFailure
+          containers:
+            - name: task
+              image: ghcr.io/example/neuroloom-executor:latest
+              imagePullPolicy: IfNotPresent
+              command: ["/bin/sh", "-c"]
+              args: ["npm run run-task -- arbitration-release-stale"]
+              envFrom:
+                - configMapRef:
+                    name: neuroloom-executor-config
+                - secretRef:
+                    name: neuroloom-executor-secret
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: neuroloom-arbitration-cleanup-remote
+spec:
+  schedule: "0 */6 * * *"
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          restartPolicy: OnFailure
+          containers:
+            - name: task
+              image: ghcr.io/example/neuroloom-executor:latest
+              imagePullPolicy: IfNotPresent
+              command: ["/bin/sh", "-c"]
+              args: ["npm run run-task -- arbitration-cleanup-remote"]
+              envFrom:
+                - configMapRef:
+                    name: neuroloom-executor-config
+                - secretRef:
+                    name: neuroloom-executor-secret
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: neuroloom-settlements-run
+spec:
+  schedule: "*/5 * * * *"
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          restartPolicy: OnFailure
+          containers:
+            - name: task
+              image: ghcr.io/example/neuroloom-executor:latest
+              imagePullPolicy: IfNotPresent
+              command: ["/bin/sh", "-c"]
+              args: ["npm run run-task -- settlements-run"]
+              envFrom:
+                - configMapRef:
+                    name: neuroloom-executor-config
+                - secretRef:
+                    name: neuroloom-executor-secret
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: neuroloom-opinion-monthly-leaders
+spec:
+  schedule: "0 0 1 * *"
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          restartPolicy: OnFailure
+          containers:
+            - name: task
+              image: ghcr.io/example/neuroloom-executor:latest
+              imagePullPolicy: IfNotPresent
+              command: ["/bin/sh", "-c"]
+              args: ["npm run run-task -- opinion-monthly-leaders"]
+              envFrom:
+                - configMapRef:
+                    name: neuroloom-executor-config
+                - secretRef:
+                    name: neuroloom-executor-secret
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: neuroloom-callback-auto-remediate
+spec:
+  schedule: "*/2 * * * *"
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          restartPolicy: OnFailure
+          containers:
+            - name: task
+              image: ghcr.io/example/neuroloom-executor:latest
+              imagePullPolicy: IfNotPresent
+              command: ["/bin/sh", "-c"]
+              args: ["npm run run-task -- callback-auto-remediate"]
+              envFrom:
+                - configMapRef:
+                    name: neuroloom-executor-config
+                - secretRef:
+                    name: neuroloom-executor-secret
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: neuroloom-callback-compatibility-cleanup
+spec:
+  schedule: "*/30 * * * *"
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          restartPolicy: OnFailure
+          containers:
+            - name: task
+              image: ghcr.io/example/neuroloom-executor:latest
+              imagePullPolicy: IfNotPresent
+              command: ["/bin/sh", "-c"]
+              args: ["npm run run-task -- callback-compatibility-cleanup"]
+              envFrom:
+                - configMapRef:
+                    name: neuroloom-executor-config
+                - secretRef:
+                    name: neuroloom-executor-secret

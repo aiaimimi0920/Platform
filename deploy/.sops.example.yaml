@@ -1,0 +1,3 @@
+creation_rules:
+  - path_regex: infra/k8s/.+\.enc\.ya?ml$
+    age: "age1replacewithyourteamrecipientxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"

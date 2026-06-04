@@ -1,0 +1,436 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: neuroloom-account-api
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: neuroloom-account-api
+  template:
+    metadata:
+      labels:
+        app: neuroloom-account-api
+    spec:
+      containers:
+        - name: account-api
+          image: ghcr.io/example/neuroloom-account-api:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 4000
+              name: http
+          envFrom:
+            - configMapRef:
+                name: neuroloom-account-api-config
+            - secretRef:
+                name: neuroloom-account-api-secret
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: http
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: neuroloom-account-api
+spec:
+  selector:
+    app: neuroloom-account-api
+  ports:
+    - port: 4000
+      targetPort: http
+      name: http
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: neuroloom-gateway
+spec:
+  replicas: 2
+  minReadySeconds: 10
+  revisionHistoryLimit: 5
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+  selector:
+    matchLabels:
+      app: neuroloom-gateway
+  template:
+    metadata:
+      labels:
+        app: neuroloom-gateway
+    spec:
+      terminationGracePeriodSeconds: 360
+      containers:
+        - name: gateway
+          image: ghcr.io/example/neuroloom-gateway:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 4200
+              name: http
+          envFrom:
+            - configMapRef:
+                name: neuroloom-gateway-config
+            - secretRef:
+                name: neuroloom-gateway-secret
+          lifecycle:
+            preStop:
+              exec:
+                command:
+                  - /bin/sh
+                  - -c
+                  - kill -TERM 1; sleep 15
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: http
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 2
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: neuroloom-gateway
+spec:
+  selector:
+    app: neuroloom-gateway
+  ports:
+    - port: 4200
+      targetPort: http
+      name: http
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: neuroloom-gateway
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: neuroloom-gateway
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: neuroloom-web
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: neuroloom-web
+  template:
+    metadata:
+      labels:
+        app: neuroloom-web
+    spec:
+      containers:
+        - name: web
+          image: ghcr.io/example/neuroloom-web:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 3000
+              name: http
+          envFrom:
+            - configMapRef:
+                name: neuroloom-web-config
+            - secretRef:
+                name: neuroloom-web-secret
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: http
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: neuroloom-web
+spec:
+  selector:
+    app: neuroloom-web
+  ports:
+    - port: 3000
+      targetPort: http
+      name: http
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: neuroloom-core
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: neuroloom-core
+  template:
+    metadata:
+      labels:
+        app: neuroloom-core
+    spec:
+      containers:
+        - name: core
+          image: ghcr.io/example/neuroloom-core:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 4000
+              name: http
+          envFrom:
+            - configMapRef:
+                name: neuroloom-core-config
+            - secretRef:
+                name: neuroloom-core-secret
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: http
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: neuroloom-core
+spec:
+  selector:
+    app: neuroloom-core
+  ports:
+    - port: 4000
+      targetPort: http
+      name: http
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: neuroloom-account-worker
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: neuroloom-account-worker
+  template:
+    metadata:
+      labels:
+        app: neuroloom-account-worker
+    spec:
+      containers:
+        - name: account-worker
+          image: ghcr.io/example/neuroloom-account-worker:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 7303
+              name: health
+          envFrom:
+            - configMapRef:
+                name: neuroloom-account-worker-config
+            - secretRef:
+                name: neuroloom-account-worker-secret
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: health
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: health
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: neuroloom-worker
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: neuroloom-worker
+  template:
+    metadata:
+      labels:
+        app: neuroloom-worker
+    spec:
+      containers:
+        - name: worker
+          image: ghcr.io/example/neuroloom-worker:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 7301
+              name: health
+          envFrom:
+            - configMapRef:
+                name: neuroloom-worker-config
+            - secretRef:
+                name: neuroloom-worker-secret
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: health
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: health
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: neuroloom-executor
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: neuroloom-executor
+  template:
+    metadata:
+      labels:
+        app: neuroloom-executor
+    spec:
+      containers:
+        - name: executor
+          image: ghcr.io/example/neuroloom-executor:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 7302
+              name: health
+          envFrom:
+            - configMapRef:
+                name: neuroloom-executor-config
+            - secretRef:
+                name: neuroloom-executor-secret
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: health
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: health
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: neuroloom-public
+spec:
+  ingressClassName: traefik
+  rules:
+    - host: app.example.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: neuroloom-web
+                port:
+                  name: http
+    - host: api.example.com
+      http:
+        paths:
+          - path: /internal/identity/linuxdo-upsert
+            pathType: Exact
+            backend:
+              service:
+                name: neuroloom-account-api
+                port:
+                  name: http
+          - path: /v1/me
+            pathType: Exact
+            backend:
+              service:
+                name: neuroloom-account-api
+                port:
+                  name: http
+          - path: /v1/wallet
+            pathType: Prefix
+            backend:
+              service:
+                name: neuroloom-account-api
+                port:
+                  name: http
+          - path: /v1/reputation
+            pathType: Prefix
+            backend:
+              service:
+                name: neuroloom-account-api
+                port:
+                  name: http
+          - path: /v1/daily-rewards
+            pathType: Prefix
+            backend:
+              service:
+                name: neuroloom-account-api
+                port:
+                  name: http
+          - path: /v1/mailbox
+            pathType: Prefix
+            backend:
+              service:
+                name: neuroloom-account-api
+                port:
+                  name: http
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: neuroloom-core
+                port:
+                  name: http
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: neuroloom-account-public
+  annotations:
+    traefik.ingress.kubernetes.io/router.entrypoints: websecure
+    traefik.ingress.kubernetes.io/router.tls: "true"
+spec:
+  ingressClassName: account-traefik
+  tls:
+    - hosts:
+        - account-api.example.com
+        - new-api.example.com
+      secretName: neuroloom-account-edge-tls
+  rules:
+    - host: account-api.example.com
+      http:
+        paths:
+          - path: /v1/new-api
+            pathType: Prefix
+            backend:
+              service:
+                name: neuroloom-gateway
+                port:
+                  name: http
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: neuroloom-account-api
+                port:
+                  name: http
+    - host: new-api.example.com
+      http:
+        paths:
+          - path: /v1
+            pathType: Prefix
+            backend:
+              service:
+                name: neuroloom-gateway
+                port:
+                  name: http

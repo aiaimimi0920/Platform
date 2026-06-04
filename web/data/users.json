@@ -1,0 +1,21 @@
+{
+  "users": [
+    {
+      "id": "usr_ac8204dd5a19402e",
+      "provider": "linuxdo",
+      "providerUserId": "312281",
+      "username": "vmjcv666",
+      "email": "3jqs6ydpp1bffyvstg7st9uwqznng2w4k96ojhjayoljzol7wp@privaterelay.linux.do",
+      "avatarUrl": "https://linux.do/user_avatar/linux.do/vmjcv666/288/1541117_2.png",
+      "trustLevel": 2,
+      "createdAt": "2026-03-20T18:22:55.876Z",
+      "updatedAt": "2026-03-20T18:22:55.888Z",
+      "lastLoginAt": "2026-03-20T18:22:55.888Z",
+      "wallet": {
+        "obsidian": 0,
+        "mira": 0,
+        "opinionTickets": 0
+      }
+    }
+  ]
+}

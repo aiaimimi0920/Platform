@@ -1,0 +1,108 @@
+import { boolean, integer, jsonb, pgTable, text, timestamp, uniqueIndex } from "drizzle-orm/pg-core";
+
+import { users } from "@/modules/identity/schema";
+
+export const agents = pgTable(
+  "agents",
+  {
+    id: text("id").primaryKey(),
+    ownerUserId: text("owner_user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    description: text("description"),
+    sourceType: text("source_type").notNull(),
+    hostingMode: text("hosting_mode").notNull().default("registry_only"),
+    runtimeEndpoint: text("runtime_endpoint"),
+    authMode: text("auth_mode").notNull(),
+    runtimeAuthToken: text("runtime_auth_token"),
+    managedServiceId: text("managed_service_id"),
+    managedProviderLabel: text("managed_provider_label"),
+    managedApiBaseUrl: text("managed_api_base_url"),
+    managedModel: text("managed_model"),
+    managedApiKey: text("managed_api_key"),
+    managedSystemPrompt: text("managed_system_prompt"),
+    managedPromptTemplate: text("managed_prompt_template"),
+    managedTaskCategory: text("managed_task_category"),
+    managedCapabilitySummary: text("managed_capability_summary"),
+    externalCallbackSecret: text("external_callback_secret"),
+    externalCallbackRotatedAt: timestamp("external_callback_rotated_at", { withTimezone: true }),
+    externalCallbackProtocolVersion: integer("external_callback_protocol_version").notNull().default(1),
+    externalCallbackPreviousProtocolVersion: integer("external_callback_previous_protocol_version"),
+    externalCallbackProtocolGraceUntil: timestamp("external_callback_protocol_grace_until", { withTimezone: true }),
+    externalCallbackSecretVersion: integer("external_callback_secret_version").notNull().default(1),
+    externalCallbackPreviousSecret: text("external_callback_previous_secret"),
+    externalCallbackPreviousSecretVersion: integer("external_callback_previous_secret_version"),
+    externalCallbackSecretGraceUntil: timestamp("external_callback_secret_grace_until", { withTimezone: true }),
+    externalCallbackRemediationPolicy: text("external_callback_remediation_policy").notNull().default("balanced"),
+    enabled: boolean("enabled").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull(),
+  },
+  (table) => ({
+    ownerNameUnique: uniqueIndex("agents_owner_name_idx").on(table.ownerUserId, table.name),
+  }),
+);
+
+export const agentCapabilities = pgTable(
+  "agent_capabilities",
+  {
+    id: text("id").primaryKey(),
+    agentId: text("agent_id").notNull().references(() => agents.id, { onDelete: "cascade" }),
+    code: text("code").notNull(),
+    title: text("title").notNull(),
+    description: text("description"),
+    routingSummary: text("routing_summary"),
+    routingTags: jsonb("routing_tags").notNull().default([]),
+    inputSchema: jsonb("input_schema"),
+    outputSchema: jsonb("output_schema"),
+    resourceNormalizationPrompt: text("resource_normalization_prompt"),
+    pricingNote: text("pricing_note"),
+    enabled: boolean("enabled").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull(),
+  },
+  (table) => ({
+    codeUniqueByAgent: uniqueIndex("agent_capabilities_agent_code_idx").on(table.agentId, table.code),
+  }),
+);
+
+export const agentMarketplaceListings = pgTable(
+  "agent_marketplace_listings",
+  {
+    id: text("id").primaryKey(),
+    agentId: text("agent_id").notNull().references(() => agents.id, { onDelete: "cascade" }),
+    capabilityId: text("capability_id").notNull().references(() => agentCapabilities.id, { onDelete: "cascade" }),
+    publicTitle: text("public_title").notNull(),
+    publicDescription: text("public_description"),
+    billingMode: text("billing_mode").notNull().default("flat_task"),
+    billingUnit: text("billing_unit"),
+    meterKey: text("meter_key"),
+    priceCurrency: text("price_currency").notNull(),
+    priceAmount: integer("price_amount").notNull(),
+    status: text("status").notNull().default("draft"),
+    externalInvocationEnabled: boolean("external_invocation_enabled").notNull().default(false),
+    autoTakeEnabled: boolean("auto_take_enabled").notNull().default(false),
+    autoTakeStatementTemplate: text("auto_take_statement_template"),
+    lastAutoProposalSweepAt: timestamp("last_auto_proposal_sweep_at", { withTimezone: true }),
+    lastAutoProposalCreatedCount: integer("last_auto_proposal_created_count").notNull().default(0),
+    publishedAt: timestamp("published_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull(),
+  },
+  (table) => ({
+    capabilityUnique: uniqueIndex("agent_marketplace_listings_capability_idx").on(table.capabilityId),
+  }),
+);
+
+export const agentCallbackConfigHistory = pgTable("agent_callback_config_history", {
+  id: text("id").primaryKey(),
+  agentId: text("agent_id").notNull().references(() => agents.id, { onDelete: "cascade" }),
+  actorUserId: text("actor_user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  changeType: text("change_type").notNull(),
+  previousProtocolVersion: integer("previous_protocol_version"),
+  nextProtocolVersion: integer("next_protocol_version"),
+  previousSecretVersion: integer("previous_secret_version"),
+  nextSecretVersion: integer("next_secret_version"),
+  graceUntil: timestamp("grace_until", { withTimezone: true }),
+  note: text("note"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
+});

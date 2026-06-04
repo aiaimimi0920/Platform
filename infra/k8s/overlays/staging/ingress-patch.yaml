@@ -1,0 +1,94 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: neuroloom-public
+spec:
+  ingressClassName: traefik
+  rules:
+    - host: app-staging.example.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: neuroloom-web
+                port:
+                  name: http
+    - host: api-staging.example.com
+      http:
+        paths:
+          - path: /internal/identity/linuxdo-upsert
+            pathType: Exact
+            backend:
+              service:
+                name: neuroloom-account-api
+                port:
+                  name: http
+          - path: /v1/me
+            pathType: Exact
+            backend:
+              service:
+                name: neuroloom-account-api
+                port:
+                  name: http
+          - path: /v1/wallet
+            pathType: Prefix
+            backend:
+              service:
+                name: neuroloom-account-api
+                port:
+                  name: http
+          - path: /v1/reputation
+            pathType: Prefix
+            backend:
+              service:
+                name: neuroloom-account-api
+                port:
+                  name: http
+          - path: /v1/daily-rewards
+            pathType: Prefix
+            backend:
+              service:
+                name: neuroloom-account-api
+                port:
+                  name: http
+          - path: /v1/mailbox
+            pathType: Prefix
+            backend:
+              service:
+                name: neuroloom-account-api
+                port:
+                  name: http
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: neuroloom-core
+                port:
+                  name: http
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: neuroloom-account-public
+  annotations:
+    traefik.ingress.kubernetes.io/router.entrypoints: websecure
+    traefik.ingress.kubernetes.io/router.tls: "true"
+spec:
+  ingressClassName: account-traefik
+  tls:
+    - hosts:
+        - account-api-staging.example.com
+      secretName: neuroloom-account-edge-tls
+  rules:
+    - host: account-api-staging.example.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: neuroloom-account-api
+                port:
+                  name: http

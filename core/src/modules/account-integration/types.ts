@@ -1,0 +1,21 @@
+export type CoreAccountProductSnapshot = {
+  id: string;
+  slug: string;
+  title: string;
+  description: string;
+  category: string;
+  kind: string;
+  currency: string;
+  price: number;
+  fulfillmentMode: string;
+  transferable: boolean;
+  active: boolean;
+  allowDiscountCodes: boolean;
+  limitScope: string;
+  durationDays: number | null;
+  unitCount: number | null;
+  warrantyDays: number | null;
+  stockLabel: string;
+  createdAt: string;
+  updatedAt: string;
+};

@@ -1,0 +1,28 @@
+{
+  "name": "@neuro/ai-gateway-domain",
+  "version": "0.1.0",
+  "private": true,
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "prebuild": "npm run build --workspace @neuro/contracts && npm run build --workspace @neuro/backend-foundation",
+    "pretypecheck": "npm run build --workspace @neuro/contracts && npm run build --workspace @neuro/backend-foundation",
+    "build": "tsc -p tsconfig.build.json && tsc-alias -p tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "db:migrate": "node dist/scripts/migrate.js"
+  },
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.918.0",
+    "@neuro/backend-foundation": "*",
+    "@neuro/contracts": "*",
+    "drizzle-orm": "^0.44.2",
+    "ioredis": "^5.8.2",
+    "pg": "^8.16.3",
+    "zod": "^4.1.12"
+  },
+  "devDependencies": {
+    "@types/node": "^20.19.27",
+    "@types/pg": "^8.15.5",
+    "typescript": "^5.8.3"
+  }
+}

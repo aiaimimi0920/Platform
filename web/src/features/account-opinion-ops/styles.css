@@ -1,0 +1,139 @@
+.issue-ops-page__shell {
+  display: grid;
+  gap: 18px;
+  padding-block: 28px;
+}
+
+.issue-ops-page__flash {
+  display: grid;
+  gap: 6px;
+}
+
+.issue-ops-page__flash--success {
+  border-color: rgba(214, 255, 98, 0.3);
+  box-shadow: inset 0 0 0 1px rgba(214, 255, 98, 0.08);
+}
+
+.issue-ops-page__flash--error {
+  border-color: rgba(255, 138, 138, 0.28);
+  box-shadow: inset 0 0 0 1px rgba(255, 138, 138, 0.08);
+}
+
+.issue-ops-page__stage,
+.issue-ops-page__settlement-section {
+  display: grid;
+  gap: 16px;
+}
+
+.issue-ops-page__stage-grid {
+  display: grid;
+  gap: 16px;
+}
+
+.issue-ops-page__batch-summary {
+  grid-column: 1 / -1;
+}
+
+.issue-ops-page__governance-grid {
+  display: grid;
+  grid-template-columns: minmax(280px, 340px) minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+
+.issue-ops-page__governance-rail {
+  display: grid;
+  gap: 16px;
+}
+
+.issue-ops-page__filters-card {
+  align-content: start;
+}
+
+.issue-ops-page__filters-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.issue-ops-page__settlement-grid {
+  display: grid;
+  grid-template-columns: minmax(260px, 320px) minmax(0, 1fr);
+  gap: 16px;
+  min-height: 0;
+}
+
+.issue-ops-page__queue-detail {
+  display: grid;
+  grid-template-columns: minmax(360px, 420px) minmax(0, 1fr);
+  gap: 16px;
+  min-height: 0;
+  align-items: start;
+}
+
+.issue-ops-page__detail-panel {
+  min-height: 0;
+  display: grid;
+  gap: 14px;
+  overflow: auto;
+}
+
+.issue-ops-page__detail-top {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(320px, 0.85fr);
+  gap: 14px;
+  align-items: start;
+}
+
+.issue-ops-page__detail-side {
+  display: grid;
+  gap: 12px;
+}
+
+.issue-ops-page__detail-summary {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.issue-ops-page__actions-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.issue-ops-page__comments {
+  display: grid;
+  gap: 10px;
+}
+
+.issue-ops-page__compact-copy {
+  margin: 0;
+  color: rgba(229, 231, 235, 0.88);
+  line-height: 1.55;
+}
+
+@media (max-width: 1280px) {
+  .issue-ops-page__governance-grid,
+  .issue-ops-page__settlement-grid,
+  .issue-ops-page__queue-detail,
+  .issue-ops-page__detail-top {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .issue-ops-page__filters-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .issue-ops-page__actions-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 720px) {
+  .issue-ops-page__filters-grid,
+  .issue-ops-page__detail-summary,
+  .issue-ops-page__actions-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

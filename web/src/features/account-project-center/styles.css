@@ -1,0 +1,752 @@
+.app-project-shell {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: minmax(320px, 372px) minmax(0, 1fr);
+  gap: 22px;
+  width: min(1480px, calc(100vw - 56px));
+  min-height: min(900px, calc(100vh - 56px));
+  margin: 28px auto;
+  padding: 22px;
+  border-radius: 36px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background:
+    linear-gradient(180deg, rgba(14, 18, 26, 0.98), rgba(11, 14, 20, 0.97)),
+    radial-gradient(circle at top left, rgba(217, 255, 56, 0.08), transparent 28%);
+  box-shadow:
+    0 32px 80px rgba(0, 0, 0, 0.52),
+    inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+.app-project-rail {
+  display: grid;
+  grid-template-rows: auto auto auto minmax(0, 1fr);
+  gap: 18px;
+  min-height: 0;
+  padding: 16px 14px 14px;
+  border-radius: 30px;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  background:
+    linear-gradient(180deg, rgba(24, 28, 36, 0.98), rgba(15, 18, 24, 0.98)),
+    radial-gradient(circle at top left, rgba(217, 255, 56, 0.06), transparent 28%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+.app-project-rail__head {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 8px 8px 18px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.app-project-rail__copy h2 {
+  margin: 0;
+  font-size: clamp(2rem, 4vw, 3rem);
+  line-height: 1;
+  color: #d9ff38;
+}
+
+.app-project-rail__copy p {
+  margin: 8px 0 0;
+  color: rgba(224, 231, 236, 0.78);
+  font-size: 0.9rem;
+}
+
+.app-project-rail__scope-tabs {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.app-project-rail__scope-tab {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 64px;
+  padding: 0 18px;
+  border-radius: 22px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.05), rgba(255,255,255,0.02)),
+    rgba(16, 20, 28, 0.86);
+  color: rgba(232, 238, 242, 0.88);
+  font-size: 1.05rem;
+  font-weight: 800;
+  text-decoration: none;
+}
+
+.app-project-rail__scope-tab--active {
+  background:
+    linear-gradient(180deg, rgba(249,250,251,0.98), rgba(233,236,240,0.96)),
+    rgba(244,246,248,0.98);
+  color: #0f1318;
+  box-shadow: 0 18px 32px rgba(0, 0, 0, 0.14), inset 0 1px 0 rgba(255,255,255,0.88);
+}
+
+.app-project-rail__summary-card,
+.app-project-rail__owner-card,
+.app-project-rail__list-shell {
+  display: grid;
+  gap: 14px;
+}
+
+.app-project-rail__summary-copy {
+  margin: 8px 0 0;
+  color: rgba(220, 227, 233, 0.82);
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+
+.app-project-rail__summary-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.app-project-rail__summary-cell {
+  display: grid;
+  gap: 8px;
+  min-height: 88px;
+  padding: 14px 16px;
+  border-radius: 20px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.07), rgba(255,255,255,0.03)),
+    rgba(20, 24, 32, 0.94);
+}
+
+.app-project-rail__summary-cell span {
+  color: rgba(220, 227, 233, 0.78);
+  font-size: 0.82rem;
+}
+
+.app-project-rail__summary-cell strong {
+  color: rgba(248, 250, 252, 0.96);
+  font-size: 1rem;
+  line-height: 1.35;
+}
+
+.app-project-rail__summary-row,
+.app-project-detail__side-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  color: rgba(230, 236, 241, 0.78);
+}
+
+.app-project-rail__summary-row strong,
+.app-project-detail__side-item strong {
+  color: rgba(248, 250, 252, 0.96);
+}
+
+.app-project-rail__owner-head,
+.app-project-detail__section-head,
+.app-project-rail__list-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.app-project-rail__owner-head h3,
+.app-project-rail__list-head h3,
+.app-project-detail__section-head h2 {
+  margin: 0;
+}
+
+.app-project-owner-form {
+  display: flex;
+  gap: 10px;
+}
+
+.app-project-owner-form__input {
+  flex: 1 1 auto;
+  min-height: 52px;
+  padding: 0 16px;
+  border-radius: 18px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.05), rgba(255,255,255,0.02)),
+    rgba(16,20,28,0.86);
+  color: rgba(245, 248, 252, 0.94);
+}
+
+.app-project-owner-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.app-project-owner-chips__item {
+  display: inline-flex;
+  align-items: center;
+  min-height: 38px;
+  padding: 0 14px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.03);
+  color: rgba(232, 238, 242, 0.82);
+  font-size: 0.86rem;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.app-project-owner-chips__item--active {
+  border-color: rgba(217, 255, 56, 0.22);
+  background: rgba(217, 255, 56, 0.09);
+  color: #f6ffbf;
+}
+
+.app-project-rail__list-shell {
+  min-height: 0;
+  grid-template-rows: auto minmax(0, 1fr);
+}
+
+.app-project-rail__list {
+  display: grid;
+  gap: 12px;
+  min-height: 0;
+  overflow-y: auto;
+  padding-right: 6px;
+}
+
+.app-project-rail-card {
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+  border-radius: 24px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.07), rgba(255,255,255,0.03)),
+    rgba(20, 24, 32, 0.94);
+  color: inherit;
+  text-decoration: none;
+  transition: transform 180ms ease, border-color 180ms ease, box-shadow 180ms ease;
+}
+
+.app-project-rail-card:hover,
+.app-project-rail-card:focus-visible {
+  transform: translateX(4px);
+  border-color: rgba(217, 255, 56, 0.24);
+  box-shadow: 0 18px 28px rgba(0, 0, 0, 0.24);
+}
+
+.app-project-rail-card--active {
+  border-color: rgba(217, 255, 56, 0.28);
+  box-shadow: 0 16px 24px rgba(0, 0, 0, 0.24), inset 0 1px 0 rgba(255,255,255,0.05);
+}
+
+.app-project-rail-card__head,
+.app-project-detail__badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.app-project-rail-card__head {
+  align-items: flex-start;
+  justify-content: space-between;
+}
+
+.app-project-rail-card__stack {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.app-project-rail-card__kicker {
+  color: rgba(217, 255, 56, 0.86);
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.app-project-rail-card__status {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 70px;
+  min-height: 42px;
+  padding: 0 12px;
+  border-radius: 16px;
+  background: rgba(217, 255, 56, 0.08);
+  border: 1px solid rgba(217, 255, 56, 0.18);
+}
+
+.app-project-rail-card__progress {
+  color: #f4ffb5;
+  font-size: 0.92rem;
+  font-weight: 900;
+}
+
+.app-project-rail-card__title {
+  display: block;
+  color: rgba(248, 250, 252, 0.96);
+  font-size: 1.1rem;
+  line-height: 1.2;
+}
+
+.app-project-rail-card__owner,
+.app-project-rail-card__summary,
+.app-project-detail__summary,
+.app-project-detail__body,
+.app-project-milestones__item p,
+.app-project-empty-state p {
+  margin: 0;
+  color: rgba(220, 227, 233, 0.82);
+}
+
+.app-project-rail-card__meta {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  color: rgba(228, 235, 240, 0.72);
+  font-size: 0.88rem;
+}
+
+.app-project-rail-card__tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.app-project-progress {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+}
+
+.app-project-progress__track {
+  display: block;
+  width: 100%;
+  height: 10px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.app-project-progress__fill {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, rgba(217,255,56,0.9), rgba(94,205,255,0.9));
+}
+
+.app-project-progress__label {
+  color: rgba(245, 248, 252, 0.92);
+  font-size: 0.88rem;
+  font-weight: 800;
+}
+
+.app-project-content {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 14px;
+  min-height: 0;
+}
+
+.app-project-content__close-row {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.app-project-detail {
+  display: grid;
+  gap: 16px;
+  min-height: 0;
+}
+
+.app-project-detail__hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1.45fr) minmax(320px, 0.9fr);
+  gap: 18px;
+  padding: 22px;
+}
+
+.app-project-detail__hero-main,
+.app-project-detail__hero-copy,
+.app-project-detail__hero-command {
+  display: grid;
+  gap: 12px;
+}
+
+.app-project-detail__title {
+  margin: 0;
+  font-size: clamp(2.1rem, 4vw, 3.5rem);
+  line-height: 1;
+  color: rgba(248, 250, 252, 0.96);
+}
+
+.app-project-detail__fact-grid,
+.app-project-detail__info-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.app-project-detail__fact-card,
+.app-project-detail__info-card {
+  display: grid;
+  gap: 8px;
+  min-height: 116px;
+  padding: 16px 18px;
+  border-radius: 22px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.07), rgba(255,255,255,0.03)),
+    rgba(20,24,32,0.94);
+}
+
+.app-project-detail__fact-card span,
+.app-project-detail__info-card span {
+  color: rgba(220, 227, 233, 0.78);
+  font-size: 0.82rem;
+}
+
+.app-project-detail__fact-card strong,
+.app-project-detail__info-card strong {
+  color: rgba(248, 250, 252, 0.96);
+  font-size: 1.02rem;
+  line-height: 1.35;
+}
+
+.app-project-detail__fact-card p,
+.app-project-detail__info-card p {
+  margin: 0;
+  color: rgba(220, 227, 233, 0.78);
+  line-height: 1.5;
+}
+
+.app-project-detail__hero-metrics {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.app-project-detail__insight-board {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.app-project-detail__insight-card {
+  display: grid;
+  gap: 14px;
+  padding: 22px;
+}
+
+.app-project-detail__insight-metrics {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.app-project-metric-card {
+  display: grid;
+  gap: 10px;
+  min-height: 138px;
+  padding: 16px 18px;
+  border-radius: 24px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.07), rgba(255,255,255,0.03)),
+    rgba(20,24,32,0.94);
+}
+
+.app-project-metric-card span,
+.app-project-metric-card p {
+  color: rgba(220, 227, 233, 0.82);
+  margin: 0;
+}
+
+.app-project-metric-card strong {
+  color: rgba(248, 250, 252, 0.96);
+  font-size: 1.15rem;
+  line-height: 1.3;
+}
+
+.app-project-detail__columns {
+  display: grid;
+  grid-template-columns: minmax(0, 1.65fr) minmax(300px, 0.85fr);
+  gap: 16px;
+}
+
+.app-project-detail__action-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.app-project-detail__section,
+.app-project-detail__sidecard {
+  display: grid;
+  gap: 16px;
+  padding: 22px;
+}
+
+.app-project-detail__snapshot {
+  display: grid;
+  gap: 10px;
+}
+
+.app-project-detail__snapshot-item {
+  display: grid;
+  gap: 8px;
+  padding: 14px 16px;
+  border-radius: 20px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.07), rgba(255,255,255,0.03)),
+    rgba(20,24,32,0.94);
+}
+
+.app-project-detail__snapshot-item span {
+  color: rgba(220, 227, 233, 0.78);
+  font-size: 0.82rem;
+}
+
+.app-project-detail__snapshot-item strong {
+  color: rgba(248, 250, 252, 0.96);
+}
+
+.app-project-detail__rule-list {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding-left: 18px;
+  color: rgba(232, 238, 242, 0.84);
+}
+
+.app-project-detail__rule-list li {
+  line-height: 1.55;
+}
+
+.app-project-progress--detail {
+  grid-template-columns: 1fr;
+  align-items: stretch;
+}
+
+.app-project-detail__workspace-link {
+  justify-content: center;
+}
+
+.app-project-hero-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.app-project-hero-actions .mg-btn {
+  justify-content: center;
+  text-align: center;
+}
+
+.app-project-related-list {
+  display: grid;
+  gap: 10px;
+}
+
+.app-project-related-card {
+  display: grid;
+  gap: 6px;
+  padding: 14px 16px;
+  border-radius: 20px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.07), rgba(255,255,255,0.03)),
+    rgba(20,24,32,0.94);
+  color: inherit;
+  text-decoration: none;
+  transition: transform 180ms ease, border-color 180ms ease, box-shadow 180ms ease;
+}
+
+.app-project-related-card:hover,
+.app-project-related-card:focus-visible {
+  transform: translateX(4px);
+  border-color: rgba(217, 255, 56, 0.24);
+  box-shadow: 0 16px 24px rgba(0, 0, 0, 0.22);
+}
+
+.app-project-related-card strong {
+  color: rgba(248, 250, 252, 0.96);
+}
+
+.app-project-related-card span {
+  color: rgba(217, 255, 56, 0.8);
+  font-size: 0.82rem;
+  font-weight: 800;
+}
+
+.app-project-related-card p {
+  margin: 0;
+  color: rgba(220, 227, 233, 0.78);
+  line-height: 1.5;
+}
+
+.app-project-sponsor-panel,
+.app-project-join-panel {
+  display: grid;
+  gap: 14px;
+  padding: 20px;
+}
+
+.app-project-sponsor-panel__header,
+.app-project-join-panel__header,
+.app-project-sponsor-panel__stats {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.app-project-sponsor-panel__stats {
+  align-items: stretch;
+}
+
+.app-project-sponsor-panel__stats > div {
+  display: grid;
+  gap: 8px;
+  flex: 1 1 0;
+  padding: 14px 16px;
+  border-radius: 20px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.07), rgba(255,255,255,0.03)),
+    rgba(20,24,32,0.94);
+}
+
+.app-project-sponsor-panel__stats span,
+.app-project-sponsor-panel__stats strong {
+  color: rgba(248, 250, 252, 0.94);
+}
+
+.app-project-sponsor-panel__stats span {
+  font-size: 0.86rem;
+  color: rgba(220, 227, 233, 0.82);
+}
+
+.app-project-sponsor-panel__form,
+.app-project-join-panel__form {
+  display: grid;
+  gap: 10px;
+}
+
+.app-project-sponsor-panel__submit,
+.app-project-join-panel__submit {
+  justify-content: center;
+}
+
+.app-project-milestones {
+  display: grid;
+  gap: 12px;
+}
+
+.app-project-milestones__item {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: auto minmax(0, 1fr);
+  padding: 14px 16px;
+  border-radius: 22px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.07), rgba(255,255,255,0.03)),
+    rgba(20,24,32,0.94);
+}
+
+.app-project-milestones__item strong {
+  color: rgba(248, 250, 252, 0.96);
+}
+
+.app-project-milestones__pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 76px;
+  min-height: 34px;
+  padding: 0 14px;
+  border-radius: 999px;
+  font-size: 0.82rem;
+  font-weight: 800;
+}
+
+.app-project-milestones__item--done .app-project-milestones__pill {
+  background: rgba(42, 173, 89, 0.14);
+  color: #aff0bc;
+}
+
+.app-project-milestones__item--active .app-project-milestones__pill {
+  background: rgba(217, 255, 56, 0.14);
+  color: #f4ffb5;
+}
+
+.app-project-milestones__item--planned .app-project-milestones__pill {
+  background: rgba(92, 116, 255, 0.14);
+  color: #c6d0ff;
+}
+
+.app-project-empty-state {
+  display: grid;
+  place-items: center;
+  gap: 8px;
+  min-height: 220px;
+  padding: 20px;
+  text-align: center;
+}
+
+.app-project-empty-state strong {
+  color: rgba(248, 250, 252, 0.96);
+  font-size: 1.15rem;
+}
+
+.app-project-empty-state--board {
+  min-height: min(640px, calc(100vh - 220px));
+}
+
+@media (max-width: 1200px) {
+  .app-project-shell {
+    grid-template-columns: minmax(280px, 320px) minmax(0, 1fr);
+  }
+
+  .app-project-detail__hero {
+    grid-template-columns: 1fr;
+  }
+
+  .app-project-detail__insight-board,
+  .app-project-detail__columns {
+    grid-template-columns: 1fr;
+  }
+
+  .app-project-detail__action-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 960px) {
+  .app-project-shell {
+    grid-template-columns: 1fr;
+    width: min(100vw - 28px, 100%);
+    min-height: calc(100vh - 28px);
+    margin: 14px auto;
+    padding: 16px;
+  }
+
+  .app-project-rail__scope-tabs {
+    grid-template-columns: 1fr;
+  }
+
+  .app-project-rail__summary-grid,
+  .app-project-detail__fact-grid,
+  .app-project-detail__info-grid,
+  .app-project-detail__insight-metrics,
+  .app-project-detail__hero-metrics {
+    grid-template-columns: 1fr;
+  }
+
+  .app-project-hero-actions {
+    grid-template-columns: 1fr;
+  }
+}

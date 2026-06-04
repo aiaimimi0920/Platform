@@ -1,0 +1,52 @@
+import { integer, pgTable, real, text, timestamp } from "drizzle-orm/pg-core";
+
+import { users } from "@/modules/identity/schema";
+
+export const reputationSnapshots = pgTable("reputation_snapshots", {
+  userId: text("user_id").primaryKey().references(() => users.id, { onDelete: "cascade" }),
+  reputationScore: integer("reputation_score").notNull(),
+  completedTaskCount: integer("completed_task_count").notNull(),
+  defaultedTaskCount: integer("defaulted_task_count").notNull(),
+  cancelledTaskCount: integer("cancelled_task_count").notNull(),
+  activeTaskCount: integer("active_task_count").notNull(),
+  favorableArbitrationCount: integer("favorable_arbitration_count").notNull().default(0),
+  unfavorableArbitrationCount: integer("unfavorable_arbitration_count").notNull().default(0),
+  trustLevel: integer("trust_level").notNull().default(0),
+  baseScore: integer("base_score").notNull().default(100),
+  trustBonus: integer("trust_bonus").notNull().default(0),
+  completedContribution: integer("completed_contribution").notNull().default(0),
+  defaultedPenalty: integer("defaulted_penalty").notNull().default(0),
+  cancelledPenalty: integer("cancelled_penalty").notNull().default(0),
+  activeContribution: integer("active_contribution").notNull().default(0),
+  arbitrationWinBonus: integer("arbitration_win_bonus").notNull().default(0),
+  arbitrationLossPenalty: integer("arbitration_loss_penalty").notNull().default(0),
+  completionRate: real("completion_rate").notNull(),
+  defaultRate: real("default_rate").notNull(),
+  tier: text("tier").notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull(),
+});
+
+export const reputationHistory = pgTable("reputation_history", {
+  id: text("id").primaryKey(),
+  userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  reputationScore: integer("reputation_score").notNull(),
+  completedTaskCount: integer("completed_task_count").notNull(),
+  defaultedTaskCount: integer("defaulted_task_count").notNull(),
+  cancelledTaskCount: integer("cancelled_task_count").notNull(),
+  activeTaskCount: integer("active_task_count").notNull(),
+  favorableArbitrationCount: integer("favorable_arbitration_count").notNull().default(0),
+  unfavorableArbitrationCount: integer("unfavorable_arbitration_count").notNull().default(0),
+  trustLevel: integer("trust_level").notNull().default(0),
+  baseScore: integer("base_score").notNull().default(100),
+  trustBonus: integer("trust_bonus").notNull().default(0),
+  completedContribution: integer("completed_contribution").notNull().default(0),
+  defaultedPenalty: integer("defaulted_penalty").notNull().default(0),
+  cancelledPenalty: integer("cancelled_penalty").notNull().default(0),
+  activeContribution: integer("active_contribution").notNull().default(0),
+  arbitrationWinBonus: integer("arbitration_win_bonus").notNull().default(0),
+  arbitrationLossPenalty: integer("arbitration_loss_penalty").notNull().default(0),
+  completionRate: real("completion_rate").notNull(),
+  defaultRate: real("default_rate").notNull(),
+  tier: text("tier").notNull(),
+  recordedAt: timestamp("recorded_at", { withTimezone: true }).notNull(),
+});

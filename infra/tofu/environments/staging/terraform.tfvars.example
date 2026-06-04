@@ -1,0 +1,7 @@
+project_id            = "replace-with-gcp-project"
+cloudflare_api_token  = "replace-with-cloudflare-api-token"
+cloudflare_zone_id    = "replace-with-cloudflare-zone-id"
+root_domain           = "example.com"
+files_cname_target    = "pub-xxxxxxxx.r2.dev"
+ssh_source_ranges     = ["203.0.113.10/32"]
+ingress_source_ranges = ["173.245.48.0/20"]

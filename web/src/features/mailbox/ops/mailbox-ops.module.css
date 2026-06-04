@@ -1,0 +1,565 @@
+.mailboxOpsScope {
+  display: contents;
+}
+
+:global(.app-mailbox-ops__sidebar-card) {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.04)),
+    rgba(10, 14, 18, 0.94);
+}
+
+:global(.app-mailbox-ops__sidebar-stats) {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+:global(.app-mailbox-ops__sidebar-actions) {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+:global(.app-mailbox-ops__sidebar-section) {
+  display: grid;
+  gap: 14px;
+}
+
+:global(.app-mailbox-ops__sidebar-section-head) {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+:global(.app-mailbox-ops__sidebar-section-head strong) {
+  color: rgba(246, 249, 252, 0.96);
+  font-size: 0.98rem;
+}
+
+:global(.app-mailbox-ops__sidebar-section-head p) {
+  margin: 6px 0 0;
+  color: rgba(190, 199, 217, 0.72);
+  line-height: 1.58;
+  font-size: 0.9rem;
+}
+
+:global(.app-mailbox-ops__sidebar-stat) {
+  display: grid;
+  gap: 6px;
+  padding: 14px 16px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 18px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.015)),
+    rgba(14, 18, 24, 0.68);
+}
+
+:global(.app-mailbox-ops__sidebar-stat span) {
+  color: rgba(190, 199, 217, 0.72);
+  font-size: 0.82rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+:global(.app-mailbox-ops__sidebar-stat strong) {
+  color: rgba(247, 250, 252, 0.96);
+  font-size: 1.48rem;
+  line-height: 0.96;
+}
+
+:global(.app-mailbox-ops__editor-card) {
+  gap: 20px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0.06)),
+    radial-gradient(circle at top right, rgba(217, 255, 56, 0.12), transparent 28%),
+    rgba(11, 14, 19, 0.96);
+}
+
+:global(.app-mailbox-ops__editor-head) {
+  gap: 18px;
+}
+
+:global(.app-mailbox-ops__editor-copy) {
+  gap: 10px;
+}
+
+:global(.app-mailbox-ops__title) {
+  margin: 0;
+  font-size: clamp(2rem, 4vw, 2.8rem);
+  line-height: 0.96;
+  letter-spacing: -0.04em;
+}
+
+:global(.app-mailbox-ops__lead) {
+  margin: 0;
+  max-width: 72ch;
+  color: rgba(226, 232, 240, 0.76);
+  line-height: 1.65;
+}
+
+:global(.app-mailbox-ops__summary) {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+:global(.app-mailbox-ops__summary-chip) {
+  display: grid;
+  gap: 8px;
+  padding: 14px 16px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 20px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.02)),
+    rgba(8, 12, 18, 0.62);
+}
+
+:global(.app-mailbox-ops__summary-label) {
+  color: rgba(190, 199, 217, 0.72);
+  font-size: 0.82rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+:global(.app-mailbox-ops__summary-value) {
+  color: rgba(247, 250, 252, 0.96);
+  font-size: 1rem;
+  line-height: 1.4;
+  font-weight: 700;
+}
+
+:global(.app-mailbox-ops__form) {
+  gap: 18px;
+}
+
+:global(.app-mailbox-ops__section) {
+  display: grid;
+  gap: 14px;
+  padding: 18px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 24px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.045), rgba(255, 255, 255, 0.018)),
+    rgba(9, 13, 18, 0.46);
+}
+
+:global(.app-mailbox-ops__section-head) {
+  display: flex;
+  justify-content: space-between;
+  align-items: start;
+  gap: 12px;
+}
+
+:global(.app-mailbox-ops__section-head strong) {
+  color: rgba(246, 249, 252, 0.96);
+  font-size: 1rem;
+}
+
+:global(.app-mailbox-ops__section-head p) {
+  margin: 6px 0 0;
+  color: rgba(190, 199, 217, 0.72);
+  line-height: 1.6;
+}
+
+:global(.app-mailbox-ops__field-grid) {
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+:global(.app-mailbox-ops__field--wide) {
+  grid-column: span 2;
+}
+
+:global(.app-mailbox-ops__compose-pills) {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+:global(.app-mailbox-ops__compose-pill) {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 36px;
+  padding: 0 14px;
+  border: 1px solid rgba(217, 255, 56, 0.16);
+  border-radius: 999px;
+  background: rgba(217, 255, 56, 0.08);
+  color: rgba(236, 255, 168, 0.94);
+  font-size: 0.84rem;
+  font-weight: 700;
+}
+
+:global(.app-mailbox-ops__compose-pill a) {
+  color: rgba(250, 252, 255, 0.92);
+  text-decoration: none;
+}
+
+:global(.app-mailbox-ops__compose-pill--muted) {
+  border-color: rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.04);
+  color: rgba(190, 199, 217, 0.78);
+}
+
+:global(.app-mailbox-ops__utility-actions) {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+:global(.app-mailbox-ops__mode-note) {
+  display: grid;
+  gap: 6px;
+  padding: 14px 16px;
+  border: 1px solid rgba(217, 255, 56, 0.14);
+  border-radius: 18px;
+  background: linear-gradient(180deg, rgba(217, 255, 56, 0.08), rgba(255, 255, 255, 0.03));
+  color: rgba(227, 235, 241, 0.84);
+  line-height: 1.6;
+}
+
+:global(.app-mailbox-ops__mode-note strong) {
+  color: rgba(245, 249, 252, 0.96);
+}
+
+:global(.app-mailbox-ops__recipient-preview) {
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 20px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.018)),
+    rgba(7, 10, 15, 0.58);
+}
+
+:global(.app-mailbox-ops__recipient-preview-copy) {
+  display: grid;
+  gap: 6px;
+}
+
+:global(.app-mailbox-ops__recipient-preview-copy strong) {
+  color: rgba(246, 249, 252, 0.96);
+  font-size: 0.98rem;
+}
+
+:global(.app-mailbox-ops__recipient-preview-copy p) {
+  margin: 0;
+  color: rgba(226, 232, 240, 0.76);
+  line-height: 1.6;
+}
+
+:global(.app-mailbox-ops__recipient-preview-list) {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+:global(.app-mailbox-ops__recipient-preview-item),
+:global(.app-mailbox-ops__recipient-preview-ok) {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 34px;
+  padding: 0 12px;
+  border-radius: 999px;
+  font-size: 0.84rem;
+  font-weight: 700;
+}
+
+:global(.app-mailbox-ops__recipient-preview-item) {
+  border: 1px solid rgba(239, 68, 68, 0.18);
+  background: rgba(239, 68, 68, 0.12);
+  color: rgba(255, 210, 210, 0.94);
+}
+
+:global(.app-mailbox-ops__recipient-preview-ok) {
+  border: 1px solid rgba(217, 255, 56, 0.16);
+  background: rgba(217, 255, 56, 0.08);
+  color: rgba(232, 255, 151, 0.94);
+}
+
+:global(.app-mailbox-ops__attachment-summary-list) {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+:global(.app-mailbox-ops__attachment-preview) {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 220px;
+  padding: 14px 16px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 18px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.018)),
+    rgba(10, 13, 19, 0.56);
+}
+
+:global(.app-mailbox-ops__attachment-preview-icon),
+:global(.app-mailbox-ops__attachment-preview-item) {
+  width: 28px;
+  height: 28px;
+  flex: 0 0 auto;
+}
+
+:global(.app-mailbox-ops__attachment-preview-item) {
+  display: inline-grid;
+  place-items: center;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(240, 244, 248, 0.92);
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+:global(.app-mailbox-ops__attachment-preview-copy) {
+  display: grid;
+  gap: 4px;
+}
+
+:global(.app-mailbox-ops__attachment-preview-copy strong) {
+  color: rgba(247, 250, 252, 0.96);
+  font-size: 0.96rem;
+}
+
+:global(.app-mailbox-ops__attachment-preview-copy span) {
+  color: rgba(190, 199, 217, 0.72);
+  font-size: 0.82rem;
+}
+
+:global(.app-mailbox-ops__attachments-grid) {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  gap: 14px;
+}
+
+:global(.app-mailbox-ops__attachment-card) {
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 20px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.015)),
+    rgba(7, 10, 14, 0.58);
+}
+
+:global(.app-mailbox-ops__attachment-card-head) {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+:global(.app-mailbox-ops__attachment-card-head strong) {
+  color: rgba(246, 249, 252, 0.96);
+  font-size: 0.94rem;
+}
+
+:global(.app-mailbox-ops__actions) {
+  padding-top: 4px;
+}
+
+:global(.app-mailbox-ops__foot-actions) {
+  display: grid;
+  gap: 12px;
+  justify-items: start;
+}
+
+:global(.app-mailbox-ops__danger-note) {
+  margin: 0;
+  color: rgba(190, 199, 217, 0.68);
+  font-size: 0.88rem;
+  line-height: 1.6;
+}
+
+:global(.app-mailbox-ops__list-item) {
+  gap: 12px;
+}
+
+:global(.app-mailbox-ops__list-meta),
+:global(.app-mailbox-ops__list-metrics) {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 12px;
+  color: rgba(226, 232, 240, 0.74);
+  font-size: 0.9rem;
+}
+
+:global(.app-mailbox-ops__library-list) {
+  display: grid;
+  gap: 12px;
+}
+
+:global(.app-mailbox-ops__library-item) {
+  display: grid;
+  gap: 10px;
+  padding: 16px 18px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 20px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.015)),
+    rgba(8, 11, 16, 0.58);
+}
+
+:global(.app-mailbox-ops__library-item--active) {
+  border-color: rgba(217, 255, 56, 0.24);
+  box-shadow: 0 0 0 1px rgba(217, 255, 56, 0.1) inset;
+}
+
+:global(.app-mailbox-ops__library-item-head) {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+:global(.app-mailbox-ops__library-item-head strong) {
+  color: rgba(247, 250, 252, 0.96);
+  font-size: 1rem;
+}
+
+:global(.app-mailbox-ops__library-item-description) {
+  margin: 0;
+  color: rgba(190, 199, 217, 0.72);
+  line-height: 1.6;
+  font-size: 0.9rem;
+}
+
+:global(.app-mailbox-ops__library-item-meta) {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  color: rgba(226, 232, 240, 0.72);
+  font-size: 0.84rem;
+}
+
+:global(.app-mailbox-ops__library-item-actions) {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+:global(.app-mailbox-ops__audit) {
+  display: grid;
+  gap: 16px;
+  padding: 24px;
+  border-color: rgba(255, 255, 255, 0.1);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.04)),
+    rgba(16, 18, 28, 0.74);
+}
+
+:global(.app-mailbox-ops__audit-head) {
+  display: flex;
+  justify-content: space-between;
+  align-items: start;
+  gap: 16px;
+}
+
+:global(.app-mailbox-ops__audit-head strong) {
+  color: rgba(246, 249, 252, 0.96);
+  font-size: 1rem;
+}
+
+:global(.app-mailbox-ops__audit-head p) {
+  margin: 6px 0 0;
+  color: rgba(190, 199, 217, 0.72);
+  line-height: 1.6;
+}
+
+:global(.app-mailbox-ops__audit-stats) {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+:global(.app-mailbox-ops__delivery-list) {
+  display: grid;
+  gap: 12px;
+}
+
+:global(.app-mailbox-ops__delivery-item) {
+  display: grid;
+  gap: 8px;
+  padding: 16px 18px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 20px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.015)),
+    rgba(10, 13, 18, 0.62);
+}
+
+:global(.app-mailbox-ops__delivery-copy) {
+  display: grid;
+  gap: 10px;
+}
+
+:global(.app-mailbox-ops__delivery-head) {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+:global(.app-mailbox-ops__delivery-head strong) {
+  color: rgba(247, 250, 252, 0.96);
+  font-size: 1rem;
+}
+
+:global(.app-mailbox-ops__delivery-meta) {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  color: rgba(190, 199, 217, 0.74);
+  font-size: 0.88rem;
+}
+
+:global(.app-mailbox-ops__delivery-error) {
+  margin: 0;
+  color: rgba(255, 206, 206, 0.9);
+  font-size: 0.88rem;
+  line-height: 1.55;
+}
+
+:global(.app-mailbox-ops__empty) {
+  display: grid;
+  gap: 8px;
+  padding: 18px;
+  border: 1px dashed rgba(255, 255, 255, 0.12);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+:global(.app-mailbox-ops__empty strong) {
+  color: rgba(242, 246, 250, 0.96);
+  font-size: 1rem;
+}
+
+:global(.app-mailbox-ops__empty span) {
+  color: rgba(190, 199, 217, 0.72);
+  line-height: 1.6;
+}
+
+@media (max-width: 1100px) {
+  :global(.app-mailbox-ops__summary) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  :global(.app-mailbox-ops__field--wide) {
+    grid-column: auto;
+  }
+
+  :global(.app-mailbox-ops__audit-head) {
+    flex-direction: column;
+  }
+}
