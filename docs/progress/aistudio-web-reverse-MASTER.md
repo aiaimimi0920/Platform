@@ -127,6 +127,9 @@
     - target RPC response 归因现在优先使用 Playwright response 绑定的真实
       request object；若同一 URL 连续出现多次请求，不再用 `method + url`
       覆盖成最后一次 request，避免重复 URL 样本错配 request / response pair
+    - capture request id 现在改为单次 probe 内单调递增 factory，不再依赖
+      `capture.requests.length`；即使 async request entry 创建在
+      `request.allHeaders()` 等待期间重叠，也不会生成重复 request id
     - `normalized-target-rpc-contract.json` 现在会优先选用各目标 RPC
       的完整 request + response pair；若前面存在 orphan / partial pair，
       不会再让归一化合同误降级为不完整
@@ -154,7 +157,7 @@
       opaque token、双 RPC URL 与双 RPC 2xx response status；否则只保留
       诊断 artifact，不把 validation `ok` 或 object-storage sidecar mirror
       误置为通过
-    - 当前脚本测试覆盖 `Gateway/scripts/tests/*.test.mjs = 32 passed` 与
+    - 当前脚本测试覆盖 `Gateway/scripts/tests/*.test.mjs = 33 passed` 与
       `Gateway/tests/python = 7 passed`
   - `text / stream/tools` 当前已统一走 `generateContent request plan -> browser request spec` 抽象
   - 一般文本热路径代码侧默认已提升为 `CodeAssistantOffline -> StreamCodeAssistantOfflineGeneration` program-owned pure-http first：

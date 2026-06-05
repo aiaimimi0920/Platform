@@ -153,6 +153,9 @@
 - target RPC response 归因现在优先使用 Playwright response 绑定的真实 request
   object；若同一 URL 连续出现多次请求，不再用 `method + url` 覆盖成最后一次
   request，避免重复 URL 样本错配 request / response pair
+- capture request id 现在改为单次 probe 内单调递增 factory，不再依赖
+  `capture.requests.length`；即使 async request entry 创建在
+  `request.allHeaders()` 等待期间重叠，也不会生成重复 request id
 - `normalized-target-rpc-contract.json` 现在会优先选用各目标 RPC 的完整
   request + response pair；若前面存在 orphan / partial pair，不会再让归一化
   合同误降级为不完整
@@ -286,7 +289,9 @@
     也不会发布不可 replay 的 sidecar mirror
   - 未抓全 target contract 时，stdout summary 仍会给出 target / normalized
     diagnostic artifact 路径
-  - `Gateway/scripts/tests/*.test.mjs` 当前为 `32 passed`
+  - request id factory 在单次 probe 内单调递增，且不依赖
+    `capture.requests.length`
+  - `Gateway/scripts/tests/*.test.mjs` 当前为 `33 passed`
   - `Gateway/tests/python` 当前为 `7 passed`
 - 已尝试补 live steady-state 证据：
   - 从旧 `NeuroPlatform/.runtime/ai-gateway-objects` 只读复制历史
