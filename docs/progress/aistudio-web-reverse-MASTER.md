@@ -176,7 +176,38 @@
     - live probe 会在进入/启动 owned app 前后 best-effort 处理 AI Studio
       `Remix ...` modal，自动点击 `Apply`，避免卡在 remix 确认层后无法
       继续补 prompt / capture
-    - 当前脚本测试覆盖 `Gateway/scripts/tests/*.test.mjs = 39 passed` 与
+    - live probe stdout summary 现在会直接暴露目标 RPC 诊断字段：
+      - `targetRpcModelPath`
+      - `targetRpcResponseStatuses`
+      - `targetRpcFailure`
+      这样只看 stdout 也能区分“未抓到目标 RPC”和“目标 RPC 已抓到但被
+      上游拒绝”
+    - 2026-06-05 已通过人工登录刷新一份可用 storage-state：
+      - `credential-runtime/aistudio-web/manual-login-20260605-233444-20260605-153446/storage-state.json`
+      - export artifact 显示 `cookieCount=24`、`hasAistudioSurface=true`
+      - 这证明当前最新失败不再是历史登录态过期
+    - 使用新登录态的 live probe 已能通过 remix/Apply 并捕获
+      `CodeAssistantOffline`，但被上游权限拒绝：
+      - 归档目录：`.runtime/aistudio-live-probe/manual-login-diagnostic-ws9998-20260606-005811`
+      - `matchedCodeAssistantOfflineCount=1`
+      - `matchedStreamCodeAssistantOfflineGenerationCount=0`
+      - `targetRpcModelPath=models/gemini-3.5-flash`
+      - `targetRpcResponseStatuses.codeAssistantOffline=403`
+      - `targetRpcFailure.bodyPreview=[7,"The caller does not have permission"]`
+      - 因 `CodeAssistantOffline` 已被拒绝，本轮不会继续发出
+        `StreamCodeAssistantOfflineGeneration`
+    - 只读 one-off model override sweep 已确认失败不是单一
+      `models/gemini-3.5-flash` 模型名导致：
+      - 归档目录：`.runtime/aistudio-live-probe/model-override-sweep-20260605T165008`
+      - 已把 CodeAssistant request `[7]` 分别改写为
+        `models/gemini-2.5-flash`、`models/gemini-2.0-flash`、
+        `models/gemini-1.5-flash`、`models/gemini-2.5-pro`、
+        `models/gemini-2.0-flash-001`
+      - 所有候选都返回同样的 `403 [7,"The caller does not have permission"]`
+      - 当前更强结论是：登录态可用、remix flow 可用、目标 RPC 可捕获；
+        阻塞点在当前账号/区域/项目对 AIStudio Apps
+        `CodeAssistantOffline` 能力本身没有权限，而不是单个模型名错误
+    - 当前脚本测试覆盖 `Gateway/scripts/tests/*.test.mjs = 40 passed` 与
       `Gateway/tests/python = 7 passed`
   - `text / stream/tools` 当前已统一走 `generateContent request plan -> browser request spec` 抽象
   - 一般文本热路径代码侧默认已提升为 `CodeAssistantOffline -> StreamCodeAssistantOfflineGeneration` program-owned pure-http first：
@@ -234,11 +265,12 @@
       - 因此当前仓内、旧 `NeuroPlatform` runtime、本机可安全复制的 Chrome
         profile 中，仍未发现可复用的 AIStudio 已登录态 / target RPC capture source
       - 当前 shell 也未设置 remote object-storage env，因此没有可自动枚举 /
-        mirror 的新远端 AIStudio runtime state；下一步需要先通过
-        `Gateway/scripts/export-aistudio-storage-state.mjs` 刷新一份本地隔离
-        storage-state，再用现有 live probe 验证是否能捕获 replay-ready 双 RPC
-      - 下一轮需要刷新可用 AIStudio 登录态 / browser profile 后重跑同一 probe，直到捕获
-        `CodeAssistantOffline` 与 `StreamCodeAssistantOfflineGeneration` 双 RPC
+        mirror 的新远端 AIStudio runtime state
+      - 2026-06-05 后续人工登录已经刷新本地隔离 storage-state；因此下一轮
+        不应继续把失败归因到登录态，而应优先更换/确认具备 AIStudio Apps
+        `CodeAssistantOffline` 权限的账号、区域或项目后重跑同一 probe，直到
+        捕获 `CodeAssistantOffline` 与 `StreamCodeAssistantOfflineGeneration`
+        双 RPC 的 replay-ready 合同
 - 当前明确不在做的内容：
   - JS/browser worker 逻辑扩张
   - 新能力 claim
