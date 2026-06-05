@@ -172,6 +172,9 @@
 - `modelPath` 归一化只从 `CodeAssistantOffline` request `[7]` 提取；若槽位
   缺失则保持 `null`，让 Rust replay 使用 caller requested model fallback，
   避免 prompt / stream 文本中的 `models/...` 字样抢占真实 runtime model
+- 目标 RPC sidecar 的 preferred header subset 现在按 header name 大小写无关
+  匹配，并继续以规范小写 key 输出，避免 `Content-Type` / `X-Goog-Api-Key`
+  等 mixed-case 捕获样本丢失 replay 关键 header
 - `replayReadyTargetRpcContract=true` 是比 `capturedTargetRpcContract=true`
   更强的可 replay / 可发布 sidecar 门槛，当前要求：
   - 双目标 RPC request + response pair 均已捕获
@@ -271,12 +274,14 @@
     non-replay-ready
   - `modelPath` 只会从 CodeAssistant 请求槽位 `[7]` 提取；槽位缺失时保持
     `null`，不会被 prompt / stream 中的 `models/...` 文本抢占
+  - 目标 RPC preferred header subset 会大小写无关保留，并以规范小写 key
+    写入 normalized sidecar
   - 完整双 RPC pair 若缺少 `appId` / `CodeAssistant` opaque token / URL，
     或目标 RPC response status 非 2xx，不会把 validation `ok` 误置为 true，
     也不会发布不可 replay 的 sidecar mirror
   - 未抓全 target contract 时，stdout summary 仍会给出 target / normalized
     diagnostic artifact 路径
-  - `Gateway/scripts/tests/*.test.mjs` 当前为 `30 passed`
+  - `Gateway/scripts/tests/*.test.mjs` 当前为 `31 passed`
   - `Gateway/tests/python` 当前为 `7 passed`
 - 已尝试补 live steady-state 证据：
   - 从旧 `NeuroPlatform/.runtime/ai-gateway-objects` 只读复制历史

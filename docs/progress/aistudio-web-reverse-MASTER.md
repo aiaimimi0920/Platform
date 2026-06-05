@@ -143,12 +143,15 @@
       提取；若槽位缺失则保持 `null`，让 Rust replay 使用 caller
       requested model fallback，避免 prompt / stream 文本中的 `models/...`
       字样抢占真实 runtime model
+    - 目标 RPC sidecar 的 preferred header subset 现在按 header name
+      大小写无关匹配，并继续以规范小写 key 输出，避免 `Content-Type` /
+      `X-Goog-Api-Key` 等 mixed-case 捕获样本丢失 replay 关键 header
     - 新增 `replayReadyTargetRpcContract` 作为可 replay / 可发布 sidecar
       门槛：除完整双 RPC pair 外，还要求 `appId`、`CodeAssistant`
       opaque token、双 RPC URL 与双 RPC 2xx response status；否则只保留
       诊断 artifact，不把 validation `ok` 或 object-storage sidecar mirror
       误置为通过
-    - 当前脚本测试覆盖 `Gateway/scripts/tests/*.test.mjs = 30 passed` 与
+    - 当前脚本测试覆盖 `Gateway/scripts/tests/*.test.mjs = 31 passed` 与
       `Gateway/tests/python = 7 passed`
   - `text / stream/tools` 当前已统一走 `generateContent request plan -> browser request spec` 抽象
   - 一般文本热路径代码侧默认已提升为 `CodeAssistantOffline -> StreamCodeAssistantOfflineGeneration` program-owned pure-http first：
