@@ -165,6 +165,10 @@
   stream response body 全局扫描 UUID；若缺少槽位来源的 `appId`，归一化
   sidecar 保持 diagnostic / non-replay-ready，不会靠任意 UUID fallback
   误发布不可 replay 的合同
+- `CodeAssistantOffline` request `[11] / [20]` 内部必须一致；它与
+  `StreamCodeAssistantOfflineGeneration` request `[3]` 同时存在时也必须
+  一致，否则归一化 sidecar 保持 diagnostic / non-replay-ready，不发布冲突
+  `appId` 合同
 - `modelPath` 归一化只从 `CodeAssistantOffline` request `[7]` 提取；若槽位
   缺失则保持 `null`，让 Rust replay 使用 caller requested model fallback，
   避免 prompt / stream 文本中的 `models/...` 字样抢占真实 runtime model
@@ -262,6 +266,9 @@
     pair，归一化合同会优先选中 2xx 完整 pair
   - `appId` 只会从 CodeAssistant / Stream 请求槽位提取，不会被响应中的
     UUID 形态 `generationId`、prompt UUID 或 stream response UUID 抢占
+  - CodeAssistant `[11] / [20]` 内部冲突，或 CodeAssistant 与 Stream
+    两侧请求槽位同时存在但 `appId` 不一致时，合同保持 diagnostic /
+    non-replay-ready
   - `modelPath` 只会从 CodeAssistant 请求槽位 `[7]` 提取；槽位缺失时保持
     `null`，不会被 prompt / stream 中的 `models/...` 文本抢占
   - 完整双 RPC pair 若缺少 `appId` / `CodeAssistant` opaque token / URL，
@@ -269,7 +276,7 @@
     也不会发布不可 replay 的 sidecar mirror
   - 未抓全 target contract 时，stdout summary 仍会给出 target / normalized
     diagnostic artifact 路径
-  - `Gateway/scripts/tests/*.test.mjs` 当前为 `28 passed`
+  - `Gateway/scripts/tests/*.test.mjs` 当前为 `30 passed`
   - `Gateway/tests/python` 当前为 `7 passed`
 - 已尝试补 live steady-state 证据：
   - 从旧 `NeuroPlatform/.runtime/ai-gateway-objects` 只读复制历史

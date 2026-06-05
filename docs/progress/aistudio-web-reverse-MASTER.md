@@ -133,6 +133,10 @@
       或 `StreamCodeAssistantOfflineGeneration` request `[3]` 提取，避免被
       响应中的 UUID 形态 `generationId`、prompt 中用户提供的 UUID、或
       stream response body 中的 UUID 误当成 Rust replay 所需 `appId`
+    - `CodeAssistantOffline` request `[11] / [20]` 内部必须一致；它与
+      `StreamCodeAssistantOfflineGeneration` request `[3]` 同时存在时也必须
+      一致，否则归一化合同保持 diagnostic / non-replay-ready，不发布冲突
+      `appId` sidecar
     - 若缺少槽位来源的 `appId`，归一化合同保持 diagnostic /
       non-replay-ready，不会靠任意 UUID fallback 误发布 sidecar
     - `modelPath` 归一化只从 `CodeAssistantOffline` request `[7]`
@@ -144,7 +148,7 @@
       opaque token、双 RPC URL 与双 RPC 2xx response status；否则只保留
       诊断 artifact，不把 validation `ok` 或 object-storage sidecar mirror
       误置为通过
-    - 当前脚本测试覆盖 `Gateway/scripts/tests/*.test.mjs = 28 passed` 与
+    - 当前脚本测试覆盖 `Gateway/scripts/tests/*.test.mjs = 30 passed` 与
       `Gateway/tests/python = 7 passed`
   - `text / stream/tools` 当前已统一走 `generateContent request plan -> browser request spec` 抽象
   - 一般文本热路径代码侧默认已提升为 `CodeAssistantOffline -> StreamCodeAssistantOfflineGeneration` program-owned pure-http first：
