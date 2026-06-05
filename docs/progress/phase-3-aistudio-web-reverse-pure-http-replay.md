@@ -314,7 +314,9 @@
   - AIStudio storage-state export helper 会生成 slugged / timestamped
     `credential-runtime/aistudio-web/.../storage-state.json` object key，
     且 auth signal 必须同时看到 AIStudio surface 与 Google auth cookie
-  - `Gateway/scripts/tests/*.test.mjs` 当前为 `36 passed`
+  - AIStudio storage-state export helper 会拒绝绝对路径、反斜杠与 `..`
+    segment，避免显式 object key 写出本地 object-storage root
+  - `Gateway/scripts/tests/*.test.mjs` 当前为 `37 passed`
   - `Gateway/tests/python` 当前为 `7 passed`
 - 已尝试补 live steady-state 证据：
   - 从旧 `NeuroPlatform/.runtime/ai-gateway-objects` 只读复制历史

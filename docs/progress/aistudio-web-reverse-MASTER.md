@@ -165,8 +165,9 @@
       手动刷新入口：打开隔离的可见 Edge/Chrome 登录 AIStudio，导出
       `credential-runtime/aistudio-web/.../storage-state.json`，供现有
       `probe-aistudio-live-request.mjs` 重跑 steady-state capture；它不直接
-      复制或改动 live Chrome / Edge profile
-    - 当前脚本测试覆盖 `Gateway/scripts/tests/*.test.mjs = 36 passed` 与
+      复制或改动 live Chrome / Edge profile；显式 object key 只接受安全
+      relative slash-delimited key，拒绝绝对路径、反斜杠与 `..` 路径穿越
+    - 当前脚本测试覆盖 `Gateway/scripts/tests/*.test.mjs = 37 passed` 与
       `Gateway/tests/python = 7 passed`
   - `text / stream/tools` 当前已统一走 `generateContent request plan -> browser request spec` 抽象
   - 一般文本热路径代码侧默认已提升为 `CodeAssistantOffline -> StreamCodeAssistantOfflineGeneration` program-owned pure-http first：
