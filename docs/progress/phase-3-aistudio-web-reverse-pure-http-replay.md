@@ -161,6 +161,8 @@
   - `StreamCodeAssistantOfflineGeneration` request `[3]`
   避免把 `CodeAssistantOffline` response `[0]` 里的 UUID 形态
   `generationId` 误当成 Rust replay 所需的 `appId`
+- `modelPath` 归一化优先从 `CodeAssistantOffline` request `[7]`
+  提取，避免 prompt 文本中的 `models/...` 字样抢占真实 runtime model
 - `replayReadyTargetRpcContract=true` 是比 `capturedTargetRpcContract=true`
   更强的可 replay / 可发布 sidecar 门槛，当前要求：
   - 双目标 RPC request + response pair 均已捕获
@@ -255,12 +257,14 @@
     pair，归一化合同会优先选中 2xx 完整 pair
   - `appId` 会优先从 CodeAssistant / Stream 请求槽位提取，不会被响应中的
     UUID 形态 `generationId` 抢占
+  - `modelPath` 会优先从 CodeAssistant 请求槽位 `[7]` 提取，不会被 prompt
+    中的 `models/...` 文本抢占
   - 完整双 RPC pair 若缺少 `appId` / `CodeAssistant` opaque token / URL，
     或目标 RPC response status 非 2xx，不会把 validation `ok` 误置为 true，
     也不会发布不可 replay 的 sidecar mirror
   - 未抓全 target contract 时，stdout summary 仍会给出 target / normalized
     diagnostic artifact 路径
-  - `Gateway/scripts/tests/*.test.mjs` 当前为 `24 passed`
+  - `Gateway/scripts/tests/*.test.mjs` 当前为 `25 passed`
   - `Gateway/tests/python` 当前为 `7 passed`
 - 已尝试补 live steady-state 证据：
   - 从旧 `NeuroPlatform/.runtime/ai-gateway-objects` 只读复制历史

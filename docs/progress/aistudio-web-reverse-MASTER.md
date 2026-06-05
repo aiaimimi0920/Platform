@@ -132,12 +132,14 @@
     - `appId` 归一化优先从 `CodeAssistantOffline` request `[11] / [20]`
       或 `StreamCodeAssistantOfflineGeneration` request `[3]` 提取，避免被
       响应中的 UUID 形态 `generationId` 抢占
+    - `modelPath` 归一化优先从 `CodeAssistantOffline` request `[7]`
+      提取，避免 prompt 文本中的 `models/...` 字样抢占真实 runtime model
     - 新增 `replayReadyTargetRpcContract` 作为可 replay / 可发布 sidecar
       门槛：除完整双 RPC pair 外，还要求 `appId`、`CodeAssistant`
       opaque token、双 RPC URL 与双 RPC 2xx response status；否则只保留
       诊断 artifact，不把 validation `ok` 或 object-storage sidecar mirror
       误置为通过
-    - 当前脚本测试覆盖 `Gateway/scripts/tests/*.test.mjs = 24 passed` 与
+    - 当前脚本测试覆盖 `Gateway/scripts/tests/*.test.mjs = 25 passed` 与
       `Gateway/tests/python = 7 passed`
   - `text / stream/tools` 当前已统一走 `generateContent request plan -> browser request spec` 抽象
   - 一般文本热路径代码侧默认已提升为 `CodeAssistantOffline -> StreamCodeAssistantOfflineGeneration` program-owned pure-http first：
