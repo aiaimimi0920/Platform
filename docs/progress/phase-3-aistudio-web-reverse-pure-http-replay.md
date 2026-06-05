@@ -431,8 +431,41 @@
     - 当前更强结论是：登录态可用、remix flow 可用、目标 RPC 可捕获；
       阻塞点在当前账号/区域/项目对 AIStudio Apps
       `CodeAssistantOffline` 能力本身没有权限，而不是单个模型名错误
+  - 2026-06-06 又刷新第二份隔离 storage-state：
+    - `credential-runtime/aistudio-web/manual-alt-codeassistant-20260606-012117-20260605-172118/storage-state.json`
+    - export artifact 同样显示 `cookieCount=24`、`hasAistudioSurface=true`
+    - 使用该登录态重跑目标 app live probe：
+      - 归档目录：`.runtime/aistudio-live-probe/manual-alt-codeassistant-ws9998-20260606-013204`
+      - `matchedCodeAssistantOfflineCount=1`
+      - `matchedStreamCodeAssistantOfflineGenerationCount=0`
+      - `targetRpcModelPath=models/gemini-3.5-flash`
+      - `targetRpcResponseStatuses.codeAssistantOffline=403`
+      - `targetRpcFailure.bodyPreview=[7,"The caller does not have permission"]`
+    - 使用该登录态再做 model override sweep：
+      - 归档目录：`.runtime/aistudio-live-probe/model-override-sweep-alt-20260605T173539`
+      - `models/gemini-2.5-flash`、`models/gemini-2.0-flash`、
+        `models/gemini-1.5-flash`、`models/gemini-2.5-pro`、
+        `models/gemini-2.0-flash-001` 全部仍返回同样的
+        `403 [7,"The caller does not have permission"]`
+    - 同一 capture 中的 `ListCloudApiKeys` 返回的 Gemini API key 可成功：
+      - `GET /v1beta/models` 返回 `200`，可列出 `50` 个模型
+      - `models/gemini-2.5-flash:generateContent` 返回 `200`，文本为 `OK`
+      - 这进一步证明普通 Gemini API / project key 是可用的；被拒的是
+        AIStudio Apps builder 专用的 `CodeAssistantOffline` RPC
+    - 从 AIStudio Apps 首页新建空白 Build app 的 one-off probe 也复现同一
+      权限拒绝：
+      - 归档目录：`.runtime/aistudio-live-probe/oneoff-build-home-alt-20260605T174244`
+      - final app URL 为 `https://aistudio.google.com/apps/c3e37f8c-eb4d-437b-98df-661dd6089878?showPreview=true&showAssistant=true`
+      - `CodeAssistantOffline` request model 仍为 `models/gemini-3.5-flash`
+      - response 仍为 `403 [7,"The caller does not have permission"]`
+      - 因此失败也不是第三方 remix app 特有问题，而是 Build/CodeAssistant
+        入口本身的权限问题
 
 因此当前不能把 live steady-state 任务勾选完成。下一轮不应继续把失败
-归因到登录态；需要先更换/确认具备 AIStudio Apps `CodeAssistantOffline`
-权限的账号、区域或项目，再重跑同一 probe，直到捕获
-`CodeAssistantOffline` 与 `StreamCodeAssistantOfflineGeneration` 双 RPC。
+归因到登录态。2026-06-06 第二个登录态、普通 Gemini API 可用性检查、
+目标 app probe、model override sweep、以及全新 Build app probe 都指向
+同一结论：阻塞点是 AIStudio Apps builder `CodeAssistantOffline` 权限，
+不是 storage-state、Gemini API key、单个模型名或第三方 remix app。
+下一轮需要更换/确认具备 AIStudio Apps `CodeAssistantOffline` 权限的
+账号、区域或项目，再重跑同一 probe，直到捕获 `CodeAssistantOffline`
+与 `StreamCodeAssistantOfflineGeneration` 双 RPC。
