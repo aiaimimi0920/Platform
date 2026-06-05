@@ -156,6 +156,11 @@
 - 若同一目标 RPC 先捕获到 rejected / non-2xx 完整 pair，后续又捕获到
   2xx 完整 pair，归一化合同会优先选择 2xx 完整 pair，避免早期失败样本
   抢占可 replay 的成功样本
+- `appId` 归一化优先从真实请求槽位提取：
+  - `CodeAssistantOffline` request `[11] / [20]`
+  - `StreamCodeAssistantOfflineGeneration` request `[3]`
+  避免把 `CodeAssistantOffline` response `[0]` 里的 UUID 形态
+  `generationId` 误当成 Rust replay 所需的 `appId`
 - `replayReadyTargetRpcContract=true` 是比 `capturedTargetRpcContract=true`
   更强的可 replay / 可发布 sidecar 门槛，当前要求：
   - 双目标 RPC request + response pair 均已捕获
@@ -248,12 +253,14 @@
     pair 抢占
   - 若同类目标 RPC 同时存在早期 non-2xx 完整 pair 与后续 2xx 完整
     pair，归一化合同会优先选中 2xx 完整 pair
+  - `appId` 会优先从 CodeAssistant / Stream 请求槽位提取，不会被响应中的
+    UUID 形态 `generationId` 抢占
   - 完整双 RPC pair 若缺少 `appId` / `CodeAssistant` opaque token / URL，
     或目标 RPC response status 非 2xx，不会把 validation `ok` 误置为 true，
     也不会发布不可 replay 的 sidecar mirror
   - 未抓全 target contract 时，stdout summary 仍会给出 target / normalized
     diagnostic artifact 路径
-  - `Gateway/scripts/tests/*.test.mjs` 当前为 `23 passed`
+  - `Gateway/scripts/tests/*.test.mjs` 当前为 `24 passed`
   - `Gateway/tests/python` 当前为 `7 passed`
 - 已尝试补 live steady-state 证据：
   - 从旧 `NeuroPlatform/.runtime/ai-gateway-objects` 只读复制历史
