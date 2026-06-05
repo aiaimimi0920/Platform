@@ -321,7 +321,10 @@
     segment，避免显式 object key 写出本地 object-storage root
   - AIStudio storage-state export helper 的 Google auth cookie domain 必须是
     `google.com` 或其子域，避免 `evilgoogle.com` 这类包含字符串误判
-  - `Gateway/scripts/tests/*.test.mjs` 当前为 `38 passed`
+  - AIStudio live probe 会在进入/启动 owned app 前后 best-effort 处理
+    AI Studio `Remix ...` modal，自动点击 `Apply`，避免 modal 阻断后续
+    prompt / capture
+  - `Gateway/scripts/tests/*.test.mjs` 当前为 `39 passed`
   - `Gateway/tests/python` 当前为 `7 passed`
 - 已尝试补 live steady-state 证据：
   - 从旧 `NeuroPlatform/.runtime/ai-gateway-objects` 只读复制历史

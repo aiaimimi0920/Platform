@@ -173,7 +173,10 @@
     - storage-state export auth signal 要求 AIStudio surface 与真实 Google
       auth cookie；cookie domain 必须是 `google.com` 或其子域，避免
       `evilgoogle.com` 这类包含字符串误判
-    - 当前脚本测试覆盖 `Gateway/scripts/tests/*.test.mjs = 38 passed` 与
+    - live probe 会在进入/启动 owned app 前后 best-effort 处理 AI Studio
+      `Remix ...` modal，自动点击 `Apply`，避免卡在 remix 确认层后无法
+      继续补 prompt / capture
+    - 当前脚本测试覆盖 `Gateway/scripts/tests/*.test.mjs = 39 passed` 与
       `Gateway/tests/python = 7 passed`
   - `text / stream/tools` 当前已统一走 `generateContent request plan -> browser request spec` 抽象
   - 一般文本热路径代码侧默认已提升为 `CodeAssistantOffline -> StreamCodeAssistantOfflineGeneration` program-owned pure-http first：
