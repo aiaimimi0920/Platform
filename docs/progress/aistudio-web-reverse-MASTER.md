@@ -143,6 +143,10 @@
       `StreamCodeAssistantOfflineGeneration` request `[3]` 同时存在时也必须
       一致，否则归一化合同保持 diagnostic / non-replay-ready，不发布冲突
       `appId` sidecar
+    - `generationId` 归一化要求 `CodeAssistantOffline` response `[0]` 与
+      `StreamCodeAssistantOfflineGeneration` request `[0]` 属于同一 generation
+      chain；两侧缺失或不一致时保持 `generationId=null`，不发布可 replay
+      sidecar
     - 若缺少槽位来源的 `appId`，归一化合同保持 diagnostic /
       non-replay-ready，不会靠任意 UUID fallback 误发布 sidecar
     - `modelPath` 归一化只从 `CodeAssistantOffline` request `[7]`
@@ -153,11 +157,16 @@
       大小写无关匹配，并继续以规范小写 key 输出，避免 `Content-Type` /
       `X-Goog-Api-Key` 等 mixed-case 捕获样本丢失 replay 关键 header
     - 新增 `replayReadyTargetRpcContract` 作为可 replay / 可发布 sidecar
-      门槛：除完整双 RPC pair 外，还要求 `appId`、`CodeAssistant`
-      opaque token、双 RPC URL 与双 RPC 2xx response status；否则只保留
-      诊断 artifact，不把 validation `ok` 或 object-storage sidecar mirror
-      误置为通过
-    - 当前脚本测试覆盖 `Gateway/scripts/tests/*.test.mjs = 33 passed` 与
+      门槛：除完整双 RPC pair 外，还要求 `appId`、一致的 `generationId`、
+      `CodeAssistant` opaque token、双 RPC URL 与双 RPC 2xx response status；
+      否则只保留诊断 artifact，不把 validation `ok` 或 object-storage
+      sidecar mirror 误置为通过
+    - 当前补了 `Gateway/scripts/export-aistudio-storage-state.mjs` 作为安全
+      手动刷新入口：打开隔离的可见 Edge/Chrome 登录 AIStudio，导出
+      `credential-runtime/aistudio-web/.../storage-state.json`，供现有
+      `probe-aistudio-live-request.mjs` 重跑 steady-state capture；它不直接
+      复制或改动 live Chrome / Edge profile
+    - 当前脚本测试覆盖 `Gateway/scripts/tests/*.test.mjs = 36 passed` 与
       `Gateway/tests/python = 7 passed`
   - `text / stream/tools` 当前已统一走 `generateContent request plan -> browser request spec` 抽象
   - 一般文本热路径代码侧默认已提升为 `CodeAssistantOffline -> StreamCodeAssistantOfflineGeneration` program-owned pure-http first：
@@ -214,6 +223,10 @@
           `page.goto: net::ERR_SOCKET_NOT_CONNECTED`，也未产生目标双 RPC 捕获证据
       - 因此当前仓内、旧 `NeuroPlatform` runtime、本机可安全复制的 Chrome
         profile 中，仍未发现可复用的 AIStudio 已登录态 / target RPC capture source
+      - 当前 shell 也未设置 remote object-storage env，因此没有可自动枚举 /
+        mirror 的新远端 AIStudio runtime state；下一步需要先通过
+        `Gateway/scripts/export-aistudio-storage-state.mjs` 刷新一份本地隔离
+        storage-state，再用现有 live probe 验证是否能捕获 replay-ready 双 RPC
       - 下一轮需要刷新可用 AIStudio 登录态 / browser profile 后重跑同一 probe，直到捕获
         `CodeAssistantOffline` 与 `StreamCodeAssistantOfflineGeneration` 双 RPC
 - 当前明确不在做的内容：

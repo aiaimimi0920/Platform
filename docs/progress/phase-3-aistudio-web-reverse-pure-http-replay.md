@@ -135,6 +135,14 @@
     - stdout JSON 与 `summary.json` 保持一致
   - 若调用方显式传入 `captureDir`，即使输入校验提前失败，也会落同一组诊断 artifact
   - 失败路径不再直接 `process.exit(...)`，而是设置 `process.exitCode`，避免绕过 `finally` 清理浏览器 / context / local websocket server
+- `gateway/scripts/export-aistudio-storage-state.mjs`
+  - 当前作为 AIStudio 登录态刷新入口：打开隔离的可见 Edge/Chrome，
+    等待人工完成 AIStudio 登录后导出 Playwright `storageState`
+  - 默认写入 `credential-runtime/aistudio-web/.../storage-state.json`，
+    可直接作为 `probe-aistudio-live-request.mjs` 的
+    `runtimeStateObjectKey`
+  - 不直接复制或改动 live Chrome / Edge profile，避免把正在运行的
+    浏览器 profile 当作测试工作目录
 
 当前作用：
 
@@ -175,6 +183,10 @@
   `StreamCodeAssistantOfflineGeneration` request `[3]` 同时存在时也必须
   一致，否则归一化 sidecar 保持 diagnostic / non-replay-ready，不发布冲突
   `appId` 合同
+- `generationId` 归一化要求 `CodeAssistantOffline` response `[0]` 与
+  `StreamCodeAssistantOfflineGeneration` request `[0]` 属于同一 generation
+  chain；两侧缺失或不一致时保持 `generationId=null`，不发布可 replay
+  sidecar
 - `modelPath` 归一化只从 `CodeAssistantOffline` request `[7]` 提取；若槽位
   缺失则保持 `null`，让 Rust replay 使用 caller requested model fallback，
   避免 prompt / stream 文本中的 `models/...` 字样抢占真实 runtime model
@@ -185,13 +197,15 @@
   更强的可 replay / 可发布 sidecar 门槛，当前要求：
   - 双目标 RPC request + response pair 均已捕获
   - 归一化合同含有 Rust replay 必需的 `appId`
+  - 归一化合同含有 CodeAssistant response 与 Stream request 一致的
+    `generationId`
   - 归一化合同含有 `codeAssistantOpaqueToken`
   - 双目标 RPC 均有可用 URL
   - 双目标 RPC response status 均为 2xx
 - `failUnlessTargetRpcCaptured=true` 的 probe `ok=true` 现在以
   `replayReadyTargetRpcContract=true` 为准；只抓到双 RPC pair 但缺少
-  `appId / codeAssistantOpaqueToken / URL / 2xx status` 时，仍会保留诊断
-  artifact，但不会把本轮 live validation 标成通过
+  `appId / generationId / codeAssistantOpaqueToken / URL / 2xx status` 时，
+  仍会保留诊断 artifact，但不会把本轮 live validation 标成通过
 - 只有 replay-ready 的归一化合同才会 mirror 到 object storage sidecar：
   - `aistudio-target-rpc-contract.json`
 - 不再把“只抓到普通 AI Studio 流量”误报成“已经抓到 steady-state 文本合同”
@@ -230,7 +244,9 @@
 - `CARGO_TARGET_DIR=C:\t\cargo-aistudio-phase3-default cargo test --manifest-path Gateway/Cargo.toml aistudio -- --nocapture`
 - `CARGO_TARGET_DIR=C:\t\cargo-aistudio-phase3-default cargo check --manifest-path Gateway/Cargo.toml`
 - `node --check Gateway/scripts/probe-aistudio-live-request.mjs`
+- `node --check Gateway/scripts/export-aistudio-storage-state.mjs`
 - `node --test Gateway/scripts/tests/probe-aistudio-live-request.test.mjs`
+- `node --test Gateway/scripts/tests/export-aistudio-storage-state.test.mjs`
 - `node --test Gateway/scripts/tests/*.test.mjs`
 - `python -m unittest discover -s Gateway/tests/python -p "test_*.py" -v`
 - `node Gateway/scripts/probe-aistudio-live-request.mjs` with:
@@ -256,6 +272,8 @@
   - `capture_contract`
   - `pure_http_material`
   - 默认 `program-owned pure-http first` 代码路径
+- 2026-06-05 新增 AIStudio storage-state 手动刷新 helper，只补齐
+  credential-refresh 操作入口；它还不是 live steady-state 验收证据
 - 2026-06-05 replay-ready probe hardening 只改 JS probe / JS test / progress
   docs；本次未重跑 cargo、browser 或 live probe，因此不把本次改动扩展声明为
   Rust/live 新验证
@@ -280,18 +298,23 @@
   - CodeAssistant `[11] / [20]` 内部冲突，或 CodeAssistant 与 Stream
     两侧请求槽位同时存在但 `appId` 不一致时，合同保持 diagnostic /
     non-replay-ready
+  - CodeAssistant response `[0]` 与 Stream request `[0]` 的 generation id
+    chain 不一致时，合同保持 diagnostic / non-replay-ready
   - `modelPath` 只会从 CodeAssistant 请求槽位 `[7]` 提取；槽位缺失时保持
     `null`，不会被 prompt / stream 中的 `models/...` 文本抢占
   - 目标 RPC preferred header subset 会大小写无关保留，并以规范小写 key
     写入 normalized sidecar
-  - 完整双 RPC pair 若缺少 `appId` / `CodeAssistant` opaque token / URL，
-    或目标 RPC response status 非 2xx，不会把 validation `ok` 误置为 true，
-    也不会发布不可 replay 的 sidecar mirror
+  - 完整双 RPC pair 若缺少 `appId` / `generationId` / `CodeAssistant`
+    opaque token / URL，或目标 RPC response status 非 2xx，不会把 validation
+    `ok` 误置为 true，也不会发布不可 replay 的 sidecar mirror
   - 未抓全 target contract 时，stdout summary 仍会给出 target / normalized
     diagnostic artifact 路径
   - request id factory 在单次 probe 内单调递增，且不依赖
     `capture.requests.length`
-  - `Gateway/scripts/tests/*.test.mjs` 当前为 `33 passed`
+  - AIStudio storage-state export helper 会生成 slugged / timestamped
+    `credential-runtime/aistudio-web/.../storage-state.json` object key，
+    且 auth signal 必须同时看到 AIStudio surface 与 Google auth cookie
+  - `Gateway/scripts/tests/*.test.mjs` 当前为 `36 passed`
   - `Gateway/tests/python` 当前为 `7 passed`
 - 已尝试补 live steady-state 证据：
   - 从旧 `NeuroPlatform/.runtime/ai-gateway-objects` 只读复制历史
@@ -365,6 +388,10 @@
         捕获证据
   - 因此当前仓内、旧 `NeuroPlatform` runtime、本机可安全复制的 Chrome
     profile 中，仍未发现可复用的 AIStudio 已登录态 / target RPC capture source
+  - 当前 shell 未设置 remote object-storage env，因此没有可自动枚举 /
+    mirror 的新远端 AIStudio runtime state；下一步需要先通过
+    `Gateway/scripts/export-aistudio-storage-state.mjs` 刷新一份本地隔离
+    storage-state，再用现有 live probe 验证是否能捕获 replay-ready 双 RPC
 
 因此当前不能把 live steady-state 任务勾选完成。下一轮需要先刷新可用
 AIStudio 登录态 / browser profile，再重跑同一 probe，直到捕获
