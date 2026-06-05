@@ -153,7 +153,18 @@
 - `normalized-target-rpc-contract.json` 现在会优先选用各目标 RPC 的完整
   request + response pair；若前面存在 orphan / partial pair，不会再让归一化
   合同误降级为不完整
-- 已把归一化合同 mirror 到 object storage sidecar：
+- `replayReadyTargetRpcContract=true` 是比 `capturedTargetRpcContract=true`
+  更强的可 replay / 可发布 sidecar 门槛，当前要求：
+  - 双目标 RPC request + response pair 均已捕获
+  - 归一化合同含有 Rust replay 必需的 `appId`
+  - 归一化合同含有 `codeAssistantOpaqueToken`
+  - 双目标 RPC 均有可用 URL
+  - 双目标 RPC response status 均为 2xx
+- `failUnlessTargetRpcCaptured=true` 的 probe `ok=true` 现在以
+  `replayReadyTargetRpcContract=true` 为准；只抓到双 RPC pair 但缺少
+  `appId / codeAssistantOpaqueToken / URL / 2xx status` 时，仍会保留诊断
+  artifact，但不会把本轮 live validation 标成通过
+- 只有 replay-ready 的归一化合同才会 mirror 到 object storage sidecar：
   - `aistudio-target-rpc-contract.json`
 - 不再把“只抓到普通 AI Studio 流量”误报成“已经抓到 steady-state 文本合同”
 
@@ -217,6 +228,9 @@
   - `capture_contract`
   - `pure_http_material`
   - 默认 `program-owned pure-http first` 代码路径
+- 2026-06-05 replay-ready probe hardening 只改 JS probe / JS test / progress
+  docs；本次未重跑 cargo、browser 或 live probe，因此不把本次改动扩展声明为
+  Rust/live 新验证
 - probe 脚本语法检查已通过，capture plumbing 改动未引入 JS 语法错误
 - probe 脚本测试当前覆盖：
   - 失败路径不直接调用 `process.exit(...)`
@@ -229,9 +243,12 @@
     都出现且各自具备 request + response pair
   - 归一化合同会优先选中完整 pair，而不是被更早出现的 orphan / partial
     pair 抢占
+  - 完整双 RPC pair 若缺少 `appId` / `CodeAssistant` opaque token / URL，
+    或目标 RPC response status 非 2xx，不会把 validation `ok` 误置为 true，
+    也不会发布不可 replay 的 sidecar mirror
   - 未抓全 target contract 时，stdout summary 仍会给出 target / normalized
     diagnostic artifact 路径
-  - `Gateway/scripts/tests/*.test.mjs` 当前为 `21 passed`
+  - `Gateway/scripts/tests/*.test.mjs` 当前为 `22 passed`
   - `Gateway/tests/python` 当前为 `7 passed`
 - 已尝试补 live steady-state 证据：
   - 从旧 `NeuroPlatform/.runtime/ai-gateway-objects` 只读复制历史

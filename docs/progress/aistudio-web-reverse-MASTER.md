@@ -127,7 +127,12 @@
     - `normalized-target-rpc-contract.json` 现在会优先选用各目标 RPC
       的完整 request + response pair；若前面存在 orphan / partial pair，
       不会再让归一化合同误降级为不完整
-    - 当前脚本测试覆盖 `Gateway/scripts/tests/*.test.mjs = 21 passed` 与
+    - 新增 `replayReadyTargetRpcContract` 作为可 replay / 可发布 sidecar
+      门槛：除完整双 RPC pair 外，还要求 `appId`、`CodeAssistant`
+      opaque token、双 RPC URL 与双 RPC 2xx response status；否则只保留
+      诊断 artifact，不把 validation `ok` 或 object-storage sidecar mirror
+      误置为通过
+    - 当前脚本测试覆盖 `Gateway/scripts/tests/*.test.mjs = 22 passed` 与
       `Gateway/tests/python = 7 passed`
   - `text / stream/tools` 当前已统一走 `generateContent request plan -> browser request spec` 抽象
   - 一般文本热路径代码侧默认已提升为 `CodeAssistantOffline -> StreamCodeAssistantOfflineGeneration` program-owned pure-http first：
