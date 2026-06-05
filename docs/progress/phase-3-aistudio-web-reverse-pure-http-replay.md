@@ -156,13 +156,15 @@
 - 若同一目标 RPC 先捕获到 rejected / non-2xx 完整 pair，后续又捕获到
   2xx 完整 pair，归一化合同会优先选择 2xx 完整 pair，避免早期失败样本
   抢占可 replay 的成功样本
-- `appId` 归一化优先从真实请求槽位提取：
+- `appId` 归一化只从真实请求槽位提取：
   - `CodeAssistantOffline` request `[11] / [20]`
   - `StreamCodeAssistantOfflineGeneration` request `[3]`
   避免把 `CodeAssistantOffline` response `[0]` 里的 UUID 形态
   `generationId` 误当成 Rust replay 所需的 `appId`
-- `appId` 不再从完整 `CodeAssistantOffline` request 文本全局扫描 UUID，
-  避免 prompt 中用户提供的 UUID 被误当成 Rust replay 所需 `appId`
+- `appId` 不再从完整 `CodeAssistantOffline` request 文本、prompt 文本或
+  stream response body 全局扫描 UUID；若缺少槽位来源的 `appId`，归一化
+  sidecar 保持 diagnostic / non-replay-ready，不会靠任意 UUID fallback
+  误发布不可 replay 的合同
 - `modelPath` 归一化优先从 `CodeAssistantOffline` request `[7]`
   提取，避免 prompt 文本中的 `models/...` 字样抢占真实 runtime model
 - `replayReadyTargetRpcContract=true` 是比 `capturedTargetRpcContract=true`
@@ -257,8 +259,8 @@
     pair 抢占
   - 若同类目标 RPC 同时存在早期 non-2xx 完整 pair 与后续 2xx 完整
     pair，归一化合同会优先选中 2xx 完整 pair
-  - `appId` 会优先从 CodeAssistant / Stream 请求槽位提取，不会被响应中的
-    UUID 形态 `generationId` 抢占
+  - `appId` 只会从 CodeAssistant / Stream 请求槽位提取，不会被响应中的
+    UUID 形态 `generationId`、prompt UUID 或 stream response UUID 抢占
   - `modelPath` 会优先从 CodeAssistant 请求槽位 `[7]` 提取，不会被 prompt
     中的 `models/...` 文本抢占
   - 完整双 RPC pair 若缺少 `appId` / `CodeAssistant` opaque token / URL，
@@ -266,7 +268,7 @@
     也不会发布不可 replay 的 sidecar mirror
   - 未抓全 target contract 时，stdout summary 仍会给出 target / normalized
     diagnostic artifact 路径
-  - `Gateway/scripts/tests/*.test.mjs` 当前为 `25 passed`
+  - `Gateway/scripts/tests/*.test.mjs` 当前为 `27 passed`
   - `Gateway/tests/python` 当前为 `7 passed`
 - 已尝试补 live steady-state 证据：
   - 从旧 `NeuroPlatform/.runtime/ai-gateway-objects` 只读复制历史
