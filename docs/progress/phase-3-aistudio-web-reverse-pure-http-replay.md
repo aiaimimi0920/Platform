@@ -330,7 +330,10 @@
     - `targetRpcFailure`
     后续只看 stdout 即可区分“未抓到目标 RPC”和“目标 RPC 已抓到但被
     上游拒绝”
-  - `Gateway/scripts/tests/*.test.mjs` 当前为 `40 passed`
+  - live probe 会记录 page-level UI diagnostic signals，并在 prompt 前
+    best-effort dismiss 非破坏性 AIStudio overlay；不会点击
+    `Create budget` 这类会改变账号/项目状态的动作
+  - `Gateway/scripts/tests/*.test.mjs` 当前为 `43 passed`
   - `Gateway/tests/python` 当前为 `7 passed`
 - 已尝试补 live steady-state 证据：
   - 从旧 `NeuroPlatform/.runtime/ai-gateway-objects` 只读复制历史

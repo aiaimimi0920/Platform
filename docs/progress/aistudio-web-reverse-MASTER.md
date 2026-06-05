@@ -236,7 +236,10 @@
         - response 仍为 `403 [7,"The caller does not have permission"]`
         - 因此失败也不是第三方 remix app 特有问题，而是 Build/CodeAssistant
           入口本身的权限问题
-    - 当前脚本测试覆盖 `Gateway/scripts/tests/*.test.mjs = 40 passed` 与
+    - live probe 会记录 page-level UI diagnostic signals，并在 prompt 前
+      best-effort dismiss 非破坏性 AIStudio overlay；不会点击
+      `Create budget` 这类会改变账号/项目状态的动作
+    - 当前脚本测试覆盖 `Gateway/scripts/tests/*.test.mjs = 43 passed` 与
       `Gateway/tests/python = 7 passed`
   - `text / stream/tools` 当前已统一走 `generateContent request plan -> browser request spec` 抽象
   - 一般文本热路径代码侧默认已提升为 `CodeAssistantOffline -> StreamCodeAssistantOfflineGeneration` program-owned pure-http first：
