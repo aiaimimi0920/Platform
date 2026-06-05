@@ -161,6 +161,8 @@
   - `StreamCodeAssistantOfflineGeneration` request `[3]`
   避免把 `CodeAssistantOffline` response `[0]` 里的 UUID 形态
   `generationId` 误当成 Rust replay 所需的 `appId`
+- `appId` 不再从完整 `CodeAssistantOffline` request 文本全局扫描 UUID，
+  避免 prompt 中用户提供的 UUID 被误当成 Rust replay 所需 `appId`
 - `modelPath` 归一化优先从 `CodeAssistantOffline` request `[7]`
   提取，避免 prompt 文本中的 `models/...` 字样抢占真实 runtime model
 - `replayReadyTargetRpcContract=true` 是比 `capturedTargetRpcContract=true`
