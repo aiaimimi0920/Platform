@@ -167,10 +167,13 @@
       `probe-aistudio-live-request.mjs` 重跑 steady-state capture；它不直接
       复制或改动 live Chrome / Edge profile；显式 object key 只接受安全
       relative slash-delimited key，拒绝绝对路径、反斜杠与 `..` 路径穿越
+    - storage-state export helper 支持无副作用 `--help` / `-h` 路径，
+      会在解析浏览器路径或启动可见窗口前直接输出 usage，避免误触发手动
+      登录等待循环
     - storage-state export auth signal 要求 AIStudio surface 与真实 Google
       auth cookie；cookie domain 必须是 `google.com` 或其子域，避免
       `evilgoogle.com` 这类包含字符串误判
-    - 当前脚本测试覆盖 `Gateway/scripts/tests/*.test.mjs = 37 passed` 与
+    - 当前脚本测试覆盖 `Gateway/scripts/tests/*.test.mjs = 38 passed` 与
       `Gateway/tests/python = 7 passed`
   - `text / stream/tools` 当前已统一走 `generateContent request plan -> browser request spec` 抽象
   - 一般文本热路径代码侧默认已提升为 `CodeAssistantOffline -> StreamCodeAssistantOfflineGeneration` program-owned pure-http first：
