@@ -150,6 +150,9 @@
   - `CodeAssistantOffline` 的 request + response pair
   - `StreamCodeAssistantOfflineGeneration` 的 request + response pair
   单个目标 RPC、或只有 request 没有 response 的半截 RPC，不再被误报为完整 target contract
+- target RPC response 归因现在优先使用 Playwright response 绑定的真实 request
+  object；若同一 URL 连续出现多次请求，不再用 `method + url` 覆盖成最后一次
+  request，避免重复 URL 样本错配 request / response pair
 - `normalized-target-rpc-contract.json` 现在会优先选用各目标 RPC 的完整
   request + response pair；若前面存在 orphan / partial pair，不会再让归一化
   合同误降级为不完整
@@ -263,6 +266,8 @@
   - 浏览器启动失败等 capture 初始化之后的异常也会留下 `capture.json`
   - 单个目标 RPC 不会把 `capturedTargetRpcContract` 误置为 true，必须双 RPC
     都出现且各自具备 request + response pair
+  - 重复 identical target RPC URL 的 response 归因会保留真实 request 顺序，
+    不会把早期 response 错配到后一次同 URL request
   - 归一化合同会优先选中完整 pair，而不是被更早出现的 orphan / partial
     pair 抢占
   - 若同类目标 RPC 同时存在早期 non-2xx 完整 pair 与后续 2xx 完整
@@ -281,7 +286,7 @@
     也不会发布不可 replay 的 sidecar mirror
   - 未抓全 target contract 时，stdout summary 仍会给出 target / normalized
     diagnostic artifact 路径
-  - `Gateway/scripts/tests/*.test.mjs` 当前为 `31 passed`
+  - `Gateway/scripts/tests/*.test.mjs` 当前为 `32 passed`
   - `Gateway/tests/python` 当前为 `7 passed`
 - 已尝试补 live steady-state 证据：
   - 从旧 `NeuroPlatform/.runtime/ai-gateway-objects` 只读复制历史
