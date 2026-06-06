@@ -239,7 +239,7 @@
     - live probe 会记录 page-level UI diagnostic signals，并在 prompt 前
       best-effort dismiss 非破坏性 AIStudio overlay；不会点击
       `Create budget` 这类会改变账号/项目状态的动作
-    - 当前脚本测试覆盖 `Gateway/scripts/tests/*.test.mjs = 43 passed` 与
+    - 当前脚本测试覆盖 `Gateway/scripts/tests/*.test.mjs = 48 passed` 与
       `Gateway/tests/python = 7 passed`
   - `text / stream/tools` 当前已统一走 `generateContent request plan -> browser request spec` 抽象
   - 一般文本热路径代码侧默认已提升为 `CodeAssistantOffline -> StreamCodeAssistantOfflineGeneration` program-owned pure-http first：
@@ -304,6 +304,12 @@
         probe、model override sweep、以及全新 Build app probe 都指向同一结论：
         阻塞点是 AIStudio Apps builder `CodeAssistantOffline` 权限，不是
         storage-state、Gemini API key、单个模型名或第三方 remix app
+      - probe 侧已补本地浏览器代理预检：显式设置
+        `browserProxyUrl=http://127.0.0.1:<port>` / `localhost` / `::1`
+        时，会在 Chromium launch 前做 TCP reachability 检查；端口不可达
+        会以 `aistudio_browser_proxy_unreachable` 早失败，并输出
+        `browserProxyPreflight`，避免把本地代理端口抖动误判为
+        AIStudio 登录态或 `CodeAssistantOffline` 权限问题
       - 下一轮需要更换/确认具备 AIStudio Apps `CodeAssistantOffline` 权限的
         账号、区域或项目后重跑同一 probe，直到捕获
         `CodeAssistantOffline` 与 `StreamCodeAssistantOfflineGeneration`

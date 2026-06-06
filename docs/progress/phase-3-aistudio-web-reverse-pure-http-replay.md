@@ -333,7 +333,7 @@
   - live probe 会记录 page-level UI diagnostic signals，并在 prompt 前
     best-effort dismiss 非破坏性 AIStudio overlay；不会点击
     `Create budget` 这类会改变账号/项目状态的动作
-  - `Gateway/scripts/tests/*.test.mjs` 当前为 `43 passed`
+  - `Gateway/scripts/tests/*.test.mjs` 当前为 `48 passed`
   - `Gateway/tests/python` 当前为 `7 passed`
 - 已尝试补 live steady-state 证据：
   - 从旧 `NeuroPlatform/.runtime/ai-gateway-objects` 只读复制历史
@@ -469,6 +469,12 @@
 目标 app probe、model override sweep、以及全新 Build app probe 都指向
 同一结论：阻塞点是 AIStudio Apps builder `CodeAssistantOffline` 权限，
 不是 storage-state、Gemini API key、单个模型名或第三方 remix app。
+probe 侧已补显式本地浏览器代理预检：当 `browserProxyUrl` 指向
+`127.0.0.1` / `localhost` / `::1` 时，脚本会在 Chromium launch 前做
+TCP reachability 检查；若 FlClash mixed-port 等本地端口不可达，会以
+`aistudio_browser_proxy_unreachable` 早失败并写出
+`browserProxyPreflight`，避免把 `ERR_PROXY_CONNECTION_FAILED` 这类本地
+网络路由问题误归因为 AIStudio 登录态或 `CodeAssistantOffline` 权限。
 下一轮需要更换/确认具备 AIStudio Apps `CodeAssistantOffline` 权限的
 账号、区域或项目，再重跑同一 probe，直到捕获 `CodeAssistantOffline`
 与 `StreamCodeAssistantOfflineGeneration` 双 RPC。
