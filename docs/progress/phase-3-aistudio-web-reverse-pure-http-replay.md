@@ -333,7 +333,7 @@
   - live probe 会记录 page-level UI diagnostic signals，并在 prompt 前
     best-effort dismiss 非破坏性 AIStudio overlay；不会点击
     `Create budget` 这类会改变账号/项目状态的动作
-  - `Gateway/scripts/tests/*.test.mjs` 当前为 `49 passed`
+  - `Gateway/scripts/tests/*.test.mjs` 当前为 `53 passed`
   - `Gateway/tests/python` 当前为 `7 passed`
 - 已尝试补 live steady-state 证据：
   - 从旧 `NeuroPlatform/.runtime/ai-gateway-objects` 只读复制历史
@@ -484,6 +484,13 @@ probe summary 现在会输出
 `authRecoveryState={isAuthRecovery:true,kind:"google_account_chooser",finalUrlHost:"accounts.google.com"}`
 并将这类 ActiveTrigger-only 登录恢复页标为 `ok=false`，避免误当成有效
 AIStudio Apps capture。
+probe 侧还继续补了 opt-in account chooser automation、late prompt textbox
+retry，以及 local WebSocket proxy error frame 汇总：
+只有显式配置 account email 时才会点击 Google account chooser 行；
+prompt textarea 延迟出现时按 `autoPromptMaxAttempts / autoPromptPollMs`
+重试；如果 textarea 只在后续 polling 阶段出现，probe 会继续按 5 秒 gate
+再次尝试 auto-prompt；browser/proxy 侧错误会以 `localProxyErrors` 暴露在
+summary 中。
 下一轮需要更换/确认具备 AIStudio Apps `CodeAssistantOffline` 权限的
 账号、区域或项目，再重跑同一 probe，直到捕获 `CodeAssistantOffline`
 与 `StreamCodeAssistantOfflineGeneration` 双 RPC。

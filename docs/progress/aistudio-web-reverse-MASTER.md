@@ -239,7 +239,7 @@
     - live probe 会记录 page-level UI diagnostic signals，并在 prompt 前
       best-effort dismiss 非破坏性 AIStudio overlay；不会点击
       `Create budget` 这类会改变账号/项目状态的动作
-    - 当前脚本测试覆盖 `Gateway/scripts/tests/*.test.mjs = 49 passed` 与
+    - 当前脚本测试覆盖 `Gateway/scripts/tests/*.test.mjs = 53 passed` 与
       `Gateway/tests/python = 7 passed`
   - `text / stream/tools` 当前已统一走 `generateContent request plan -> browser request spec` 抽象
   - 一般文本热路径代码侧默认已提升为 `CodeAssistantOffline -> StreamCodeAssistantOfflineGeneration` program-owned pure-http first：
@@ -321,6 +321,16 @@
           `authRecoveryState={isAuthRecovery:true,kind:"google_account_chooser",finalUrlHost:"accounts.google.com"}`
         - 本轮已被显式标为 `ok=false`，避免把登录恢复页的
           ActiveTrigger-only 流量误判为有效 AIStudio Apps capture
+      - probe 侧继续补了 opt-in account chooser automation 与 late
+        prompt textbox retry：只有显式配置 account email 时才会点击
+        Google account chooser 行；prompt textarea 延迟出现时会按
+        `autoPromptMaxAttempts / autoPromptPollMs` 重试。
+      - 若 prompt textarea 在初始阶段不可见、但后续 polling 阶段才出现，
+        probe 会继续按 5 秒 gate 重试 auto-prompt，而不是只尝试一次后
+        固定等待超时。
+      - local WebSocket proxy error frames 现在会汇总为
+        `localProxyErrors`，避免把 browser/proxy 侧返回的 403/错误文本
+        和“未捕获目标双 RPC”混在一起。
       - 下一轮需要更换/确认具备 AIStudio Apps `CodeAssistantOffline` 权限的
         账号、区域或项目后重跑同一 probe，直到捕获
         `CodeAssistantOffline` 与 `StreamCodeAssistantOfflineGeneration`
