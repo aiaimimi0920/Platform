@@ -333,7 +333,7 @@
   - live probe 会记录 page-level UI diagnostic signals，并在 prompt 前
     best-effort dismiss 非破坏性 AIStudio overlay；不会点击
     `Create budget` 这类会改变账号/项目状态的动作
-  - `Gateway/scripts/tests/*.test.mjs` 当前为 `48 passed`
+  - `Gateway/scripts/tests/*.test.mjs` 当前为 `49 passed`
   - `Gateway/tests/python` 当前为 `7 passed`
 - 已尝试补 live steady-state 证据：
   - 从旧 `NeuroPlatform/.runtime/ai-gateway-objects` 只读复制历史
@@ -475,6 +475,15 @@ TCP reachability 检查；若 FlClash mixed-port 等本地端口不可达，会�
 `aistudio_browser_proxy_unreachable` 早失败并写出
 `browserProxyPreflight`，避免把 `ERR_PROXY_CONNECTION_FAILED` 这类本地
 网络路由问题误归因为 AIStudio 登录态或 `CodeAssistantOffline` 权限。
+2026-06-06 晚间复核时，`127.0.0.1:42344` 已恢复可达，目标 app
+probe 的 `browserProxyPreflight={ok:true,host:"127.0.0.1",port:42344}`
+生效；但同一隔离 storage-state 最终进入 Google account chooser，只捕获
+`ActiveTrigger`，没有目标双 RPC。归档目录：
+`.runtime/aistudio-live-probe/manual-alt-auth-recovery-proxy42344-ws9998-20260606-192024`。
+probe summary 现在会输出
+`authRecoveryState={isAuthRecovery:true,kind:"google_account_chooser",finalUrlHost:"accounts.google.com"}`
+并将这类 ActiveTrigger-only 登录恢复页标为 `ok=false`，避免误当成有效
+AIStudio Apps capture。
 下一轮需要更换/确认具备 AIStudio Apps `CodeAssistantOffline` 权限的
 账号、区域或项目，再重跑同一 probe，直到捕获 `CodeAssistantOffline`
 与 `StreamCodeAssistantOfflineGeneration` 双 RPC。
