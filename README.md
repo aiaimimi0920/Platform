@@ -49,6 +49,92 @@ Important local environment keys include:
 Platform account and operator flows may use these values to call Gateway. Gateway
 runtime implementation remains owned by `../Gateway`.
 
+## Tea integration
+
+Platform Core exposes Tea through internal-only proxy routes under
+`/internal/tea/*`. Browser code and public clients should call Platform/Core with
+the existing internal/user context rules; they should not hold the Tea daemon
+token or call Tea directly.
+
+Important local environment keys include:
+
+- `TEA_SERVER_URL` - Tea daemon base URL used by Platform Core, for example
+  `http://tea:48910` in compose or `http://127.0.0.1:48910` in local smoke
+  tests.
+- `TEA_AUTH_TOKEN` - bearer token Platform Core uses when calling Tea.
+- `INTERNAL_API_TOKEN` - token required by Platform's `/internal/tea/*` routes.
+
+The local compose stack wires Core to the sibling Tea service:
+
+```yaml
+TEA_SERVER_URL: http://tea:48910
+TEA_AUTH_TOKEN: ${TEA_AUTH_TOKEN:-local-internal-token}
+```
+
+To prove Platform Core can operate against a real `tea-daemon` through its
+internal Tea proxy, run the root smoke harness from the Neuro workspace root:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\smoke-platform-tea-real.ps1
+```
+
+The harness starts an isolated Tea daemon on a free loopback port with a
+temporary SQLite store, runs `core/src/modules/tea/real-daemon-smoke.test.ts`
+with `TEA_PLATFORM_REAL_SMOKE=1`, verifies ticket lifecycle operations through
+Platform Core, and writes artifacts under
+`.tmp/tea-smoke/platform-tea-real-<timestamp>/`.
+
+Platform Web now exposes an authenticated Tea work-order desk at `/tea`, a
+ticket detail/review page at `/tea/[ticketId]`, and browser-facing JSON routes
+under `/api/tea/tickets/*`. Detail pages read ticket events, Loom run evidence,
+JSON export, and Markdown export through the same backend-mediated boundary.
+Operators can add review comments, reject tickets with a reason, stop/retry the
+latest run, and download JSON/Markdown evidence without receiving the Tea daemon
+token. The call chain is:
+
+Review/action routes currently exposed by Platform Web include:
+
+- `POST /api/tea/tickets` for human ticket creation.
+- `GET /api/tea/tickets/:ticketId` for detail plus event timeline.
+- `POST /api/tea/tickets/:ticketId/comments` for human review comments.
+- `POST /api/tea/tickets/:ticketId/analyze`, `/plan`, `/approve`, `/reject`,
+  `/run`, `/stop`, `/retry`, `/accept`, and `/close` for ticket lifecycle
+  controls.
+- `GET /api/tea/tickets/:ticketId/runs` for Loom run evidence.
+- `GET /api/tea/tickets/:ticketId/export/json` and `/export/markdown` for
+  browser JSON envelopes.
+- `GET /api/tea/tickets/:ticketId/export/json/download` and
+  `/export/markdown/download` for raw attachment downloads.
+
+1. browser/page forms call Platform Web routes or server actions;
+2. Platform Web uses `CORE_INTERNAL_URL` plus `INTERNAL_API_TOKEN` to call
+   Platform Core `/internal/tea/*`;
+3. Platform Core uses `TEA_SERVER_URL` and `TEA_AUTH_TOKEN` to call the Tea
+   daemon;
+4. the browser never receives or stores `TEA_AUTH_TOKEN`.
+
+Focused Web Tea tests:
+
+```powershell
+cd Platform
+node --test --import tsx web/src/lib/tea-client.test.ts web/src/lib/tea-route-utils.test.ts web/src/lib/tea-api-handlers.test.ts web/src/lib/tea-detail-controls.test.ts web/src/lib/tea-real-core-smoke.test.ts
+```
+
+To prove the browser-facing Platform Web handlers can operate through Platform
+Core HTTP against a real `tea-daemon`, run the root smoke harness:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\smoke-platform-web-tea-real.ps1
+```
+
+The harness starts an isolated Tea daemon, starts an in-process Platform Core
+HTTP server for `/internal/tea/*`, then drives the Platform Web Tea handlers for
+create, comment, reject, approve, run, detail/events, runs, JSON export,
+Markdown export, raw JSON/Markdown downloads, stop, retry, close, and
+terminal-ticket conflict checks. It also asserts that Platform Web does not
+send `authorization` to Core while Platform Core does send the Tea bearer token
+to the Tea daemon.
+
 ## Local validation
 
 ```powershell

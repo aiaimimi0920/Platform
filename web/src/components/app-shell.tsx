@@ -43,6 +43,7 @@ const ACCOUNT_TERMINAL_PREFIXES = [
   "/opinions",
   "/chat",
   "/agents",
+  "/tea",
   "/tasks",
   "/inventory",
   "/my-tasks",
@@ -82,6 +83,7 @@ export function AppShell({ authActionSlot, children, currentUserId, features, pu
     { href: "/redeem", label: "兑换码", enabled: publicSurfaces.redemption.enabled && features.redemption.enabled && !isAccountTerminal },
     { href: "/mailbox", label: "邮箱", enabled: publicSurfaces.mailbox.enabled && features.mailbox.enabled && !isAccountTerminal },
     { href: "/projects", label: "项目", enabled: publicSurfaces.projects.enabled && Boolean(currentUserId) && !isAccountTerminal },
+    { href: "/tea", label: "工单", enabled: Boolean(currentUserId) },
     { href: "/tasks", label: "集市", enabled: publicSurfaces.tasks.enabled && features.taskHub.enabled },
     { href: "/opinions", label: "议题", enabled: publicSurfaces.opinions.enabled && features.opinionHub.enabled },
   ].filter((link) => link.enabled && !(isAccountTerminal && redundantTerminalLinks.has(link.href)));
