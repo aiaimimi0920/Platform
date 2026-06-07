@@ -79,6 +79,8 @@ services:
       DATABASE_URL: postgres://neuroloom:neuroloom@postgres:5432/neuroloom
       REDIS_URL: redis://valkey:6379
       INTERNAL_API_TOKEN: local-internal-token
+      TEA_SERVER_URL: http://tea:48910
+      TEA_AUTH_TOKEN: ${TEA_AUTH_TOKEN:-local-internal-token}
       PLATFORM_OPERATOR_USER_IDS: local-operator,local-dev-account
       OAUTH_CLIENT_ID: local-client
       OAUTH_CLIENT_SECRET: local-secret
@@ -274,6 +276,52 @@ services:
     volumes:
       - "${USERPROFILE}/.neuro:/root/.neuro"
 
+  loom:
+    build:
+      context: ../../Loom
+      dockerfile: Dockerfile
+    cpus: 0.75
+    mem_limit: 384m
+    environment:
+      LOOM_DAEMON_HOST: 0.0.0.0
+      LOOM_DAEMON_PORT: 8765
+    ports:
+      - "${LOOM_HOST_PORT:-48766}:8765"
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "loom",
+          "status",
+          "--daemon-url",
+          "http://127.0.0.1:8765"
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  tea:
+    build:
+      context: ../../Tea
+      dockerfile: Dockerfile
+    cpus: 0.75
+    mem_limit: 384m
+    environment:
+      TEA_BIND_ADDR: 0.0.0.0:48910
+      TEA_AUTH_TOKEN: ${TEA_AUTH_TOKEN:-local-internal-token}
+      TEA_STORE_PATH: /data/tea.sqlite
+      TEA_AI_BRAIN_BASE_URL: ${TEA_AI_BRAIN_BASE_URL:-}
+      TEA_AI_BRAIN_AUTH_TOKEN: ${TEA_AI_BRAIN_AUTH_TOKEN:-}
+      TEA_LOOM_BASE_URL: ${TEA_LOOM_BASE_URL:-http://loom:8765}
+      TEA_LOOM_AUTH_TOKEN: ${TEA_LOOM_AUTH_TOKEN:-}
+    depends_on:
+      loom:
+        condition: service_healthy
+    ports:
+      - "${TEA_HOST_PORT:-48910}:48910"
+    volumes:
+      - tea-data:/data
+
   web:
     build:
       context: ..
@@ -448,3 +496,4 @@ volumes:
   postgres-data:
   valkey-data:
   minio-data:
+  tea-data:

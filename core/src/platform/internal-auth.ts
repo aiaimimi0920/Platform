@@ -1,7 +1,7 @@
 import type { FastifyReply, FastifyRequest } from "fastify";
 
-import { env } from "@/env";
-import { HttpError } from "@/platform/errors";
+import { env } from "../env";
+import { HttpError } from "./errors";
 
 export function assertInternalRequest(request: FastifyRequest): void {
   const token = request.headers["x-internal-api-token"];

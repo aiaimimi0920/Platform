@@ -25,6 +25,8 @@ type CoreEnv = {
   internalApiToken: string;
   aiGatewayInternalUrl: string | null;
   aiGatewayManagementToken: string | null;
+  teaServerUrl: string | null;
+  teaAuthToken: string | null;
   platformOperatorUserIds: string[];
   outboxProcessingLeaseTimeoutMs: number;
   objectStorageDriver: "local" | "s3-compatible";
@@ -2350,6 +2352,8 @@ export const env: CoreEnv = {
     process.env.GATEWAY_MANAGEMENT_TOKEN?.trim() ||
     process.env.INTERNAL_API_TOKEN?.trim() ||
     null,
+  teaServerUrl: process.env.TEA_SERVER_URL?.trim() || process.env.TEA_BASE_URL?.trim() || null,
+  teaAuthToken: process.env.TEA_AUTH_TOKEN?.trim() || process.env.INTERNAL_API_TOKEN?.trim() || null,
   platformOperatorUserIds,
   outboxProcessingLeaseTimeoutMs: Math.max(
     5_000,

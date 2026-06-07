@@ -19,6 +19,7 @@ import { opinionHubRouter } from "@/modules/opinion-hub/router";
 import { productOrderItemRouter } from "@/modules/product-order-item/router";
 import { redemptionMailboxMarketplaceRouter } from "@/modules/redemption-mailbox-marketplace/router";
 import { taskHubRouter } from "@/modules/task-hub/router";
+import { teaRouter } from "@/modules/tea/router";
 
 export async function buildServer() {
   const app = Fastify({ logger: true });
@@ -53,6 +54,7 @@ export async function buildServer() {
   await app.register(productOrderItemRouter);
   await app.register(redemptionMailboxMarketplaceRouter);
   await app.register(taskHubRouter);
+  await app.register(teaRouter);
 
   app.setErrorHandler((error, _request, reply) => {
     if (error instanceof HttpError) {
