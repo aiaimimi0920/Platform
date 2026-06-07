@@ -120,7 +120,7 @@ Focused Web Tea tests:
 
 ```powershell
 cd Platform
-node --test --import tsx web/src/lib/tea-client.test.ts web/src/lib/tea-route-utils.test.ts web/src/lib/tea-api-handlers.test.ts web/src/lib/tea-detail-controls.test.ts web/src/lib/tea-real-core-smoke.test.ts
+node --test --import tsx web/src/lib/tea-client.test.ts web/src/lib/tea-route-utils.test.ts web/src/lib/tea-api-handlers.test.ts web/src/lib/tea-detail-controls.test.ts web/src/lib/tea-real-core-smoke.test.ts web/src/lib/tea-web-ui-smoke-harness-contract.test.ts
 ```
 
 To prove the browser-facing Platform Web handlers can operate through Platform
@@ -138,6 +138,28 @@ and terminal-ticket conflict checks. It also asserts that review comments appear
 in detail responses and both export formats, that Platform Web does not send
 `authorization` to Core, and that Platform Core does send the Tea bearer token
 to the Tea daemon.
+
+To prove the actual Next.js Tea UI still works through Local Dev auth, server
+actions, redirects, downloads, and the same Web -> Core -> Tea boundary, run the
+browser-level product smoke from the Neuro workspace root:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\smoke-platform-web-tea-ui-real.ps1 -KeepArtifacts
+```
+
+The UI harness starts an isolated `tea-daemon`, a minimal Platform Core helper
+for `/internal/tea/*`, `/internal/features`, `/internal/public-surfaces`, and
+Local Dev identity upsert, then starts `next dev` and drives real Chrome or Edge
+through `playwright-core`. It logs in with `DEV_AUTH_BYPASS_ENABLED`, creates a
+ticket from `/tea`, opens `/tea/[ticketId]`, submits a human comment, approves,
+runs, downloads Markdown/JSON evidence, stops and retries the latest run, then
+reads helper-captured evidence to assert that Web -> Core requests do not carry
+`authorization` while Core -> Tea requests do carry the Tea bearer token.
+Artifacts are written under
+`.tmp/tea-smoke/platform-web-tea-ui-real-<guid>/`. Because Next dev uses a
+single `.next/dev/lock`, stop any already-running `next dev` for
+`Platform/web` before running this smoke, or let the harness fail before it
+touches unknown processes.
 
 ## Local validation
 
