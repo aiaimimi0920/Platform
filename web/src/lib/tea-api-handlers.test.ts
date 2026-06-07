@@ -12,6 +12,7 @@ import {
   handleExportTeaTicketJsonRequest,
   handleExportTeaTicketMarkdownRequest,
   handleGetTeaTicketRequest,
+  handleGetTeaTicketCommentsRequest,
   handleGetTeaTicketRunsRequest,
   handleRejectTeaTicketRequest,
   handleRetryTeaTicketRequest,
@@ -157,8 +158,19 @@ test("handleGetTeaTicketRequest returns ticket detail and events for a browser t
     { id: "event-1", kind: "ticket_created", ticket_id: "ticket-detail-1" },
     { id: "event-2", kind: "ticket_approved", ticket_id: "ticket-detail-1" },
   ];
+  const comments: TeaTicketCommentView[] = [
+    {
+      body: "Reviewer asked for final smoke evidence.",
+      id: "comment-1",
+      ticket_id: "ticket-detail-1",
+    },
+  ];
 
   const response = await handleGetTeaTicketRequest("ticket-detail-1", {
+    getTeaTicketComments: async (_context, ticketId) => {
+      assert.equal(ticketId, "ticket-detail-1");
+      return comments;
+    },
     getTeaTicket: async (context, ticketId) => {
       assert.deepEqual(context, userContext);
       requestedTicketId = ticketId;
@@ -174,7 +186,30 @@ test("handleGetTeaTicketRequest returns ticket detail and events for a browser t
   assert.equal(response.status, 200);
   assert.equal(response.headers.get("cache-control"), noStoreHeader);
   assert.equal(requestedTicketId, "ticket-detail-1");
-  assert.deepEqual(await response.json(), { events, ticket });
+  assert.deepEqual(await response.json(), { comments, events, ticket });
+});
+
+test("handleGetTeaTicketCommentsRequest returns persisted review comments for the browser detail page", async () => {
+  const comments: TeaTicketCommentView[] = [
+    {
+      body: "Persisted review comment.",
+      id: "comment-1",
+      ticket_id: "ticket-detail-2",
+    },
+  ];
+
+  const response = await handleGetTeaTicketCommentsRequest("ticket-detail-2", {
+    getTeaTicketComments: async (context, ticketId) => {
+      assert.deepEqual(context, userContext);
+      assert.equal(ticketId, "ticket-detail-2");
+      return comments;
+    },
+    requireUserContext: async () => userContext,
+  });
+
+  assert.equal(response.status, 200);
+  assert.equal(response.headers.get("cache-control"), noStoreHeader);
+  assert.deepEqual(await response.json(), { comments });
 });
 
 test("ticket lifecycle handlers return the expected browser envelopes", async () => {

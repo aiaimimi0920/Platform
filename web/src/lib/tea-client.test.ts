@@ -8,6 +8,7 @@ import {
   createTeaTicket,
   exportTeaTicketJson,
   exportTeaTicketMarkdown,
+  getTeaTicketComments,
   getTeaTicketRuns,
   listTeaTickets,
   rejectTeaTicket,
@@ -285,6 +286,36 @@ test("Tea review action helpers call Platform Core without Tea bearer auth", asy
       assert.equal(requests[0]?.init?.body, JSON.stringify({ body: "Please attach validation evidence." }));
       assert.equal(requests[1]?.init?.body, JSON.stringify({ reason: "Plan needs a safer rollback step." }));
       assert.ok(requests.every((request) => getHeader(request.init, "authorization") === null));
+    },
+  );
+});
+
+test("getTeaTicketComments reads persisted review comments through Platform Core only", async () => {
+  await withCapturedFetch(
+    () =>
+      jsonResponse({
+        comments: [
+          {
+            body: "Persisted review comment.",
+            id: "comment-1",
+            ticket_id: "ticket-1",
+          },
+        ],
+      }),
+    async (requests) => {
+      const comments = await getTeaTicketComments(userContext, "ticket-1");
+
+      assert.deepEqual(comments, [
+        {
+          body: "Persisted review comment.",
+          id: "comment-1",
+          ticket_id: "ticket-1",
+        },
+      ]);
+      assert.equal(requests.length, 1);
+      assert.equal(requests[0]?.url, "http://core-test.local/internal/tea/tickets/ticket-1/comments");
+      assert.equal(requests[0]?.init?.method, "GET");
+      assert.equal(getHeader(requests[0]?.init, "authorization"), null);
     },
   );
 });

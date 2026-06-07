@@ -86,8 +86,10 @@ Platform Core, and writes artifacts under
 
 Platform Web now exposes an authenticated Tea work-order desk at `/tea`, a
 ticket detail/review page at `/tea/[ticketId]`, and browser-facing JSON routes
-under `/api/tea/tickets/*`. Detail pages read ticket events, Loom run evidence,
-JSON export, and Markdown export through the same backend-mediated boundary.
+under `/api/tea/tickets/*`. Detail pages read ticket comments, ticket events,
+Loom run evidence, JSON export, and Markdown export through the same
+backend-mediated boundary. JSON and Markdown exports include persisted human
+review comments so review notes are not write-only after submission.
 Operators can add review comments, reject tickets with a reason, stop/retry the
 latest run, and download JSON/Markdown evidence without receiving the Tea daemon
 token. The call chain is:
@@ -95,7 +97,8 @@ token. The call chain is:
 Review/action routes currently exposed by Platform Web include:
 
 - `POST /api/tea/tickets` for human ticket creation.
-- `GET /api/tea/tickets/:ticketId` for detail plus event timeline.
+- `GET /api/tea/tickets/:ticketId` for detail plus comments and event timeline.
+- `GET /api/tea/tickets/:ticketId/comments` for persisted review comments.
 - `POST /api/tea/tickets/:ticketId/comments` for human review comments.
 - `POST /api/tea/tickets/:ticketId/analyze`, `/plan`, `/approve`, `/reject`,
   `/run`, `/stop`, `/retry`, `/accept`, and `/close` for ticket lifecycle
@@ -129,10 +132,11 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\smoke-platform-web
 
 The harness starts an isolated Tea daemon, starts an in-process Platform Core
 HTTP server for `/internal/tea/*`, then drives the Platform Web Tea handlers for
-create, comment, reject, approve, run, detail/events, runs, JSON export,
-Markdown export, raw JSON/Markdown downloads, stop, retry, close, and
-terminal-ticket conflict checks. It also asserts that Platform Web does not
-send `authorization` to Core while Platform Core does send the Tea bearer token
+create, comment, reject, approve, run, detail/comments/events, comments, runs,
+JSON export, Markdown export, raw JSON/Markdown downloads, stop, retry, close,
+and terminal-ticket conflict checks. It also asserts that review comments appear
+in detail responses and both export formats, that Platform Web does not send
+`authorization` to Core, and that Platform Core does send the Tea bearer token
 to the Tea daemon.
 
 ## Local validation

@@ -80,6 +80,14 @@ export function createTeaRouter(options: TeaRouterOptions = {}): FastifyPluginAs
     );
 
     app.get<{ Params: { ticketId: string } }>(
+      "/internal/tea/tickets/:ticketId/comments",
+      { preHandler: withInternalRequest },
+      async (request) => ({
+        comments: await callTea(() => getClient().listComments(request.params.ticketId)),
+      }),
+    );
+
+    app.get<{ Params: { ticketId: string } }>(
       "/internal/tea/tickets/:ticketId/events",
       { preHandler: withInternalRequest },
       async (request) => ({

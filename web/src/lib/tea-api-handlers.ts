@@ -39,10 +39,22 @@ export type CreateTeaTicketHandlerDeps = {
 
 export type GetTeaTicketHandlerDeps = {
   getTeaTicket: (userContext: InternalUserContext, ticketId: string) => Promise<TeaTicketView>;
+  getTeaTicketComments: (
+    userContext: InternalUserContext,
+    ticketId: string,
+  ) => Promise<TeaTicketCommentView[]>;
   getTeaTicketEvents: (
     userContext: InternalUserContext,
     ticketId: string,
   ) => Promise<TeaTicketEventView[]>;
+  requireUserContext: RequireUserContext;
+};
+
+export type GetTeaTicketCommentsHandlerDeps = {
+  getTeaTicketComments: (
+    userContext: InternalUserContext,
+    ticketId: string,
+  ) => Promise<TeaTicketCommentView[]>;
   requireUserContext: RequireUserContext;
 };
 
@@ -156,13 +168,27 @@ export async function handleGetTeaTicketRequest(
 ): Promise<Response> {
   try {
     const userContext = await deps.requireUserContext();
-    const [ticket, events] = await Promise.all([
+    const [ticket, comments, events] = await Promise.all([
       deps.getTeaTicket(userContext, ticketId),
+      deps.getTeaTicketComments(userContext, ticketId),
       deps.getTeaTicketEvents(userContext, ticketId),
     ]);
-    return teaJson({ ticket, events });
+    return teaJson({ ticket, comments, events });
   } catch (error) {
     return teaRouteErrorResponse(error, "Tea ticket unavailable");
+  }
+}
+
+export async function handleGetTeaTicketCommentsRequest(
+  ticketId: string,
+  deps: GetTeaTicketCommentsHandlerDeps,
+): Promise<Response> {
+  try {
+    const userContext = await deps.requireUserContext();
+    const comments = await deps.getTeaTicketComments(userContext, ticketId);
+    return teaJson({ comments });
+  } catch (error) {
+    return teaRouteErrorResponse(error, "Tea ticket comments unavailable");
   }
 }
 

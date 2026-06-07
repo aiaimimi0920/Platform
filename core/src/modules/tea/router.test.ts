@@ -176,4 +176,43 @@ describe("Platform Tea router", () => {
       await app.close();
     }
   });
+
+  it("proxies ticket comment lists through Tea", async () => {
+    const requests: CapturedRequest[] = [];
+    const app = await buildTeaTestServer(async (input, init) => {
+      requests.push({ url: input.toString(), init });
+      return jsonResponse([
+        {
+          body: "Persisted review comment.",
+          id: "comment-1",
+          ticket_id: "ticket-1",
+        },
+      ]);
+    });
+
+    try {
+      const response = await app.inject({
+        headers: { "x-internal-api-token": "internal-token" },
+        method: "GET",
+        url: "/internal/tea/tickets/ticket-1/comments",
+      });
+
+      assert.equal(response.statusCode, 200);
+      assert.deepEqual(response.json(), {
+        comments: [
+          {
+            body: "Persisted review comment.",
+            id: "comment-1",
+            ticket_id: "ticket-1",
+          },
+        ],
+      });
+      assert.equal(requests.length, 1);
+      assert.equal(requests[0]?.url, "http://tea.local/v1/tickets/ticket-1/comments");
+      assert.equal(requests[0]?.init?.method, "GET");
+      assert.equal((requests[0]?.init?.headers as Record<string, string>).authorization, "Bearer tea-token");
+    } finally {
+      await app.close();
+    }
+  });
 });

@@ -11,6 +11,7 @@ import {
   exportTeaTicketJson,
   exportTeaTicketMarkdown,
   getTeaTicket,
+  getTeaTicketComments,
   getTeaTicketEvents,
   getTeaTicketRuns,
   approveTeaTicket,
@@ -29,6 +30,7 @@ import {
   handleExportTeaTicketJsonRequest,
   handleExportTeaTicketMarkdownRequest,
   handleGetTeaTicketRequest,
+  handleGetTeaTicketCommentsRequest,
   handleGetTeaTicketRunsRequest,
   handleRejectTeaTicketRequest,
   handleRetryTeaTicketRequest,
@@ -212,16 +214,37 @@ test(
 
       const detailResponse = await handleGetTeaTicketRequest(ticketId, {
         getTeaTicket,
+        getTeaTicketComments,
         getTeaTicketEvents,
         requireUserContext: async () => userContext,
       });
       const detailBody = await detailResponse.text();
       assert.equal(detailResponse.status, 200, detailBody);
-      const detail = JSON.parse(detailBody) as { ticket: JsonRecord; events: JsonRecord[] };
+      const detail = JSON.parse(detailBody) as {
+        ticket: JsonRecord;
+        comments: JsonRecord[];
+        events: JsonRecord[];
+      };
       assert.equal(detail.ticket.id, ticketId);
+      assert.ok(
+        detail.comments.some((entry) => entry.id === commentId && entry.body === "Human reviewer comment from Platform Web real smoke."),
+        `expected detail response to include review comment ${commentId}`,
+      );
       const events = detail.events;
       assert.ok(events.some((event) => event.kind === "ticket_created"));
       assert.ok(events.some((event) => event.kind === "run_succeeded"));
+
+      const commentsResponse = await handleGetTeaTicketCommentsRequest(ticketId, {
+        getTeaTicketComments,
+        requireUserContext: async () => userContext,
+      });
+      const commentsBody = await commentsResponse.text();
+      assert.equal(commentsResponse.status, 200, commentsBody);
+      const listedComments = JSON.parse(commentsBody) as { comments: JsonRecord[] };
+      assert.ok(
+        listedComments.comments.some((entry) => entry.id === commentId && entry.body === "Human reviewer comment from Platform Web real smoke."),
+        `expected Web comments response to include review comment ${commentId}`,
+      );
 
       const runsResponse = await handleGetTeaTicketRunsRequest(ticketId, {
         getTeaTicketRuns,
@@ -250,6 +273,10 @@ test(
       };
       assert.equal(jsonExport.export.ticket?.id, ticketId);
       assert.ok(
+        jsonExport.export.comments?.some((entry) => entry.id === commentId),
+        `expected Web JSON export to include review comment ${commentId}`,
+      );
+      assert.ok(
         jsonExport.export.runs?.some((entry) => entry.id === runId && entry.status === "succeeded"),
         `expected Web JSON export to include succeeded run ${runId}`,
       );
@@ -262,6 +289,8 @@ test(
       assert.equal(markdownExportResponse.status, 200, markdownExportBody);
       const markdownExport = JSON.parse(markdownExportBody) as { markdown: string };
       assert.match(markdownExport.markdown, /## Runs/);
+      assert.match(markdownExport.markdown, /## Comments/);
+      assert.ok(markdownExport.markdown.includes(commentId), `expected Markdown export to include comment ${commentId}`);
       assert.ok(markdownExport.markdown.includes(runId), `expected Markdown export to include run ${runId}`);
       assert.match(markdownExport.markdown, /mock loom run completed/);
 
@@ -274,11 +303,16 @@ test(
       assert.match(jsonDownloadResponse.headers.get("content-disposition") || "", /attachment/);
       assert.match(jsonDownloadResponse.headers.get("content-disposition") || "", /\.json"/);
       const jsonDownload = JSON.parse(jsonDownloadBody) as {
+        comments?: JsonRecord[];
         events?: JsonRecord[];
         runs?: JsonRecord[];
         ticket?: JsonRecord;
       };
       assert.equal(jsonDownload.ticket?.id, ticketId);
+      assert.ok(
+        jsonDownload.comments?.some((entry) => entry.id === commentId),
+        `expected raw Web JSON download to include comment ${commentId}`,
+      );
       assert.ok(
         jsonDownload.runs?.some((entry) => entry.id === runId && entry.status === "succeeded"),
         `expected raw Web JSON download to include succeeded run ${runId}`,
@@ -293,6 +327,7 @@ test(
       assert.match(markdownDownloadResponse.headers.get("content-disposition") || "", /attachment/);
       assert.match(markdownDownloadResponse.headers.get("content-disposition") || "", /\.md"/);
       assert.match(markdownDownloadResponse.headers.get("content-type") || "", /text\/markdown/);
+      assert.ok(markdownDownload.includes(commentId), `expected raw Web Markdown download to include comment ${commentId}`);
       assert.ok(markdownDownload.includes(runId), `expected raw Web Markdown download to include run ${runId}`);
 
       const stopResponse = await handleStopTeaTicketRequest(ticketId, {
@@ -359,9 +394,13 @@ test(
           jsonDownloadResponse.headers.get("content-disposition") === `attachment; filename="tea-ticket-${ticketId}.json"`,
         markdownDownloadAttachment:
           markdownDownloadResponse.headers.get("content-disposition") === `attachment; filename="tea-ticket-${ticketId}.md"`,
+        jsonDownloadContainsComment: jsonDownload.comments?.some((entry) => entry.id === commentId),
         jsonDownloadContainsRun: jsonDownload.runs?.some((entry) => entry.id === runId && entry.status === "succeeded"),
+        markdownDownloadContainsComment: markdownDownload.includes(commentId),
         markdownDownloadContainsRun: markdownDownload.includes(runId),
+        markdownExportContainsComment: markdownExport.markdown.includes(commentId),
         markdownExportContainsRunEvidence: markdownExport.markdown.includes("mock loom run completed"),
+        commentExportCount: listedComments.comments.length,
         runExportCount: listedRuns.runs.length,
         webToCoreFetchCount: coreFetches.length,
         coreToTeaFetchCount: teaFetches.length,

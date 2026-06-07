@@ -137,4 +137,37 @@ describe("Tea HTTP client", () => {
       JSON.stringify({ body: "Please attach validation evidence before approval." }),
     );
   });
+
+  it("lists ticket comments with bearer auth", async () => {
+    const requests: CapturedRequest[] = [];
+    const fetchFn = async (input: string | URL, init?: RequestInit): Promise<Response> => {
+      requests.push({ url: input.toString(), init });
+      return jsonResponse([
+        {
+          body: "Persisted review comment.",
+          id: "comment-1",
+          ticket_id: "ticket-1",
+        },
+      ]);
+    };
+    const client = createTeaClient({
+      authToken: "tea-token",
+      baseUrl: "http://tea.local/",
+      fetchFn,
+    });
+
+    const result = await client.listComments("ticket-1");
+
+    assert.deepEqual(result, [
+      {
+        body: "Persisted review comment.",
+        id: "comment-1",
+        ticket_id: "ticket-1",
+      },
+    ]);
+    assert.equal(requests.length, 1);
+    assert.equal(requests[0]?.url, "http://tea.local/v1/tickets/ticket-1/comments");
+    assert.equal(requests[0]?.init?.method, "GET");
+    assert.equal((requests[0]?.init?.headers as Record<string, string>).authorization, "Bearer tea-token");
+  });
 });

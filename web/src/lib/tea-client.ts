@@ -182,6 +182,19 @@ export async function addTeaTicketComment(
   return response.comment;
 }
 
+export async function getTeaTicketComments(
+  userContext: InternalUserContext,
+  ticketId: string,
+): Promise<TeaTicketCommentView[]> {
+  const response = await coreTeaRequest<{ comments: TeaTicketCommentView[] }>(
+    `/internal/tea/tickets/${encodeURIComponent(ticketId)}/comments`,
+    {
+      userContext,
+    },
+  );
+  return Array.isArray(response.comments) ? response.comments : [];
+}
+
 export async function getTeaTicketRuns(
   userContext: InternalUserContext,
   ticketId: string,

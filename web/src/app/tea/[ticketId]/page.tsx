@@ -22,9 +22,11 @@ import {
   exportTeaTicketJson,
   exportTeaTicketMarkdown,
   getTeaTicket,
+  getTeaTicketComments,
   getTeaTicketEvents,
   getTeaTicketRuns,
   type TeaRunView,
+  type TeaTicketCommentView,
   type TeaTicketEventView,
   type TeaTicketView,
 } from "@/lib/tea-client";
@@ -130,16 +132,32 @@ export default async function TeaTicketPage({ params, searchParams }: TeaTicketP
   };
   const redirectTo = `/tea/${encodeURIComponent(ticketId)}`;
 
-  const [ticketResult, eventsResult, runsResult, jsonExportResult, markdownExportResult] = await Promise.allSettled([
+  const [
+    ticketResult,
+    commentsResult,
+    eventsResult,
+    runsResult,
+    jsonExportResult,
+    markdownExportResult,
+  ] = await Promise.allSettled([
     getTeaTicket(userContext, ticketId),
+    getTeaTicketComments(userContext, ticketId),
     getTeaTicketEvents(userContext, ticketId),
     getTeaTicketRuns(userContext, ticketId),
     exportTeaTicketJson(userContext, ticketId),
     exportTeaTicketMarkdown(userContext, ticketId),
   ]);
 
-  const loadError = settledError(ticketResult, eventsResult, runsResult, jsonExportResult, markdownExportResult);
+  const loadError = settledError(
+    ticketResult,
+    commentsResult,
+    eventsResult,
+    runsResult,
+    jsonExportResult,
+    markdownExportResult,
+  );
   const ticket = settledValue<TeaTicketView | null>(ticketResult, null);
+  const comments = settledValue<TeaTicketCommentView[]>(commentsResult, []);
   const events = settledValue<TeaTicketEventView[]>(eventsResult, []);
   const runs = settledValue<TeaRunView[]>(runsResult, []);
   const jsonExport = settledValue<unknown>(jsonExportResult, null);
@@ -190,6 +208,7 @@ export default async function TeaTicketPage({ params, searchParams }: TeaTicketP
 
           <AccountHomeStatGrid>
             <AccountHomeStat label="事件数" value={events.length} />
+            <AccountHomeStat label="评论数" value={comments.length} />
             <AccountHomeStat label="执行次数" value={runs.length} />
             <AccountHomeStat label="当前状态" value={ticketStatus} />
           </AccountHomeStatGrid>
@@ -257,6 +276,33 @@ export default async function TeaTicketPage({ params, searchParams }: TeaTicketP
                         control.requiresRun === true && runs.length === 0,
                       ),
                     )}
+                  </div>
+                )}
+              </AccountHomeSection>
+
+              <AccountHomeSection>
+                <AccountHomeSectionHead
+                  actions={<span className="app-note">{comments.length} 条</span>}
+                  kicker="Review"
+                  title="人工评论记录"
+                />
+                {comments.length === 0 ? (
+                  <p className="mg-copy">暂无人工评论。可以在右侧提交补充证据、风险判断或验收意见。</p>
+                ) : (
+                  <div className="app-task-list">
+                    {comments.map((comment) => (
+                      <Card className="app-stack" key={comment.id}>
+                        <div className="app-task-card__header">
+                          <div>
+                            <p className="mg-subtitle">{formatDateTime(comment.created_at)}</p>
+                            <h2 className="app-card-title">{comment.id}</h2>
+                          </div>
+                          <Badge variant="glass">Comment</Badge>
+                        </div>
+                        <p className="mg-copy">{comment.body || "空评论。"}</p>
+                        {comment.actor ? <pre className="app-code-block">{stringifyPreview(comment.actor)}</pre> : null}
+                      </Card>
+                    ))}
                   </div>
                 )}
               </AccountHomeSection>
