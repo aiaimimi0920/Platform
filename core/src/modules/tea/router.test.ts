@@ -249,6 +249,41 @@ describe("Platform Tea router", () => {
     }
   });
 
+  it("forwards canonical ticket decomposition through Tea", async () => {
+    const requests: CapturedRequest[] = [];
+    const app = await buildTeaTestServer(async (input, init) => {
+      requests.push({ url: input.toString(), init });
+      return jsonResponse({
+        analysis: { recommended_workflow: "loom.tea_ticket_decompose.v1" },
+        plan: { steps: [{ id: "inspect-context" }] },
+        provider: { capability: "tea.ticket.decompose.v1", mode: "loom" },
+      });
+    });
+
+    try {
+      const response = await app.inject({
+        method: "POST",
+        url: "/internal/tea/tickets/ticket-1/decompose",
+        headers: { "x-internal-api-token": "internal-token" },
+      });
+
+      assert.equal(response.statusCode, 200);
+      assert.deepEqual(response.json(), {
+        decomposition: {
+          analysis: { recommended_workflow: "loom.tea_ticket_decompose.v1" },
+          plan: { steps: [{ id: "inspect-context" }] },
+          provider: { capability: "tea.ticket.decompose.v1", mode: "loom" },
+        },
+      });
+      assert.equal(requests.length, 1);
+      assert.equal(requests[0]?.url, "http://tea.local/v1/tickets/ticket-1/decompose");
+      assert.equal(requests[0]?.init?.method, "POST");
+      assert.equal((requests[0]?.init?.headers as Record<string, string>).authorization, "Bearer tea-token");
+    } finally {
+      await app.close();
+    }
+  });
+
   it("validates and forwards ticket comments", async () => {
     const requests: CapturedRequest[] = [];
     const app = await buildTeaTestServer(async (input, init) => {

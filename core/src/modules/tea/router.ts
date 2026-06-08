@@ -119,6 +119,14 @@ export function createTeaRouter(options: TeaRouterOptions = {}): FastifyPluginAs
     );
 
     app.post<{ Params: { ticketId: string } }>(
+      "/internal/tea/tickets/:ticketId/decompose",
+      { preHandler: withInternalRequest },
+      async (request) => ({
+        decomposition: await callTea(() => getClient().decomposeTicket(request.params.ticketId)),
+      }),
+    );
+
+    app.post<{ Params: { ticketId: string } }>(
       "/internal/tea/tickets/:ticketId/analyze",
       { preHandler: withInternalRequest },
       async (request) => ({

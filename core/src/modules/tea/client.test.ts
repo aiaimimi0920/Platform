@@ -121,6 +121,35 @@ describe("Tea HTTP client", () => {
     assert.equal((requests[0]?.init?.headers as Record<string, string>).authorization, "Bearer tea-token");
   });
 
+  it("posts canonical ticket decomposition through Tea", async () => {
+    const requests: CapturedRequest[] = [];
+    const fetchFn = async (input: string | URL, init?: RequestInit): Promise<Response> => {
+      requests.push({ url: input.toString(), init });
+      return jsonResponse({
+        analysis: { recommended_workflow: "loom.tea_ticket_decompose.v1" },
+        plan: { steps: [{ id: "inspect-context" }] },
+        provider: { capability: "tea.ticket.decompose.v1", mode: "loom" },
+      });
+    };
+    const client = createTeaClient({
+      authToken: "tea-token",
+      baseUrl: "http://tea.local/",
+      fetchFn,
+    });
+
+    const result = await client.decomposeTicket("ticket-1");
+
+    assert.deepEqual(result, {
+      analysis: { recommended_workflow: "loom.tea_ticket_decompose.v1" },
+      plan: { steps: [{ id: "inspect-context" }] },
+      provider: { capability: "tea.ticket.decompose.v1", mode: "loom" },
+    });
+    assert.equal(requests.length, 1);
+    assert.equal(requests[0]?.url, "http://tea.local/v1/tickets/ticket-1/decompose");
+    assert.equal(requests[0]?.init?.method, "POST");
+    assert.equal((requests[0]?.init?.headers as Record<string, string>).authorization, "Bearer tea-token");
+  });
+
   it("posts ticket comments with bearer auth and one JSON body", async () => {
     const requests: CapturedRequest[] = [];
     const fetchFn = async (input: string | URL, init?: RequestInit): Promise<Response> => {

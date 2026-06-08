@@ -87,6 +87,11 @@ export type AnalyzeTeaTicketHandlerDeps = {
   requireUserContext: RequireUserContext;
 };
 
+export type DecomposeTeaTicketHandlerDeps = {
+  decomposeTeaTicket: (userContext: InternalUserContext, ticketId: string) => Promise<unknown>;
+  requireUserContext: RequireUserContext;
+};
+
 export type PlanTeaTicketHandlerDeps = {
   planTeaTicket: (userContext: InternalUserContext, ticketId: string) => Promise<unknown>;
   requireUserContext: RequireUserContext;
@@ -287,6 +292,19 @@ export async function handleAnalyzeTeaTicketRequest(
     return teaJson({ analysis });
   } catch (error) {
     return teaRouteErrorResponse(error, "Tea ticket analysis failed");
+  }
+}
+
+export async function handleDecomposeTeaTicketRequest(
+  ticketId: string,
+  deps: DecomposeTeaTicketHandlerDeps,
+): Promise<Response> {
+  try {
+    const userContext = await deps.requireUserContext();
+    const decomposition = await deps.decomposeTeaTicket(userContext, ticketId);
+    return teaJson({ decomposition });
+  } catch (error) {
+    return teaRouteErrorResponse(error, "Tea ticket decomposition failed");
   }
 }
 

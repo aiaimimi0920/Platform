@@ -1,4 +1,5 @@
 export type TeaDetailLifecycleAction =
+  | "decompose"
   | "analyze"
   | "plan"
   | "approve"
@@ -32,6 +33,7 @@ export type TeaTicketDetailControls = {
 const terminalStatuses = new Set(["closed", "cancelled"]);
 
 const lifecycleControls: TeaDetailLifecycleControl[] = [
+  { action: "decompose", label: "拆解工单", variant: "mg-btn--primary" },
   { action: "analyze", label: "AI 分析" },
   { action: "plan", label: "生成计划" },
   { action: "approve", label: "审批", variant: "mg-btn--secondary" },

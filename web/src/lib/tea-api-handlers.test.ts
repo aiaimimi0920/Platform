@@ -8,6 +8,7 @@ import {
   handleApproveTeaTicketRequest,
   handleCancelTeaTicketRequest,
   handleCreateTeaTicketRequest,
+  handleDecomposeTeaTicketRequest,
   handleDownloadTeaTicketJsonRequest,
   handleDownloadTeaTicketMarkdownRequest,
   handleExportTeaTicketJsonRequest,
@@ -214,6 +215,11 @@ test("handleGetTeaTicketCommentsRequest returns persisted review comments for th
 });
 
 test("ticket lifecycle handlers return the expected browser envelopes", async () => {
+  const decomposition = {
+    analysis: { recommended_workflow: "loom.tea_ticket_decompose.v1" },
+    plan: { steps: [{ id: "inspect-context" }] },
+    provider: { capability: "tea.ticket.decompose.v1", mode: "loom" },
+  };
   const approvedTicket: TeaTicketView = {
     id: "ticket-action-1",
     status: "approved",
@@ -227,6 +233,17 @@ test("ticket lifecycle handlers return the expected browser envelopes", async ()
     status: "succeeded",
     ticket_id: "ticket-action-1",
   };
+
+  const decomposeResponse = await handleDecomposeTeaTicketRequest("ticket-action-1", {
+    decomposeTeaTicket: async (context, ticketId) => {
+      assert.deepEqual(context, userContext);
+      assert.equal(ticketId, "ticket-action-1");
+      return decomposition;
+    },
+    requireUserContext: async () => userContext,
+  });
+  assert.equal(decomposeResponse.status, 200);
+  assert.deepEqual(await decomposeResponse.json(), { decomposition });
 
   const approveResponse = await handleApproveTeaTicketRequest("ticket-action-1", {
     approveTeaTicket: async (context, ticketId) => {

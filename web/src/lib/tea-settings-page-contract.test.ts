@@ -3,7 +3,24 @@ import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import test from "node:test";
 
-const repoRoot = resolve(process.cwd(), "..");
+function findRepoRoot(startDir: string) {
+  let current = resolve(startDir);
+  for (;;) {
+    if (
+      existsSync(resolve(current, "Platform", "web", "package.json")) &&
+      existsSync(resolve(current, "scripts"))
+    ) {
+      return current;
+    }
+    const parent = resolve(current, "..");
+    if (parent === current) {
+      throw new Error(`Unable to locate Neuro repo root from ${startDir}`);
+    }
+    current = parent;
+  }
+}
+
+const repoRoot = findRepoRoot(process.cwd());
 const settingsPagePath = resolve(repoRoot, "Platform", "web", "src", "app", "tea", "settings", "page.tsx");
 const settingsPageExists = existsSync(settingsPagePath);
 const settingsPageSource = settingsPageExists ? readFileSync(settingsPagePath, "utf8") : "";

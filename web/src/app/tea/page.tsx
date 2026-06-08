@@ -88,6 +88,16 @@ function configActionLabel(status: TeaStatusView | null): string {
   return configSource(status) === "loom-managed" ? "在 Loom 中配置 Tea" : "打开 Tea 本地设置";
 }
 
+function brainProviderMode(status: TeaStatusView | null): string {
+  return typeof status?.brain_provider?.mode === "string" ? status.brain_provider.mode : "unknown";
+}
+
+function brainProviderCapability(status: TeaStatusView | null): string {
+  return typeof status?.brain_provider?.capability === "string"
+    ? status.brain_provider.capability
+    : "tea.ticket.decompose.v1";
+}
+
 export default async function TeaPage({ searchParams }: TeaPageProps) {
   const session = await auth();
   if (!session?.user?.id) {
@@ -221,6 +231,7 @@ export default async function TeaPage({ searchParams }: TeaPageProps) {
                             <Link className="mg-btn mg-btn--secondary" href={`/tea/${encodeURIComponent(ticket.id)}`}>
                               查看详情 / 审阅证据
                             </Link>
+                            {lifecycleButton(ticket, "decompose", "拆解工单", "mg-btn--primary")}
                             {lifecycleButton(ticket, "analyze", "AI 分析")}
                             {lifecycleButton(ticket, "plan", "生成计划")}
                             {lifecycleButton(ticket, "approve", "审批", "mg-btn--secondary")}
@@ -264,13 +275,29 @@ export default async function TeaPage({ searchParams }: TeaPageProps) {
             </AccountHomeSection>
 
             <AccountHomeSection>
+              <AccountHomeSectionHead kicker="BrainProvider" title="拆解能力" />
+              <Card className="app-stack">
+                <div className="app-action-row">
+                  <Badge variant={brainProviderMode(teaStatus) === "loom" ? "cyan" : "glass"}>
+                    {brainProviderMode(teaStatus)}
+                  </Badge>
+                  <span className="app-note">{brainProviderCapability(teaStatus)}</span>
+                </div>
+                <p className="mg-copy">
+                  Tea 负责工单生命周期和拆解记录；Loom 负责强推理拆解提案。没有 Loom 时，Tea 会使用本地
+                  template/manual provider 保持独立可用。
+                </p>
+              </Card>
+            </AccountHomeSection>
+
+            <AccountHomeSection>
               <AccountHomeSectionHead kicker="Create" title="提交 AI 工单" />
               <form action={createTeaTicketAction} className="app-form-grid">
                 <input name="redirectTo" type="hidden" value="/tea" />
                 <Input name="title" placeholder="工单标题，例如：修复 Hook 截图上传失败" required />
                 <Textarea
                   name="description"
-                  placeholder="描述目标、上下文、验收标准、限制条件。Tea 会把它交给 AI brain 分析并拆成计划。"
+                  placeholder="描述目标、上下文、验收标准、限制条件。Tea 会记录工单，并在拆解时使用 Loom 或本地模板生成提案。"
                   required
                   rows={6}
                 />

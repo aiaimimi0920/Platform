@@ -11,6 +11,7 @@ import {
   cancelTeaTicket,
   closeTeaTicket,
   createTeaTicket,
+  decomposeTeaTicket,
   planTeaTicket,
   rejectTeaTicket,
   retryTeaTicket,
@@ -25,7 +26,17 @@ import {
   parseTeaRejectPayload,
 } from "@/lib/tea-route-utils";
 
-type TeaLifecycleAction = "analyze" | "plan" | "approve" | "run" | "stop" | "retry" | "accept" | "close" | "cancel";
+type TeaLifecycleAction =
+  | "decompose"
+  | "analyze"
+  | "plan"
+  | "approve"
+  | "run"
+  | "stop"
+  | "retry"
+  | "accept"
+  | "close"
+  | "cancel";
 
 function resolveRedirectPath(value: FormDataEntryValue | null, fallback: string): string {
   const raw = typeof value === "string" ? value.trim() : "";
@@ -46,7 +57,8 @@ function toMessage(error: unknown, fallback: string): string {
 
 function normalizeLifecycleAction(value: FormDataEntryValue | null): TeaLifecycleAction | null {
   const raw = typeof value === "string" ? value.trim() : "";
-  return raw === "analyze" ||
+  return raw === "decompose" ||
+    raw === "analyze" ||
     raw === "plan" ||
     raw === "approve" ||
     raw === "run" ||
@@ -61,6 +73,8 @@ function normalizeLifecycleAction(value: FormDataEntryValue | null): TeaLifecycl
 
 function lifecycleActionSuccessMessage(action: TeaLifecycleAction): string {
   switch (action) {
+    case "decompose":
+      return "Tea 已完成工单拆解。";
     case "analyze":
       return "Tea 已完成工单分析。";
     case "plan":
@@ -119,6 +133,9 @@ export async function teaTicketLifecycleAction(formData: FormData) {
   try {
     const userContext = await requirePlatformUserContext();
     switch (action) {
+      case "decompose":
+        await decomposeTeaTicket(userContext, ticketId);
+        break;
       case "analyze":
         await analyzeTeaTicket(userContext, ticketId);
         break;

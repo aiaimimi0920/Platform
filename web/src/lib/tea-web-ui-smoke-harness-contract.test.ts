@@ -3,7 +3,24 @@ import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import test from "node:test";
 
-const repoRoot = resolve(process.cwd(), "..");
+function findRepoRoot(startDir: string) {
+  let current = resolve(startDir);
+  for (;;) {
+    if (
+      existsSync(resolve(current, "Platform", "web", "package.json")) &&
+      existsSync(resolve(current, "scripts"))
+    ) {
+      return current;
+    }
+    const parent = resolve(current, "..");
+    if (parent === current) {
+      throw new Error(`Unable to locate Neuro repo root from ${startDir}`);
+    }
+    current = parent;
+  }
+}
+
+const repoRoot = findRepoRoot(process.cwd());
 const harnessPath = resolve(repoRoot, "scripts", "smoke-platform-web-tea-ui-real.ps1");
 const nextConfigPath = resolve(repoRoot, "Platform", "web", "next.config.ts");
 const harnessExists = existsSync(harnessPath);
@@ -25,14 +42,22 @@ test("Platform Web Tea UI real smoke drives the actual Next UI with local dev au
   assert.match(harnessSource, /DEV_AUTH_BYPASS_ENABLED/);
   assert.match(harnessSource, /NEXTAUTH_SECRET/);
   assert.match(harnessSource, /使用 Local Dev 登录/);
+  assert.match(harnessSource, /dismissBlockingOverlays/);
+  assert.match(harnessSource, /关闭公告面板/);
+  assert.match(harnessSource, /\.app-announcement-close/);
+  assert.match(harnessSource, /\.app-announcement-overlay/);
+  assert.match(harnessSource, /force:\s*true/);
+  assert.match(harnessSource, /announcement overlay still blocks Tea UI/);
   assert.match(harnessSource, /AI 工单控制台/);
   assert.match(harnessSource, /提交 AI 工单/);
+  assert.match(harnessSource, /拆解工单/);
   assert.match(harnessSource, /查看详情 \/ 审阅证据/);
   assert.match(harnessSource, /人工评论/);
   assert.match(harnessSource, /提交评论/);
 });
 
 test("Platform Web Tea UI real smoke verifies lifecycle, downloads, and credential boundary evidence", () => {
+  assert.match(harnessSource, /loom\.tea_ticket_decompose\.v1/);
   assert.match(harnessSource, /审批/);
   assert.match(harnessSource, /执行/);
   assert.match(harnessSource, /停止最新执行/);
@@ -61,9 +86,11 @@ test("Platform Web Tea UI real smoke records cleanup and refuses unsafe port col
 test("Platform Web Tea UI real smoke isolates Next dev artifacts from shared .next lock", () => {
   assert.match(nextConfigSource, /NEXT_DIST_DIR/);
   assert.match(nextConfigSource, /distDir/);
-  assert.match(harnessSource, /\.next-tea-ui-smoke-\$runId/);
+  assert.match(harnessSource, /\$nextDistRunId\s*=\s*\$runId\.Replace\("-", ""\)\.Substring\(0,\s*12\)/);
+  assert.match(harnessSource, /\.nt-\$nextDistRunId/);
   assert.match(harnessSource, /NEXT_DIST_DIR/);
   assert.match(harnessSource, /next_dist_dir/);
+  assert.doesNotMatch(harnessSource, /\.next-tea-ui-smoke-\$runId/);
   assert.doesNotMatch(harnessSource, /web\\\.next\\dev\\lock/);
 });
 

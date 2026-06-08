@@ -86,6 +86,8 @@ export function createTeaClient(config: TeaClientConfig) {
       request(`/v1/tickets/${encodeURIComponent(ticketId)}/comments`, { method: "POST", body }),
     listComments: (ticketId: string) => request(`/v1/tickets/${encodeURIComponent(ticketId)}/comments`),
     getTicketEvents: (ticketId: string) => request(`/v1/tickets/${encodeURIComponent(ticketId)}/events`),
+    decomposeTicket: (ticketId: string) =>
+      request(`/v1/tickets/${encodeURIComponent(ticketId)}/decompose`, { method: "POST" }),
     analyzeTicket: (ticketId: string) => request(`/v1/tickets/${encodeURIComponent(ticketId)}/analyze`, { method: "POST" }),
     planTicket: (ticketId: string) => request(`/v1/tickets/${encodeURIComponent(ticketId)}/plan`, { method: "POST" }),
     approveTicket: (ticketId: string) => request(`/v1/tickets/${encodeURIComponent(ticketId)}/approve`, { method: "POST" }),

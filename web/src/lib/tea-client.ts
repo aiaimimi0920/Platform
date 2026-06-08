@@ -76,7 +76,14 @@ export type TeaConfigurationStatusView = {
   [key: string]: unknown;
 };
 
+export type TeaBrainProviderStatusView = {
+  capability?: string;
+  mode?: "manual" | "template" | "loom" | string;
+  [key: string]: unknown;
+};
+
 export type TeaStatusView = {
+  brain_provider?: TeaBrainProviderStatusView;
   service?: string;
   status?: string;
   configuration_source?: TeaConfigurationSource | string;
@@ -304,6 +311,20 @@ export async function analyzeTeaTicket(
     },
   );
   return response.analysis;
+}
+
+export async function decomposeTeaTicket(
+  userContext: InternalUserContext,
+  ticketId: string,
+): Promise<unknown> {
+  const response = await coreTeaRequest<{ decomposition: unknown }>(
+    `/internal/tea/tickets/${encodeURIComponent(ticketId)}/decompose`,
+    {
+      method: "POST",
+      userContext,
+    },
+  );
+  return response.decomposition;
 }
 
 export async function planTeaTicket(

@@ -14,7 +14,7 @@ test("active Tea tickets expose review mutations, stop/retry lifecycle controls,
   assert.equal(controls.showRejectForm, true);
   assert.deepEqual(
     controls.lifecycleControls.map((control) => control.action),
-    ["analyze", "plan", "approve", "run", "stop", "retry", "accept", "close", "cancel"],
+    ["decompose", "analyze", "plan", "approve", "run", "stop", "retry", "accept", "close", "cancel"],
   );
   assert.deepEqual(
     controls.lifecycleControls.filter((control) => control.requiresRun).map((control) => control.action),

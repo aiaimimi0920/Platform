@@ -7,6 +7,7 @@ import {
   addTeaTicketComment,
   cancelTeaTicket,
   createTeaTicket,
+  decomposeTeaTicket,
   exportTeaTicketJson,
   exportTeaTicketMarkdown,
   getTeaConfiguration,
@@ -361,6 +362,32 @@ test("Tea review action helpers call Platform Core without Tea bearer auth", asy
       assert.equal(requests[0]?.init?.body, JSON.stringify({ body: "Please attach validation evidence." }));
       assert.equal(requests[1]?.init?.body, JSON.stringify({ reason: "Plan needs a safer rollback step." }));
       assert.ok(requests.every((request) => getHeader(request.init, "authorization") === null));
+    },
+  );
+});
+
+test("decomposeTeaTicket calls Platform Core canonical decompose route", async () => {
+  await withCapturedFetch(
+    () =>
+      jsonResponse({
+        decomposition: {
+          analysis: { recommended_workflow: "loom.tea_ticket_decompose.v1" },
+          plan: { steps: [{ id: "inspect-context" }] },
+          provider: { capability: "tea.ticket.decompose.v1", mode: "loom" },
+        },
+      }),
+    async (requests) => {
+      const decomposition = await decomposeTeaTicket(userContext, "ticket-1");
+
+      assert.deepEqual(decomposition, {
+        analysis: { recommended_workflow: "loom.tea_ticket_decompose.v1" },
+        plan: { steps: [{ id: "inspect-context" }] },
+        provider: { capability: "tea.ticket.decompose.v1", mode: "loom" },
+      });
+      assert.equal(requests.length, 1);
+      assert.equal(requests[0]?.url, "http://core-test.local/internal/tea/tickets/ticket-1/decompose");
+      assert.equal(requests[0]?.init?.method, "POST");
+      assert.equal(getHeader(requests[0]?.init, "authorization"), null);
     },
   );
 });
