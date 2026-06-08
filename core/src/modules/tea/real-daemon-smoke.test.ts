@@ -80,6 +80,45 @@ describe("Platform Tea real daemon smoke", () => {
         assert.equal(getResponse.statusCode, 200, getResponse.body);
         assert.equal((getResponse.json() as { ticket: JsonRecord }).ticket.id, ticketId);
 
+        const cancelCreateResponse = await app.inject({
+          method: "POST",
+          url: "/internal/tea/tickets",
+          headers,
+          payload: {
+            title: "Platform Tea cancel smoke",
+            description: "Create a separate real Tea ticket to verify cancellation through Platform Core.",
+          },
+        });
+        assert.equal(cancelCreateResponse.statusCode, 200, cancelCreateResponse.body);
+        const cancelCreated = cancelCreateResponse.json() as { ticket: JsonRecord };
+        const cancelledTicketId = String(cancelCreated.ticket.id || "");
+        assert.match(cancelledTicketId, /^[0-9a-f-]{36}$/);
+
+        const cancelResponse = await app.inject({
+          method: "POST",
+          url: `/internal/tea/tickets/${cancelledTicketId}/cancel`,
+          headers,
+        });
+        assert.equal(cancelResponse.statusCode, 200, cancelResponse.body);
+        assert.equal((cancelResponse.json() as { ticket: JsonRecord }).ticket.status, "cancelled");
+
+        const cancelEventsResponse = await app.inject({
+          method: "GET",
+          url: `/internal/tea/tickets/${cancelledTicketId}/events`,
+          headers,
+        });
+        assert.equal(cancelEventsResponse.statusCode, 200, cancelEventsResponse.body);
+        const cancelEvents = (cancelEventsResponse.json() as { events: JsonRecord[] }).events;
+        assert.ok(cancelEvents.some((event) => event.kind === "ticket_cancelled"));
+
+        const rejectAfterCancelResponse = await app.inject({
+          method: "POST",
+          url: `/internal/tea/tickets/${cancelledTicketId}/reject`,
+          headers,
+          payload: { reason: "cancelled tickets must be immutable" },
+        });
+        assert.equal(rejectAfterCancelResponse.statusCode, 409, rejectAfterCancelResponse.body);
+
         const approveResponse = await app.inject({
           method: "POST",
           url: `/internal/tea/tickets/${ticketId}/approve`,
@@ -149,7 +188,11 @@ describe("Platform Tea real daemon smoke", () => {
           teaServerUrl,
           teaAuthTokenLength: teaAuthToken.length,
           ticketId,
+          cancelledTicketId,
           runId,
+          cancelledTicketStatus: "cancelled",
+          cancelEventsIncludeCancelled: cancelEvents.some((event) => event.kind === "ticket_cancelled"),
+          cancelMutationConflictStatus: rejectAfterCancelResponse.statusCode,
           eventCount: events.length,
           markdownContainsRunEvidence: markdown.includes("mock loom run completed"),
         };

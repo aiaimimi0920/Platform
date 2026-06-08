@@ -227,6 +227,7 @@ export default async function TeaPage({ searchParams }: TeaPageProps) {
                             {lifecycleButton(ticket, "run", "执行", "mg-btn--primary")}
                             {lifecycleButton(ticket, "accept", "验收")}
                             {lifecycleButton(ticket, "close", "关闭")}
+                            {lifecycleButton(ticket, "cancel", "取消")}
                           </div>
                         )}
                       </Card>

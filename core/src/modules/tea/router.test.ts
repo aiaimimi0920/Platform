@@ -224,6 +224,31 @@ describe("Platform Tea router", () => {
     }
   });
 
+  it("forwards ticket cancellation through Tea", async () => {
+    const requests: CapturedRequest[] = [];
+    const app = await buildTeaTestServer(async (input, init) => {
+      requests.push({ url: input.toString(), init });
+      return jsonResponse({ id: "ticket-1", status: "cancelled" });
+    });
+
+    try {
+      const response = await app.inject({
+        method: "POST",
+        url: "/internal/tea/tickets/ticket-1/cancel",
+        headers: { "x-internal-api-token": "internal-token" },
+      });
+
+      assert.equal(response.statusCode, 200);
+      assert.deepEqual(response.json(), { ticket: { id: "ticket-1", status: "cancelled" } });
+      assert.equal(requests.length, 1);
+      assert.equal(requests[0]?.url, "http://tea.local/v1/tickets/ticket-1/cancel");
+      assert.equal(requests[0]?.init?.method, "POST");
+      assert.equal((requests[0]?.init?.headers as Record<string, string>).authorization, "Bearer tea-token");
+    } finally {
+      await app.close();
+    }
+  });
+
   it("validates and forwards ticket comments", async () => {
     const requests: CapturedRequest[] = [];
     const app = await buildTeaTestServer(async (input, init) => {

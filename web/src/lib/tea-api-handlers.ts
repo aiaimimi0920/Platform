@@ -131,6 +131,11 @@ export type CloseTeaTicketHandlerDeps = {
   requireUserContext: RequireUserContext;
 };
 
+export type CancelTeaTicketHandlerDeps = {
+  cancelTeaTicket: (userContext: InternalUserContext, ticketId: string) => Promise<TeaTicketView>;
+  requireUserContext: RequireUserContext;
+};
+
 export async function handleListTeaTicketsRequest(
   request: Request,
   deps: ListTeaTicketsHandlerDeps,
@@ -404,5 +409,18 @@ export async function handleCloseTeaTicketRequest(
     return teaJson({ ticket });
   } catch (error) {
     return teaRouteErrorResponse(error, "Tea ticket close failed");
+  }
+}
+
+export async function handleCancelTeaTicketRequest(
+  ticketId: string,
+  deps: CancelTeaTicketHandlerDeps,
+): Promise<Response> {
+  try {
+    const userContext = await deps.requireUserContext();
+    const ticket = await deps.cancelTeaTicket(userContext, ticketId);
+    return teaJson({ ticket });
+  } catch (error) {
+    return teaRouteErrorResponse(error, "Tea ticket cancel failed");
   }
 }

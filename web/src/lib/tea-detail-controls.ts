@@ -6,7 +6,8 @@ export type TeaDetailLifecycleAction =
   | "stop"
   | "retry"
   | "accept"
-  | "close";
+  | "close"
+  | "cancel";
 
 export type TeaDetailLifecycleControl = {
   action: TeaDetailLifecycleAction;
@@ -39,6 +40,7 @@ const lifecycleControls: TeaDetailLifecycleControl[] = [
   { action: "retry", label: "重试最新执行", requiresRun: true, variant: "mg-btn--glass" },
   { action: "accept", label: "验收" },
   { action: "close", label: "关闭" },
+  { action: "cancel", label: "取消", variant: "mg-btn--glass" },
 ];
 
 export function isTerminalTeaTicketStatus(status: string): boolean {

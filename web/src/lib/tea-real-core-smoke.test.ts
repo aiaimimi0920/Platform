@@ -6,6 +6,7 @@ import type { InternalUserContext } from "@neuro/contracts";
 
 import {
   addTeaTicketComment,
+  cancelTeaTicket,
   closeTeaTicket,
   createTeaTicket,
   exportTeaTicketJson,
@@ -23,6 +24,7 @@ import {
 import {
   handleAddTeaTicketCommentRequest,
   handleApproveTeaTicketRequest,
+  handleCancelTeaTicketRequest,
   handleCloseTeaTicketRequest,
   handleCreateTeaTicketRequest,
   handleDownloadTeaTicketJsonRequest,
@@ -191,6 +193,68 @@ test(
       const rejected = JSON.parse(rejectBody) as { ticket: JsonRecord };
       assert.equal(rejected.ticket.id, rejectedTicketId);
       assert.equal(rejected.ticket.status, "blocked");
+
+      const cancelCreateResponse = await handleCreateTeaTicketRequest(
+        new Request("https://platform.local/api/tea/tickets", {
+          body: JSON.stringify({
+            description:
+              "Create a separate real Tea ticket to verify cancellation through the browser-facing path.",
+            title: "Platform Web Tea cancel smoke",
+          }),
+          method: "POST",
+        }),
+        {
+          createTeaTicket,
+          requireUserContext: async () => userContext,
+        },
+      );
+      const cancelCreateBody = await cancelCreateResponse.text();
+      assert.equal(cancelCreateResponse.status, 201, cancelCreateBody);
+      const cancelCreated = JSON.parse(cancelCreateBody) as { ticket: JsonRecord };
+      const cancelledTicketId = String(cancelCreated.ticket.id || "");
+      assert.match(cancelledTicketId, /^[0-9a-f-]{36}$/);
+
+      const cancelResponse = await handleCancelTeaTicketRequest(cancelledTicketId, {
+        cancelTeaTicket,
+        requireUserContext: async () => userContext,
+      });
+      const cancelBody = await cancelResponse.text();
+      assert.equal(cancelResponse.status, 200, cancelBody);
+      const cancelled = JSON.parse(cancelBody) as { ticket: JsonRecord };
+      assert.equal(cancelled.ticket.id, cancelledTicketId);
+      assert.equal(cancelled.ticket.status, "cancelled");
+
+      const cancelDetailResponse = await handleGetTeaTicketRequest(cancelledTicketId, {
+        getTeaTicket,
+        getTeaTicketComments,
+        getTeaTicketEvents,
+        requireUserContext: async () => userContext,
+      });
+      const cancelDetailBody = await cancelDetailResponse.text();
+      assert.equal(cancelDetailResponse.status, 200, cancelDetailBody);
+      const cancelDetail = JSON.parse(cancelDetailBody) as {
+        ticket: JsonRecord;
+        comments: JsonRecord[];
+        events: JsonRecord[];
+      };
+      assert.equal(cancelDetail.ticket.status, "cancelled");
+      const cancelEvents = cancelDetail.events;
+      assert.ok(cancelEvents.some((event) => event.kind === "ticket_cancelled"));
+
+      const commentAfterCancelResponse = await handleAddTeaTicketCommentRequest(
+        cancelledTicketId,
+        new Request(`https://platform.local/api/tea/tickets/${cancelledTicketId}/comments`, {
+          body: JSON.stringify({
+            body: "Cancelled tickets must stay immutable.",
+          }),
+          method: "POST",
+        }),
+        {
+          addTeaTicketComment,
+          requireUserContext: async () => userContext,
+        },
+      );
+      assert.equal(commentAfterCancelResponse.status, 409, await commentAfterCancelResponse.text());
 
       const approveResponse = await handleApproveTeaTicketRequest(ticketId, {
         approveTeaTicket,
@@ -384,9 +448,13 @@ test(
         coreBaseUrl,
         ticketId,
         rejectedTicketId,
+        cancelledTicketId,
         runId,
         commentId,
         rejectedTicketStatus: rejected.ticket.status,
+        cancelledTicketStatus: cancelled.ticket.status,
+        cancelEventsIncludeCancelled: cancelEvents.some((event) => event.kind === "ticket_cancelled"),
+        cancelMutationConflictStatus: commentAfterCancelResponse.status,
         stoppedRunStatus: stopped.run.status,
         retriedRunStatus: retried.run.status,
         eventCount: events.length,

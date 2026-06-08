@@ -5,6 +5,7 @@ import type { InternalUserContext } from "@neuro/contracts";
 
 import {
   addTeaTicketComment,
+  cancelTeaTicket,
   createTeaTicket,
   exportTeaTicketJson,
   exportTeaTicketMarkdown,
@@ -321,6 +322,9 @@ test("Tea review action helpers call Platform Core without Tea bearer auth", asy
       if (url.endsWith("/stop")) {
         return jsonResponse({ run: { id: "run-1", status: "stopped", ticket_id: "ticket-1" } });
       }
+      if (url.endsWith("/cancel")) {
+        return jsonResponse({ ticket: { id: "ticket-1", status: "cancelled" } });
+      }
       return jsonResponse({ run: { id: "run-2", status: "retrying", ticket_id: "ticket-1" } });
     },
     async (requests) => {
@@ -332,6 +336,7 @@ test("Tea review action helpers call Platform Core without Tea bearer auth", asy
       });
       const stoppedRun = await stopTeaTicket(userContext, "ticket-1");
       const retriedRun = await retryTeaTicket(userContext, "ticket-1");
+      const cancelledTicket = await cancelTeaTicket(userContext, "ticket-1");
 
       assert.deepEqual(comment, {
         body: "Please attach validation evidence.",
@@ -341,15 +346,18 @@ test("Tea review action helpers call Platform Core without Tea bearer auth", asy
       assert.deepEqual(rejectedTicket, { id: "ticket-1", status: "needs_info" });
       assert.deepEqual(stoppedRun, { id: "run-1", status: "stopped", ticket_id: "ticket-1" });
       assert.deepEqual(retriedRun, { id: "run-2", status: "retrying", ticket_id: "ticket-1" });
-      assert.equal(requests.length, 4);
+      assert.deepEqual(cancelledTicket, { id: "ticket-1", status: "cancelled" });
+      assert.equal(requests.length, 5);
       assert.equal(requests[0]?.url, "http://core-test.local/internal/tea/tickets/ticket-1/comments");
       assert.equal(requests[1]?.url, "http://core-test.local/internal/tea/tickets/ticket-1/reject");
       assert.equal(requests[2]?.url, "http://core-test.local/internal/tea/tickets/ticket-1/stop");
       assert.equal(requests[3]?.url, "http://core-test.local/internal/tea/tickets/ticket-1/retry");
+      assert.equal(requests[4]?.url, "http://core-test.local/internal/tea/tickets/ticket-1/cancel");
       assert.equal(requests[0]?.init?.method, "POST");
       assert.equal(requests[1]?.init?.method, "POST");
       assert.equal(requests[2]?.init?.method, "POST");
       assert.equal(requests[3]?.init?.method, "POST");
+      assert.equal(requests[4]?.init?.method, "POST");
       assert.equal(requests[0]?.init?.body, JSON.stringify({ body: "Please attach validation evidence." }));
       assert.equal(requests[1]?.init?.body, JSON.stringify({ reason: "Plan needs a safer rollback step." }));
       assert.ok(requests.every((request) => getHeader(request.init, "authorization") === null));

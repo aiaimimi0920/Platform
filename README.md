@@ -81,7 +81,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\smoke-platform-tea
 The harness starts an isolated Tea daemon on a free loopback port with a
 temporary SQLite store, runs `core/src/modules/tea/real-daemon-smoke.test.ts`
 with `TEA_PLATFORM_REAL_SMOKE=1`, verifies ticket lifecycle operations through
-Platform Core, and writes artifacts under
+Platform Core, including cancel terminal-state behavior, and writes artifacts under
 `.tmp/tea-smoke/platform-tea-real-<timestamp>/`.
 
 Platform Web now exposes an authenticated Tea work-order desk at `/tea`, a
@@ -91,8 +91,8 @@ Loom run evidence, JSON export, and Markdown export through the same
 backend-mediated boundary. JSON and Markdown exports include persisted human
 review comments so review notes are not write-only after submission.
 Operators can add review comments, reject tickets with a reason, stop/retry the
-latest run, and download JSON/Markdown evidence without receiving the Tea daemon
-token. The call chain is:
+latest run, accept/close completed work, cancel active work, and download
+JSON/Markdown evidence without receiving the Tea daemon token. The call chain is:
 
 Review/action routes currently exposed by Platform Web include:
 
@@ -101,7 +101,7 @@ Review/action routes currently exposed by Platform Web include:
 - `GET /api/tea/tickets/:ticketId/comments` for persisted review comments.
 - `POST /api/tea/tickets/:ticketId/comments` for human review comments.
 - `POST /api/tea/tickets/:ticketId/analyze`, `/plan`, `/approve`, `/reject`,
-  `/run`, `/stop`, `/retry`, `/accept`, and `/close` for ticket lifecycle
+  `/run`, `/stop`, `/retry`, `/accept`, `/close`, and `/cancel` for ticket lifecycle
   controls.
 - `GET /api/tea/tickets/:ticketId/runs` for Loom run evidence.
 - `GET /api/tea/tickets/:ticketId/export/json` and `/export/markdown` for
@@ -132,7 +132,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\smoke-platform-web
 
 The harness starts an isolated Tea daemon, starts an in-process Platform Core
 HTTP server for `/internal/tea/*`, then drives the Platform Web Tea handlers for
-create, comment, reject, approve, run, detail/comments/events, comments, runs,
+create, comment, reject, cancel, approve, run, detail/comments/events, comments, runs,
 JSON export, Markdown export, raw JSON/Markdown downloads, stop, retry, close,
 and terminal-ticket conflict checks. It also asserts that review comments appear
 in detail responses and both export formats, that Platform Web does not send

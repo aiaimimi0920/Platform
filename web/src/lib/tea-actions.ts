@@ -8,6 +8,7 @@ import {
   addTeaTicketComment,
   analyzeTeaTicket,
   approveTeaTicket,
+  cancelTeaTicket,
   closeTeaTicket,
   createTeaTicket,
   planTeaTicket,
@@ -24,7 +25,7 @@ import {
   parseTeaRejectPayload,
 } from "@/lib/tea-route-utils";
 
-type TeaLifecycleAction = "analyze" | "plan" | "approve" | "run" | "stop" | "retry" | "accept" | "close";
+type TeaLifecycleAction = "analyze" | "plan" | "approve" | "run" | "stop" | "retry" | "accept" | "close" | "cancel";
 
 function resolveRedirectPath(value: FormDataEntryValue | null, fallback: string): string {
   const raw = typeof value === "string" ? value.trim() : "";
@@ -52,7 +53,8 @@ function normalizeLifecycleAction(value: FormDataEntryValue | null): TeaLifecycl
     raw === "stop" ||
     raw === "retry" ||
     raw === "accept" ||
-    raw === "close"
+    raw === "close" ||
+    raw === "cancel"
     ? raw
     : null;
 }
@@ -75,6 +77,8 @@ function lifecycleActionSuccessMessage(action: TeaLifecycleAction): string {
       return "Tea 工单已验收。";
     case "close":
       return "Tea 工单已关闭。";
+    case "cancel":
+      return "Tea 工单已取消。";
   }
 }
 
@@ -138,6 +142,9 @@ export async function teaTicketLifecycleAction(formData: FormData) {
         break;
       case "close":
         await closeTeaTicket(userContext, ticketId);
+        break;
+      case "cancel":
+        await cancelTeaTicket(userContext, ticketId);
         break;
     }
     target = buildStatusRedirect(redirectTo, "success", lifecycleActionSuccessMessage(action));

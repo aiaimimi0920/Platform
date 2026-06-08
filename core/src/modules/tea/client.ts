@@ -97,6 +97,7 @@ export function createTeaClient(config: TeaClientConfig) {
     listRuns: (ticketId: string) => request(`/v1/tickets/${encodeURIComponent(ticketId)}/runs`),
     acceptTicket: (ticketId: string) => request(`/v1/tickets/${encodeURIComponent(ticketId)}/accept`, { method: "POST" }),
     closeTicket: (ticketId: string) => request(`/v1/tickets/${encodeURIComponent(ticketId)}/close`, { method: "POST" }),
+    cancelTicket: (ticketId: string) => request(`/v1/tickets/${encodeURIComponent(ticketId)}/cancel`, { method: "POST" }),
     exportTicketJson: (ticketId: string) => request(`/v1/tickets/${encodeURIComponent(ticketId)}/export/json`),
     exportTicketMarkdown: (ticketId: string) =>
       request(`/v1/tickets/${encodeURIComponent(ticketId)}/export/markdown`),

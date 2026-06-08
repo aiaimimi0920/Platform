@@ -385,6 +385,13 @@ export async function closeTeaTicket(
   return ticketMutation(userContext, ticketId, "close");
 }
 
+export async function cancelTeaTicket(
+  userContext: InternalUserContext,
+  ticketId: string,
+): Promise<TeaTicketView> {
+  return ticketMutation(userContext, ticketId, "cancel");
+}
+
 async function runMutation(
   userContext: InternalUserContext,
   ticketId: string,
@@ -403,7 +410,7 @@ async function runMutation(
 async function ticketMutation(
   userContext: InternalUserContext,
   ticketId: string,
-  action: "approve" | "accept" | "close",
+  action: "approve" | "accept" | "close" | "cancel",
 ): Promise<TeaTicketView> {
   const response = await coreTeaRequest<{ ticket: TeaTicketView }>(
     `/internal/tea/tickets/${encodeURIComponent(ticketId)}/${action}`,

@@ -6,6 +6,7 @@ import type { InternalUserContext } from "@neuro/contracts";
 import {
   handleAddTeaTicketCommentRequest,
   handleApproveTeaTicketRequest,
+  handleCancelTeaTicketRequest,
   handleCreateTeaTicketRequest,
   handleDownloadTeaTicketJsonRequest,
   handleDownloadTeaTicketMarkdownRequest,
@@ -217,6 +218,10 @@ test("ticket lifecycle handlers return the expected browser envelopes", async ()
     id: "ticket-action-1",
     status: "approved",
   };
+  const cancelledTicket: TeaTicketView = {
+    id: "ticket-action-1",
+    status: "cancelled",
+  };
   const run: TeaRunView = {
     id: "run-1",
     status: "succeeded",
@@ -244,6 +249,17 @@ test("ticket lifecycle handlers return the expected browser envelopes", async ()
   });
   assert.equal(runResponse.status, 200);
   assert.deepEqual(await runResponse.json(), { run });
+
+  const cancelResponse = await handleCancelTeaTicketRequest("ticket-action-1", {
+    cancelTeaTicket: async (context, ticketId) => {
+      assert.deepEqual(context, userContext);
+      assert.equal(ticketId, "ticket-action-1");
+      return cancelledTicket;
+    },
+    requireUserContext: async () => userContext,
+  });
+  assert.equal(cancelResponse.status, 200);
+  assert.deepEqual(await cancelResponse.json(), { ticket: cancelledTicket });
 });
 
 test("ticket review handlers return runs and export evidence envelopes", async () => {

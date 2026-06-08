@@ -201,6 +201,14 @@ export function createTeaRouter(options: TeaRouterOptions = {}): FastifyPluginAs
       }),
     );
 
+    app.post<{ Params: { ticketId: string } }>(
+      "/internal/tea/tickets/:ticketId/cancel",
+      { preHandler: withInternalRequest },
+      async (request) => ({
+        ticket: await callTea(() => getClient().cancelTicket(request.params.ticketId)),
+      }),
+    );
+
     app.get<{ Params: { ticketId: string } }>(
       "/internal/tea/tickets/:ticketId/export/json",
       { preHandler: withInternalRequest },

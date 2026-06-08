@@ -100,6 +100,27 @@ describe("Tea HTTP client", () => {
     );
   });
 
+  it("posts ticket cancellation with bearer auth", async () => {
+    const requests: CapturedRequest[] = [];
+    const fetchFn = async (input: string | URL, init?: RequestInit): Promise<Response> => {
+      requests.push({ url: input.toString(), init });
+      return jsonResponse({ id: "ticket-1", status: "cancelled" });
+    };
+    const client = createTeaClient({
+      authToken: "tea-token",
+      baseUrl: "http://tea.local/",
+      fetchFn,
+    });
+
+    const result = await client.cancelTicket("ticket-1");
+
+    assert.deepEqual(result, { id: "ticket-1", status: "cancelled" });
+    assert.equal(requests.length, 1);
+    assert.equal(requests[0]?.url, "http://tea.local/v1/tickets/ticket-1/cancel");
+    assert.equal(requests[0]?.init?.method, "POST");
+    assert.equal((requests[0]?.init?.headers as Record<string, string>).authorization, "Bearer tea-token");
+  });
+
   it("posts ticket comments with bearer auth and one JSON body", async () => {
     const requests: CapturedRequest[] = [];
     const fetchFn = async (input: string | URL, init?: RequestInit): Promise<Response> => {
