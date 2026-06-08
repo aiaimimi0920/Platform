@@ -2413,7 +2413,9 @@ export default async function AgentsOpsPage({
     ),
   }));
   const selectedActionDeckItems =
-    selectedAgent?.sourceType === "external"
+    !selectedAgent
+      ? []
+      : selectedAgent.sourceType === "external"
       ? hasExternalCallbackBacklog
         ? [
             {

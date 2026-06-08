@@ -721,7 +721,7 @@ export default async function AgentCenterPage({ searchParams }: AgentCenterPageP
                   <AgentStageGlyph />
                 </div>
                 <div className="app-agent-rail__copy">
-                  <h2>智能体</h2>
+                  <h1>智能体</h1>
                 </div>
               </div>
 

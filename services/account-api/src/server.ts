@@ -172,8 +172,8 @@ export async function buildServer() {
       onRequest: withInternalRequest,
     },
     async (request) => {
-      const { userId } = assertUserContext(request);
-      if (!isPlatformOperatorUserId(userId)) {
+      const { userId, providerUserId } = assertUserContext(request);
+      if (!isPlatformOperatorUserId(userId, providerUserId)) {
         throw new HttpError(401, "UNAUTHORIZED", "Only platform operators can inspect notification webhook routes");
       }
 
@@ -189,8 +189,8 @@ export async function buildServer() {
       onRequest: withInternalRequest,
     },
     async (request) => {
-      const { userId } = assertUserContext(request);
-      if (!isPlatformOperatorUserId(userId)) {
+      const { userId, providerUserId } = assertUserContext(request);
+      if (!isPlatformOperatorUserId(userId, providerUserId)) {
         throw new HttpError(401, "UNAUTHORIZED", "Only platform operators can inspect notification webhook incident saved views");
       }
       const query = request.query as Record<string, string | undefined>;
@@ -208,8 +208,8 @@ export async function buildServer() {
       onRequest: withInternalRequest,
     },
     async (request) => {
-      const { userId } = assertUserContext(request);
-      if (!isPlatformOperatorUserId(userId)) {
+      const { userId, providerUserId } = assertUserContext(request);
+      if (!isPlatformOperatorUserId(userId, providerUserId)) {
         throw new HttpError(401, "UNAUTHORIZED", "Only platform operators can inspect the default notification webhook incident saved view");
       }
       return {
@@ -224,8 +224,8 @@ export async function buildServer() {
       onRequest: withInternalRequest,
     },
     async (request) => {
-      const { userId } = assertUserContext(request);
-      if (!isPlatformOperatorUserId(userId)) {
+      const { userId, providerUserId } = assertUserContext(request);
+      if (!isPlatformOperatorUserId(userId, providerUserId)) {
         throw new HttpError(401, "UNAUTHORIZED", "Only platform operators can create notification webhook incident saved views");
       }
       const body = (request.body ?? {}) as {
@@ -299,8 +299,8 @@ export async function buildServer() {
       onRequest: withInternalRequest,
     },
     async (request) => {
-      const { userId } = assertUserContext(request);
-      if (!isPlatformOperatorUserId(userId)) {
+      const { userId, providerUserId } = assertUserContext(request);
+      if (!isPlatformOperatorUserId(userId, providerUserId)) {
         throw new HttpError(401, "UNAUTHORIZED", "Only platform operators can set the default notification webhook incident saved view");
       }
       const viewId = String((request.params as { viewId?: string }).viewId || "").trim();
@@ -319,8 +319,8 @@ export async function buildServer() {
       onRequest: withInternalRequest,
     },
     async (request) => {
-      const { userId } = assertUserContext(request);
-      if (!isPlatformOperatorUserId(userId)) {
+      const { userId, providerUserId } = assertUserContext(request);
+      if (!isPlatformOperatorUserId(userId, providerUserId)) {
         throw new HttpError(401, "UNAUTHORIZED", "Only platform operators can update notification webhook incident saved views");
       }
       const viewId = String((request.params as { viewId?: string }).viewId || "").trim();
@@ -398,8 +398,8 @@ export async function buildServer() {
       onRequest: withInternalRequest,
     },
     async (request) => {
-      const { userId } = assertUserContext(request);
-      if (!isPlatformOperatorUserId(userId)) {
+      const { userId, providerUserId } = assertUserContext(request);
+      if (!isPlatformOperatorUserId(userId, providerUserId)) {
         throw new HttpError(401, "UNAUTHORIZED", "Only platform operators can delete notification webhook incident saved views");
       }
       const viewId = String((request.params as { viewId?: string }).viewId || "").trim();
@@ -417,8 +417,8 @@ export async function buildServer() {
       onRequest: withInternalRequest,
     },
     async (request) => {
-      const { userId } = assertUserContext(request);
-      if (!isPlatformOperatorUserId(userId)) {
+      const { userId, providerUserId } = assertUserContext(request);
+      if (!isPlatformOperatorUserId(userId, providerUserId)) {
         throw new HttpError(401, "UNAUTHORIZED", "Only platform operators can inspect notification webhook incidents");
       }
 
@@ -444,8 +444,8 @@ export async function buildServer() {
       onRequest: withInternalRequest,
     },
     async (request) => {
-      const { userId } = assertUserContext(request);
-      if (!isPlatformOperatorUserId(userId)) {
+      const { userId, providerUserId } = assertUserContext(request);
+      if (!isPlatformOperatorUserId(userId, providerUserId)) {
         throw new HttpError(401, "UNAUTHORIZED", "Only platform operators can acknowledge notification webhook incidents in batch");
       }
 
@@ -469,8 +469,8 @@ export async function buildServer() {
       onRequest: withInternalRequest,
     },
     async (request) => {
-      const { userId } = assertUserContext(request);
-      if (!isPlatformOperatorUserId(userId)) {
+      const { userId, providerUserId } = assertUserContext(request);
+      if (!isPlatformOperatorUserId(userId, providerUserId)) {
         throw new HttpError(401, "UNAUTHORIZED", "Only platform operators can silence notification webhook incidents in batch");
       }
 
@@ -499,8 +499,8 @@ export async function buildServer() {
       onRequest: withInternalRequest,
     },
     async (request) => {
-      const { userId } = assertUserContext(request);
-      if (!isPlatformOperatorUserId(userId)) {
+      const { userId, providerUserId } = assertUserContext(request);
+      if (!isPlatformOperatorUserId(userId, providerUserId)) {
         throw new HttpError(401, "UNAUTHORIZED", "Only platform operators can clear notification webhook incidents in batch");
       }
 
@@ -524,8 +524,8 @@ export async function buildServer() {
       onRequest: withInternalRequest,
     },
     async (request) => {
-      const { userId } = assertUserContext(request);
-      if (!isPlatformOperatorUserId(userId)) {
+      const { userId, providerUserId } = assertUserContext(request);
+      if (!isPlatformOperatorUserId(userId, providerUserId)) {
         throw new HttpError(401, "UNAUTHORIZED", "Only platform operators can acknowledge notification webhook incidents");
       }
 
@@ -550,8 +550,8 @@ export async function buildServer() {
       onRequest: withInternalRequest,
     },
     async (request) => {
-      const { userId } = assertUserContext(request);
-      if (!isPlatformOperatorUserId(userId)) {
+      const { userId, providerUserId } = assertUserContext(request);
+      if (!isPlatformOperatorUserId(userId, providerUserId)) {
         throw new HttpError(401, "UNAUTHORIZED", "Only platform operators can silence notification webhook incidents");
       }
 
@@ -583,8 +583,8 @@ export async function buildServer() {
       onRequest: withInternalRequest,
     },
     async (request) => {
-      const { userId } = assertUserContext(request);
-      if (!isPlatformOperatorUserId(userId)) {
+      const { userId, providerUserId } = assertUserContext(request);
+      if (!isPlatformOperatorUserId(userId, providerUserId)) {
         throw new HttpError(401, "UNAUTHORIZED", "Only platform operators can clear notification webhook incident silence");
       }
 

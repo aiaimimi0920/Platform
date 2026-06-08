@@ -1,4 +1,5 @@
 import { auth } from "@/auth";
+import { GatewayDependencyUnavailableCard } from "@/components/gateway-dependency-unavailable-card";
 import { NtBadge, NtCard, NtPanel } from "@/components/nt-primitives";
 import {
   listOperatorGatewayProviderCredentialModelStates,
@@ -6,6 +7,7 @@ import {
   summarizeOperatorGatewayUsageAggregates,
   type GatewayProviderCredentialModelStateView,
 } from "@/lib/account-client";
+import { buildGatewayDependencyUnavailableNotice } from "@/lib/gateway-catalog-notice";
 import { isPlatformOperatorUserId, requirePlatformOperatorUserContext } from "@/lib/platform-session";
 import { redirect } from "next/navigation";
 
@@ -73,7 +75,7 @@ export default async function GatewayHealthPage({
     typeof params.providerAccountId === "string" ? params.providerAccountId.trim() : "";
   const model = typeof params.model === "string" ? params.model.trim() : "";
 
-  const [states, usageSummary, usageBuckets] = await Promise.all([
+  const [statesResult, usageSummaryResult, usageBucketsResult] = await Promise.allSettled([
     listOperatorGatewayProviderCredentialModelStates(userContext, {
       status: status || undefined,
       providerAccountId: providerAccountId || undefined,
@@ -83,6 +85,45 @@ export default async function GatewayHealthPage({
     summarizeOperatorGatewayUsageAggregates(userContext),
     listOperatorGatewayUsageAggregates(userContext, { limit: USAGE_LIMIT }),
   ]);
+
+  if (
+    statesResult.status === "rejected" ||
+    usageSummaryResult.status === "rejected" ||
+    usageBucketsResult.status === "rejected"
+  ) {
+    let dependencyError: unknown;
+    if (statesResult.status === "rejected") {
+      dependencyError = statesResult.reason;
+    } else if (usageSummaryResult.status === "rejected") {
+      dependencyError = usageSummaryResult.reason;
+    } else if (usageBucketsResult.status === "rejected") {
+      dependencyError = usageBucketsResult.reason;
+    }
+    const notice = buildGatewayDependencyUnavailableNotice(dependencyError, {
+      resourceName: "健康状态与用量聚合",
+      continuation: "credential × model 状态机和 usage bucket 暂不可查看；其他运营页面仍可继续使用。",
+    });
+
+    return (
+      <div className="nt-shell" style={{ display: "grid", gap: 24, padding: "24px 0 40px" }}>
+        <NtCard style={{ display: "grid", gap: 16 }}>
+          <div>
+            <span className="nt-kicker">AI Gateway / Health</span>
+            <h1 style={{ margin: "6px 0 0", color: "rgba(243,245,247,0.98)" }}>健康状态与用量聚合</h1>
+            <p style={{ margin: "8px 0 0", color: "rgba(148,163,184,0.9)" }}>
+              页面已降级为依赖提示，避免 Gateway 离线时整页 500。
+            </p>
+          </div>
+        </NtCard>
+        <GatewayDependencyUnavailableCard notice={notice} />
+        <NtPanel style={{ color: "rgba(148,163,184,0.9)" }}>当前无法读取 Gateway 健康状态记录。</NtPanel>
+      </div>
+    );
+  }
+
+  const states = statesResult.value;
+  const usageSummary = usageSummaryResult.value;
+  const usageBuckets = usageBucketsResult.value;
 
   return (
     <div className="nt-shell" style={{ display: "grid", gap: 24, padding: "24px 0 40px" }}>
@@ -113,7 +154,7 @@ export default async function GatewayHealthPage({
             <option value="cooling">cooling</option>
             <option value="blocked">blocked</option>
           </select>
-          <button className="nt-button" type="submit">
+          <button className="nt-btn nt-btn--primary" type="submit">
             筛选
           </button>
         </form>
@@ -130,7 +171,7 @@ export default async function GatewayHealthPage({
         </NtCard>
       ) : null}
 
-      <div style={{ display: "grid", gridTemplateColumns: "minmax(360px, 1.2fr) minmax(320px, 0.8fr)", gap: 18 }}>
+      <div className="nt-gateway-split-pane">
         <section style={{ display: "grid", gap: 12 }}>
           {states.map((state) => (
             <StateRow key={state.id} state={state} />

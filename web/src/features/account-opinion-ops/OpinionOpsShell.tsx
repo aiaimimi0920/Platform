@@ -24,7 +24,7 @@ export function OpinionOpsShell({ data, query }: IssueOpsShellProps) {
       <header className="issue-ops-shell__header">
         <div>
           <span className="mg-terminal-kicker">Issue Ops</span>
-          <h3 className="mg-card__title" style={{ marginTop: 8 }}>议题运维骨架</h3>
+          <h1 className="mg-card__title" style={{ marginTop: 8 }}>议题运维骨架</h1>
           <p className="mg-copy" style={{ margin: "6px 0 0" }}>
             当前模块状态：{features.opinionHub?.enabled ? "已开启" : "未启用"}（来自 feature snapshot）。
           </p>

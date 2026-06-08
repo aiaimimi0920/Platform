@@ -9,6 +9,7 @@ import {
 import { auth } from "@/auth";
 import { getFeatureSnapshot, listOperatorProducts } from "@/lib/core-client";
 import { getGatewayAccessCatalog } from "@/lib/account-client";
+import { buildGatewayCatalogUnavailableNotice } from "@/lib/gateway-catalog-notice";
 import { isPlatformOperatorUserId } from "@/lib/platform-session";
 
 type ProductOpsPageProps = {
@@ -64,11 +65,11 @@ export default async function ProductOpsPage({ searchParams }: ProductOpsPagePro
           status: bundle.status,
           projectId: bundle.projectId,
         })),
-        error: null,
+        notice: null,
       }))
       .catch((error) => ({
         bundles: [] as OperatorProductBundleOption[],
-        error: error instanceof Error ? error.message : "Gateway bundle 目录加载失败。",
+        notice: buildGatewayCatalogUnavailableNotice(error),
       })),
   ]);
   const redirectTo = "/ops/products";
@@ -86,8 +87,12 @@ export default async function ProductOpsPage({ searchParams }: ProductOpsPagePro
         {status && message ? (
           <p className={`ops-alert ops-alert--${status}`}>{message}</p>
         ) : null}
-        {bundleCatalogResult.error ? (
-          <p className="ops-alert ops-alert--error">Gateway bundle 目录加载失败：{bundleCatalogResult.error}</p>
+        {bundleCatalogResult.notice ? (
+          <div className="ops-alert ops-alert--warning" role="status" aria-live="polite">
+            <strong className="ops-alert__title">{bundleCatalogResult.notice.title}</strong>
+            <span className="ops-alert__body">{bundleCatalogResult.notice.body}</span>
+            <span className="ops-alert__detail">{bundleCatalogResult.notice.detail}</span>
+          </div>
         ) : null}
 
         <div className="ops-card">

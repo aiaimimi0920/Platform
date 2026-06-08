@@ -593,7 +593,7 @@ export default async function OpinionCenterPage({ searchParams }: OpinionsPagePr
                 <OpinionPanelIcon />
               </div>
               <div className="app-honor__rail-copy">
-                <h2>议题</h2>
+                <h1>议题</h1>
               </div>
             </div>
 

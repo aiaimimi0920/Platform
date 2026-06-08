@@ -38,5 +38,15 @@ export default async function RedeemPage() {
     );
   }
 
-  return <main className="app-page" />;
+  return (
+    <main className="app-page">
+      <div className="mg-shell">
+        <Card className="app-stack">
+          <h1 className="mg-title">兑换码</h1>
+          <p className="mg-copy">输入平台发放的兑换码，领取对应的钱包、资产或服务权益。</p>
+          <p className="mg-copy">兑换面板会自动打开；如果没有出现，请点击顶部的“立即兑换”按钮。</p>
+        </Card>
+      </div>
+    </main>
+  );
 }

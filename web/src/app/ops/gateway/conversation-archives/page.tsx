@@ -1,9 +1,11 @@
 import type { GatewayConversationArchiveView } from "@/lib/account-client";
 import { auth } from "@/auth";
+import { GatewayDependencyUnavailableCard } from "@/components/gateway-dependency-unavailable-card";
 import {
   getOperatorGatewayConversationArchiveArtifacts,
   listOperatorGatewayConversationArchives,
 } from "@/lib/account-client";
+import { buildGatewayDependencyUnavailableNotice } from "@/lib/gateway-catalog-notice";
 import { NtBadge, NtCard, NtPanel } from "@/components/nt-primitives";
 import { isPlatformOperatorUserId, requirePlatformOperatorUserContext } from "@/lib/platform-session";
 import Link from "next/link";
@@ -122,19 +124,36 @@ export default async function GatewayConversationArchivesPage({
   const userId = typeof params.userId === "string" ? params.userId.trim() : "";
   const q = typeof params.q === "string" ? params.q.trim() : "";
 
-  const archives = await listOperatorGatewayConversationArchives(userContext, {
-    status: status || undefined,
-    userId: userId || undefined,
-    limit: ARCHIVE_LIMIT,
-  });
+  let dependencyNotice: ReturnType<typeof buildGatewayDependencyUnavailableNotice> | null = null;
+  let archives: GatewayConversationArchiveView[] = [];
+  try {
+    archives = await listOperatorGatewayConversationArchives(userContext, {
+      status: status || undefined,
+      userId: userId || undefined,
+      limit: ARCHIVE_LIMIT,
+    });
+  } catch (error) {
+    dependencyNotice = buildGatewayDependencyUnavailableNotice(error, {
+      resourceName: "用户级对话存档",
+      continuation: "存档列表和 artifact 预览暂不可查看；其他运营页面仍可继续使用。",
+    });
+  }
   const filteredArchives = archives.filter((archive) =>
     q ? archiveSearchText(archive).includes(q.toLowerCase()) : true,
   );
   const selectedArchiveId =
     typeof params.archiveId === "string" && params.archiveId ? params.archiveId : filteredArchives[0]?.id ?? null;
-  const selectedArtifacts = selectedArchiveId
-    ? await getOperatorGatewayConversationArchiveArtifacts(userContext, selectedArchiveId)
-    : null;
+  let selectedArtifacts: Awaited<ReturnType<typeof getOperatorGatewayConversationArchiveArtifacts>> | null = null;
+  if (selectedArchiveId && !dependencyNotice) {
+    try {
+      selectedArtifacts = await getOperatorGatewayConversationArchiveArtifacts(userContext, selectedArchiveId);
+    } catch (error) {
+      dependencyNotice = buildGatewayDependencyUnavailableNotice(error, {
+        resourceName: "对话存档 artifact",
+        continuation: "存档列表仍可查看，artifact 预览暂不可用。",
+      });
+    }
+  }
   const query = new URLSearchParams();
   if (status) query.set("status", status);
   if (userId) query.set("userId", userId);
@@ -166,13 +185,15 @@ export default async function GatewayConversationArchivesPage({
             <option value="partial">partial</option>
             <option value="archive_failed">archive_failed</option>
           </select>
-          <button className="nt-button" type="submit">
+          <button className="nt-btn nt-btn--primary" type="submit">
             筛选
           </button>
         </form>
       </NtCard>
 
-      <div style={{ display: "grid", gridTemplateColumns: "minmax(320px, 0.9fr) minmax(360px, 1.1fr)", gap: 18 }}>
+      {dependencyNotice ? <GatewayDependencyUnavailableCard notice={dependencyNotice} /> : null}
+
+      <div className="nt-gateway-split-pane">
         <section style={{ display: "grid", gap: 12 }}>
           {filteredArchives.map((archive) => (
             <ArchiveRow

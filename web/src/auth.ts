@@ -1,5 +1,8 @@
+import "@/lib/auth-url-bootstrap";
+
 import NextAuth from "next-auth";
 import Credentials from "next-auth/providers/credentials";
+import type { NextAuthConfig } from "next-auth";
 import type { LinuxDoUpsertInput } from "@neuro/contracts";
 
 import { upsertLinuxDoUser } from "@/lib/account-client";
@@ -16,7 +19,8 @@ function normalizeProfile(profile: Record<string, unknown>): LinuxDoUpsertInput 
   };
 }
 
-export const { handlers, auth, signIn, signOut } = NextAuth({
+export const authConfig = {
+  basePath: "/api/auth",
   providers: [
     {
       id: "linuxdo",
@@ -123,4 +127,6 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   },
   secret: process.env.NEXTAUTH_SECRET || process.env.OAUTH_CLIENT_SECRET,
   trustHost: true,
-});
+} satisfies NextAuthConfig;
+
+export const { handlers, auth, signIn, signOut } = NextAuth(authConfig);

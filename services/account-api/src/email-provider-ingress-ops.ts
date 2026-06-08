@@ -22,8 +22,8 @@ export const emailProviderIngressOpsRouter: FastifyPluginAsync = async (app) => 
     async (request) => {
       await requireModuleEnabled("identity");
 
-      const { userId } = assertUserContext(request);
-      if (!isPlatformOperatorUserId(userId)) {
+      const { userId, providerUserId } = assertUserContext(request);
+      if (!isPlatformOperatorUserId(userId, providerUserId)) {
         throw new HttpError(401, "UNAUTHORIZED", "Only platform operators can inspect real email ingress");
       }
 
@@ -45,8 +45,8 @@ export const emailProviderIngressOpsRouter: FastifyPluginAsync = async (app) => 
     async (request) => {
       await requireModuleEnabled("identity");
 
-      const { userId } = assertUserContext(request);
-      if (!isPlatformOperatorUserId(userId)) {
+      const { userId, providerUserId } = assertUserContext(request);
+      if (!isPlatformOperatorUserId(userId, providerUserId)) {
         throw new HttpError(401, "UNAUTHORIZED", "Only platform operators can retry real email ingress");
       }
 

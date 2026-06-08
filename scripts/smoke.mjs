@@ -137,8 +137,11 @@ describe("monorepo structure", () => {
   });
 
   it("does not document Gateway release helpers as Platform-local deploy scripts", () => {
-    const agentsPath = join(rootDir, "AGENTS.md");
-    const contents = readFileSync(agentsPath, "utf8");
+    const filesToCheck = [
+      "AGENTS.md",
+      "docs/20-ai-gateway/AI网关发布与滚动切流基线.md",
+      "../docs/gateway/baseline/AI网关发布与滚动切流基线.md",
+    ];
     const stalePlatformLocalReferencePatterns = [
       /-\s+`deploy\/build-images\.sh`\s+与\s+`deploy\/push-images\.sh`/,
       /-\s+`deploy\/docker\/gateway\.Dockerfile`/,
@@ -148,11 +151,14 @@ describe("monorepo structure", () => {
       /`deploy\/build-images\.sh`、`deploy\/push-images\.sh`、`deploy\/rollout-gateway\.sh`/,
     ];
 
-    for (const stalePattern of stalePlatformLocalReferencePatterns) {
-      assert(
-        !stalePattern.test(contents),
-        `${stalePattern} should be documented as Gateway-owned, not Platform-local`,
-      );
+    for (const fileToCheck of filesToCheck) {
+      const contents = readFileSync(join(rootDir, fileToCheck), "utf8");
+      for (const stalePattern of stalePlatformLocalReferencePatterns) {
+        assert(
+          !stalePattern.test(contents),
+          `${fileToCheck}: ${stalePattern} should be documented as Gateway-owned, not Platform-local`,
+        );
+      }
     }
   });
 

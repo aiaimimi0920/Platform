@@ -1,3 +1,13 @@
-import { handlers } from "@/auth";
+import { Auth } from "@auth/core";
+import type { NextRequest } from "next/server";
 
-export const { GET, POST } = handlers;
+import { authConfig } from "@/auth";
+import { toAuthCoreRequest } from "@/lib/auth-core-request";
+
+export function GET(request: NextRequest) {
+  return Auth(toAuthCoreRequest(request), authConfig);
+}
+
+export function POST(request: NextRequest) {
+  return Auth(toAuthCoreRequest(request), authConfig);
+}

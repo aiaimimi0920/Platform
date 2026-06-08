@@ -17,8 +17,8 @@
     "@fastify/cors": "^11.1.0",
     "@neuro/backend-foundation": "*",
     "@neuro/contracts": "*",
-    "drizzle-orm": "^0.44.2",
-    "fastify": "^5.6.1",
+    "drizzle-orm": "^0.45.2",
+    "fastify": "^5.8.5",
     "ioredis": "^5.8.2",
     "pg": "^8.16.3",
     "zod": "^4.1.12"

@@ -4,12 +4,14 @@ import type {
   GatewayRequestAuditView,
 } from "@/lib/account-client";
 import { auth } from "@/auth";
+import { GatewayDependencyUnavailableCard } from "@/components/gateway-dependency-unavailable-card";
 import {
   getOperatorGatewayRequestArtifacts,
   getOperatorGatewayRequestAudit,
   getOperatorGatewayRequestAuditSummary,
   listOperatorGatewayRequestAudits,
 } from "@/lib/account-client";
+import { buildGatewayDependencyUnavailableNotice } from "@/lib/gateway-catalog-notice";
 import { isPlatformOperatorUserId, requirePlatformOperatorUserContext } from "@/lib/platform-session";
 import { NtBadge, NtCard, NtPanel } from "@/components/nt-primitives";
 import Link from "next/link";
@@ -311,10 +313,45 @@ export default async function GatewayTracesPage({
   const statusFilter = typeof params.status === "string" ? params.status.trim() : "";
   const searchQuery = typeof params.q === "string" ? params.q.trim() : "";
 
-  const [requestList, summary] = await Promise.all([
+  const [requestListResult, summaryResult] = await Promise.allSettled([
     listOperatorGatewayRequestAudits(userContext, { status: statusFilter || undefined, limit: REQUEST_LIMIT }),
     getOperatorGatewayRequestAuditSummary(userContext, { limit: REQUEST_LIMIT }),
   ]);
+
+  if (requestListResult.status === "rejected" || summaryResult.status === "rejected") {
+    let dependencyError: unknown;
+    if (requestListResult.status === "rejected") {
+      dependencyError = requestListResult.reason;
+    } else if (summaryResult.status === "rejected") {
+      dependencyError = summaryResult.reason;
+    }
+    const notice = buildGatewayDependencyUnavailableNotice(dependencyError, {
+      resourceName: "请求追踪",
+      continuation: "请求审计列表、路由判定和请求物料暂不可查看；其他运营页面仍可继续使用。",
+    });
+
+    return (
+      <div className="nt-shell" style={{ display: "grid", gap: 24, padding: "24px 0 40px" }}>
+        <section style={{ display: "grid", gap: 12 }}>
+          <span className="nt-kicker">Operator / AI 网关</span>
+          <h1 style={{ margin: 0, color: "rgba(243,245,247,0.98)", fontSize: "2rem", lineHeight: 1.1 }}>
+            请求追踪
+          </h1>
+        </section>
+        <GatewayDependencyUnavailableCard notice={notice} />
+        <NtCard style={{ display: "grid", gap: 8 }}>
+          <span className="nt-kicker">请求事件明细</span>
+          <strong style={{ color: "rgba(243,245,247,0.96)" }}>当前无法连接 AI Gateway</strong>
+          <span style={{ color: "rgba(190,199,217,0.76)" }}>
+            Gateway 服务恢复后，刷新页面即可重新加载最近 {REQUEST_LIMIT} 条请求。
+          </span>
+        </NtCard>
+      </div>
+    );
+  }
+
+  const requestList = requestListResult.value;
+  const summary = summaryResult.value;
 
   const filteredRequests = requestList.filter((request) =>
     searchQuery ? getRequestSearchText(request).includes(searchQuery.toLowerCase()) : true,
@@ -329,12 +366,31 @@ export default async function GatewayTracesPage({
   const selectedRequestId =
     typeof params.requestId === "string" && params.requestId ? params.requestId : filteredRequests[0]?.id ?? null;
 
-  const selectedRequest = selectedRequestId
-    ? await getOperatorGatewayRequestAudit(userContext, selectedRequestId)
-    : null;
-  const artifacts = selectedRequestId
-    ? await getOperatorGatewayRequestArtifacts(userContext, selectedRequestId)
-    : null;
+  let selectedRequest: GatewayRequestAuditView | null = null;
+  let artifacts: Awaited<ReturnType<typeof getOperatorGatewayRequestArtifacts>> | null = null;
+  let selectedRequestNotice: ReturnType<typeof buildGatewayDependencyUnavailableNotice> | null = null;
+  if (selectedRequestId) {
+    const [selectedRequestResult, artifactsResult] = await Promise.allSettled([
+      getOperatorGatewayRequestAudit(userContext, selectedRequestId),
+      getOperatorGatewayRequestArtifacts(userContext, selectedRequestId),
+    ]);
+    if (selectedRequestResult.status === "fulfilled") {
+      selectedRequest = selectedRequestResult.value;
+    } else {
+      selectedRequestNotice = buildGatewayDependencyUnavailableNotice(selectedRequestResult.reason, {
+        resourceName: "选中请求明细",
+        continuation: "左侧请求列表仍可查看，明细面板暂不可用。",
+      });
+    }
+    if (artifactsResult.status === "fulfilled") {
+      artifacts = artifactsResult.value;
+    } else if (!selectedRequestNotice) {
+      selectedRequestNotice = buildGatewayDependencyUnavailableNotice(artifactsResult.reason, {
+        resourceName: "请求物料",
+        continuation: "请求摘要仍可查看，物料预览暂不可用。",
+      });
+    }
+  }
 
   return (
     <div className="nt-shell" style={{ display: "grid", gap: 24, padding: "24px 0 40px" }}>
@@ -415,14 +471,7 @@ export default async function GatewayTracesPage({
         </form>
       </NtCard>
 
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "minmax(0, 1.35fr) minmax(360px, 0.95fr)",
-          gap: 18,
-          alignItems: "start",
-        }}
-      >
+      <div className="nt-gateway-split-pane">
         <NtCard style={{ display: "grid", gap: 14 }}>
           <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap", alignItems: "center" }}>
             <div style={{ display: "grid", gap: 4 }}>
@@ -453,7 +502,8 @@ export default async function GatewayTracesPage({
           </div>
         </NtCard>
 
-        <div style={{ display: "grid", gap: 16, position: "sticky", top: 20 }}>
+        <div className="nt-gateway-sticky-panel">
+          {selectedRequestNotice ? <GatewayDependencyUnavailableCard notice={selectedRequestNotice} /> : null}
           {selectedRequest ? (
             <>
               <NtCard style={{ display: "grid", gap: 12 }}>

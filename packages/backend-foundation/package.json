@@ -10,8 +10,8 @@
   },
   "dependencies": {
     "@neuro/contracts": "*",
-    "drizzle-orm": "^0.44.2",
-    "fastify": "^5.6.1",
+    "drizzle-orm": "^0.45.2",
+    "fastify": "^5.8.5",
     "ioredis": "^5.8.2",
     "pg": "^8.16.3"
   },

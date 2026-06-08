@@ -1,6 +1,7 @@
 import { getOperatorGatewayProviderInventory } from "@/lib/account-client";
 import { auth } from "@/auth";
 import { NtCard, NtPanel } from "@/components/nt-primitives";
+import { buildGatewayDependencyUnavailableNotice } from "@/lib/gateway-catalog-notice";
 import { isPlatformOperatorUserId, requirePlatformOperatorUserContext } from "@/lib/platform-session";
 import Link from "next/link";
 import { redirect } from "next/navigation";
@@ -25,10 +26,21 @@ export default async function GatewayProviderOpsPage({ searchParams }: GatewayPr
 
   const pageParams = searchParams ? await searchParams : undefined;
   const userContext = await requirePlatformOperatorUserContext();
-  const inventory = await getOperatorGatewayProviderInventory(userContext);
-  const providerEntries = inventory.providers ?? [];
+  const inventoryResult = await getOperatorGatewayProviderInventory(userContext)
+    .then((inventory) => ({
+      inventory,
+      notice: null,
+    }))
+    .catch((error) => ({
+      inventory: null,
+      notice: buildGatewayDependencyUnavailableNotice(error, {
+        resourceName: "服务商库存",
+        continuation: "已创建服务商列表暂不可用；创建服务商模板入口仍可打开。",
+      }),
+    }));
+  const providerEntries = inventoryResult.inventory?.providers ?? [];
   const providerGroups = groupProviderInventoryEntries(providerEntries);
-  const providerSummary = inventory.summary;
+  const providerSummary = inventoryResult.inventory?.summary ?? null;
   const redirectTo = "/ops/gateway/providers";
 
   return (
@@ -66,10 +78,37 @@ export default async function GatewayProviderOpsPage({ searchParams }: GatewayPr
         </NtPanel>
       ) : null}
 
+      {inventoryResult.notice ? (
+        <NtPanel
+          role="status"
+          aria-live="polite"
+          style={{
+            display: "grid",
+            gap: 8,
+            borderColor: "rgba(245,158,11,0.28)",
+            background: "rgba(39,28,8,0.72)",
+          }}
+        >
+          <span className="nt-kicker">依赖服务未连接</span>
+          <strong style={{ color: "#fde68a" }}>{inventoryResult.notice.title}</strong>
+          <span style={{ color: "rgba(254,243,199,0.9)" }}>{inventoryResult.notice.body}</span>
+          <span style={{ color: "rgba(254,243,199,0.72)", fontSize: "0.86rem", overflowWrap: "anywhere" }}>
+            {inventoryResult.notice.detail}
+          </span>
+        </NtPanel>
+      ) : null}
+
       <section style={{ display: "grid", gap: 12 }}>
         {providerEntries.length === 0 ? (
           <NtCard style={{ display: "grid", gap: 10 }}>
-            <strong style={{ color: "rgba(243,245,247,0.96)" }}>暂无服务商</strong>
+            <strong style={{ color: "rgba(243,245,247,0.96)" }}>
+              {inventoryResult.notice ? "服务商库存暂不可读" : "暂无服务商"}
+            </strong>
+            {inventoryResult.notice ? (
+              <span style={{ color: "rgba(190,199,217,0.76)" }}>
+                Gateway 恢复后会自动显示已创建的 provider surface；当前仍可进入“创建服务商”查看模板。
+              </span>
+            ) : null}
           </NtCard>
         ) : (
           <div

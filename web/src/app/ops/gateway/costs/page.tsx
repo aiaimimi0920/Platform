@@ -1,6 +1,8 @@
 import { auth } from "@/auth";
+import { GatewayDependencyUnavailableCard } from "@/components/gateway-dependency-unavailable-card";
 import { getOperatorGatewayCosts } from "@/lib/account-client";
 import type { GatewayCostOverviewView } from "@/lib/account-client";
+import { buildGatewayDependencyUnavailableNotice } from "@/lib/gateway-catalog-notice";
 import { isPlatformOperatorUserId, requirePlatformOperatorUserContext } from "@/lib/platform-session";
 import { NtBadge, NtCard, NtInput, NtPanel } from "@/components/nt-primitives";
 import { redirect } from "next/navigation";
@@ -331,7 +333,16 @@ export default async function GatewayCostOpsPage() {
   }
 
   const userContext = await requirePlatformOperatorUserContext();
-  const costs = (await getOperatorGatewayCosts(userContext)) as GatewayCostOverviewView | null;
+  let costs: GatewayCostOverviewView | null = null;
+  let dependencyNotice: ReturnType<typeof buildGatewayDependencyUnavailableNotice> | null = null;
+  try {
+    costs = (await getOperatorGatewayCosts(userContext)) as GatewayCostOverviewView | null;
+  } catch (error) {
+    dependencyNotice = buildGatewayDependencyUnavailableNotice(error, {
+      resourceName: "使用统计与模型市场价",
+      continuation: "历史调用量和模型定价编辑暂不可用；其他运营页面仍可继续使用。",
+    });
+  }
   const summary = costs?.summary ?? {
     providerCount: 0,
     pricedProviderCount: 0,
@@ -370,6 +381,8 @@ export default async function GatewayCostOpsPage() {
           </Link>
         </div>
       </section>
+
+      {dependencyNotice ? <GatewayDependencyUnavailableCard notice={dependencyNotice} /> : null}
 
       <section
         style={{

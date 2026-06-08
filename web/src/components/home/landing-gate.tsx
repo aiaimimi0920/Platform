@@ -10,6 +10,11 @@ import { cn } from "@/lib/cn";
 const READY_PROGRESS = 25;
 const FILL_PROGRESS = 18;
 const RESUME_COOKIE = "nl_landing_resume";
+export const LANDING_GATE_INITIAL_VIEWPORT_WIDTH = 1440;
+
+export function resolveLandingGateReadyWidthPx(viewportWidth: number): number {
+  return Math.min(Math.max(viewportWidth * 0.25, 340), Math.max(viewportWidth - 24, 32));
+}
 
 type LandingGateProps = {
   actionSlot: ReactNode;
@@ -37,11 +42,11 @@ export function LandingGate({
   const router = useRouter();
   const progressRef = useRef(initialProgress);
   const frameRef = useRef<number | null>(null);
+  const [viewportWidth, setViewportWidth] = useState(LANDING_GATE_INITIAL_VIEWPORT_WIDTH);
 
   const progressValue = Math.round(progress);
   const entryMotionStyle = useMemo(() => {
-    const viewportWidth = typeof window === "undefined" ? 1440 : window.innerWidth;
-    const readyWidthPx = Math.min(Math.max(viewportWidth * 0.25, 340), Math.max(viewportWidth - 24, 32));
+    const readyWidthPx = resolveLandingGateReadyWidthPx(viewportWidth);
     const fillScale =
       phase === "idle"
         ? 0
@@ -117,7 +122,20 @@ export function LandingGate({
     }
 
     return style as CSSProperties;
-  }, [phase, progress]);
+  }, [phase, progress, viewportWidth]);
+
+  useEffect(() => {
+    const syncViewportWidth = () => {
+      setViewportWidth(window.innerWidth);
+    };
+
+    syncViewportWidth();
+    window.addEventListener("resize", syncViewportWidth);
+
+    return () => {
+      window.removeEventListener("resize", syncViewportWidth);
+    };
+  }, []);
 
   const progressLabel = useMemo(() => {
     if (resumeAuthenticatedReturn && phase === "ready") {

@@ -1,4 +1,5 @@
 import { auth } from "@/auth";
+import { GatewayDependencyUnavailableCard } from "@/components/gateway-dependency-unavailable-card";
 import { NtBadge, NtCard, NtInput, NtPanel } from "@/components/nt-primitives";
 import type { NtBadgeTone } from "@/components/nt-primitives";
 import {
@@ -9,6 +10,7 @@ import type {
   GatewayModelAliasView,
   GatewayModelAssociationMatrixView,
 } from "@/lib/account-client";
+import { buildGatewayDependencyUnavailableNotice } from "@/lib/gateway-catalog-notice";
 import {
   isPlatformOperatorUserId,
   requirePlatformOperatorUserContext,
@@ -178,10 +180,77 @@ export default async function GatewayModelAliasesPage({ searchParams }: ModelAli
   const message = typeof params?.message === "string" ? params.message.trim() : "";
 
   const userContext = await requirePlatformOperatorUserContext();
-  const [modelAssociations, modelAliases] = await Promise.all([
+  const [modelAssociationsResult, modelAliasesResult] = await Promise.allSettled([
     getOperatorGatewayModelAssociations(userContext),
     listOperatorGatewayModelAliases(userContext),
   ]);
+
+  if (modelAssociationsResult.status === "rejected" || modelAliasesResult.status === "rejected") {
+    let dependencyError: unknown;
+    if (modelAssociationsResult.status === "rejected") {
+      dependencyError = modelAssociationsResult.reason;
+    } else if (modelAliasesResult.status === "rejected") {
+      dependencyError = modelAliasesResult.reason;
+    }
+    const notice = buildGatewayDependencyUnavailableNotice(dependencyError, {
+      resourceName: "模型别名矩阵",
+      continuation: "全局模型别名和服务商模型映射暂不可维护；创建服务商模板入口仍可打开。",
+    });
+
+    return (
+      <NtPanel style={{ display: "grid", gap: 20 }}>
+        <header style={{ display: "grid", gap: 14 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", flexWrap: "wrap", gap: 16 }}>
+            <div style={{ display: "grid", gap: 8 }}>
+              <p className="nt-kicker">AI 网关</p>
+              <h1 style={{ margin: 0, fontSize: "2rem" }}>模型别名</h1>
+              <p style={{ margin: 0, color: "rgba(190,199,217,0.76)", maxWidth: 980 }}>
+                页面已降级为依赖提示，避免 Gateway 离线时整页 500。
+              </p>
+            </div>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
+              {SECTION_OPTIONS.map((option) => (
+                <Link
+                  key={option.key}
+                  href={buildPageHref({ section: option.key })}
+                  className={`nt-btn ${activeSection === option.key ? "nt-btn--primary" : ""}`}
+                >
+                  {option.label}
+                </Link>
+              ))}
+            </div>
+          </div>
+        </header>
+
+        {status && message ? (
+          <NtCard
+            style={{
+              display: "grid",
+              gap: 6,
+              borderColor: status === "success" ? "rgba(120,255,204,0.28)" : "rgba(255,114,118,0.28)",
+              background:
+                status === "success"
+                  ? "linear-gradient(135deg, rgba(11,31,24,0.92), rgba(18,41,33,0.84))"
+                  : "linear-gradient(135deg, rgba(42,15,17,0.94), rgba(54,20,25,0.84))",
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <NtBadge tone={resolveStatusTone(status)}>{status === "success" ? "操作完成" : "操作失败"}</NtBadge>
+            </div>
+            <p style={{ margin: 0, color: "rgba(243,245,247,0.92)" }}>{message}</p>
+          </NtCard>
+        ) : null}
+
+        <GatewayDependencyUnavailableCard
+          notice={notice}
+          action={{ href: "/ops/gateway/providers/create", label: "打开创建服务商模板" }}
+        />
+      </NtPanel>
+    );
+  }
+
+  const modelAssociations = modelAssociationsResult.value;
+  const modelAliases = modelAliasesResult.value;
 
   const providerRows = (modelAssociations.providerRows ?? []).slice().sort((left, right) => left.label.localeCompare(right.label));
   const aliasRows = modelAssociations.aliasRows ?? [];

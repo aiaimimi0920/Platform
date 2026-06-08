@@ -2199,11 +2199,12 @@ a {
 
   .app-entry__status {
     left: 18px;
-    bottom: 24px;
+    top: 24px;
+    bottom: auto;
   }
 
   .app-entry__signal-bar {
-    width: 28px;
+    width: var(--entry-bar-width, 28px);
   }
 
   .app-entry__panel {
@@ -2226,7 +2227,8 @@ a {
 
   .app-entry__status {
     left: 14px;
-    bottom: 18px;
+    top: 18px;
+    bottom: auto;
   }
 
   .app-entry__status-value {
@@ -2324,6 +2326,38 @@ a {
   position: relative;
   z-index: 1;
   gap: 24px;
+}
+
+.app-page--dashboard .mg-terminal-hero {
+  align-items: start;
+}
+
+.app-page--dashboard .mg-terminal-stage {
+  min-height: 340px;
+}
+
+.app-page--dashboard .mg-terminal-stage__media {
+  min-height: 300px;
+}
+
+.app-page--dashboard .mg-terminal-hero__body {
+  align-content: start;
+  padding-top: 8px;
+}
+
+.app-page--dashboard .mg-terminal-rail {
+  align-content: start;
+}
+
+@media (max-width: 1100px) {
+  .app-page--dashboard .mg-terminal-hero {
+    order: -1;
+  }
+
+  .app-page--dashboard .mg-terminal-hero__body {
+    order: -1;
+    padding-top: 0;
+  }
 }
 
 .app-page--dashboard .app-account-shell {
@@ -2523,7 +2557,9 @@ a {
 }
 
 .app-dashboard-stage .app-account-stage-avatar {
-  min-height: 260px;
+  min-height: 170px;
+  height: 170px;
+  aspect-ratio: auto;
   border-radius: 24px;
   background:
     radial-gradient(circle at top, rgba(217, 255, 56, 0.16), transparent 34%),
@@ -2851,6 +2887,7 @@ a {
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.03);
 }
 
+.app-honor__rail-copy h1,
 .app-honor__rail-copy h2 {
   margin: 0;
   font-family: var(--font-display);
@@ -5167,6 +5204,102 @@ a {
   min-height: 0;
 }
 
+.nt-gateway-split-pane {
+  display: grid;
+  grid-template-columns: minmax(320px, 0.9fr) minmax(360px, 1.1fr);
+  gap: 18px;
+  align-items: start;
+  min-width: 0;
+}
+
+.nt-gateway-split-pane > * {
+  min-width: 0;
+}
+
+.nt-gateway-sticky-panel {
+  display: grid;
+  gap: 16px;
+  position: sticky;
+  top: 20px;
+  min-width: 0;
+}
+
+@media (max-width: 760px) {
+  .ops-header {
+    height: auto;
+    padding: 8px 12px;
+  }
+
+  .ops-header__inner {
+    min-height: 46px;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+
+  .ops-header__actions {
+    gap: 8px;
+    margin-left: auto;
+  }
+
+  .ops-header__back-link {
+    padding: 6px 10px;
+    font-size: 0.78rem;
+  }
+
+  .ops-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .ops-rail {
+    position: static;
+    height: auto;
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding: 10px 12px;
+    border-right: 0;
+    border-bottom: 1px solid var(--mg-terminal-line, rgba(255, 255, 255, 0.08));
+  }
+
+  .ops-rail__nav {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-width: max-content;
+    padding-bottom: 4px;
+  }
+
+  .ops-rail__group {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 0;
+  }
+
+  .ops-rail__group-title {
+    padding: 0 4px 0 0;
+    white-space: nowrap;
+  }
+
+  .ops-rail__item {
+    display: inline-flex;
+    white-space: nowrap;
+    padding: 7px 10px;
+  }
+
+  .ops-main {
+    padding: 18px 14px 28px;
+    overflow: visible;
+  }
+
+  .nt-gateway-split-pane {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  .nt-gateway-sticky-panel {
+    position: static !important;
+  }
+}
+
 /* Ops page components */
 
 .ops-page-stack {
@@ -5211,6 +5344,30 @@ a {
   background: rgba(244, 63, 94, 0.12);
   border: 1px solid rgba(244, 63, 94, 0.24);
   color: #fda4af;
+}
+
+.ops-alert--warning {
+  background: rgba(245, 158, 11, 0.12);
+  border: 1px solid rgba(245, 158, 11, 0.28);
+  color: #fde68a;
+}
+
+.ops-alert__title,
+.ops-alert__body,
+.ops-alert__detail {
+  display: block;
+}
+
+.ops-alert__title {
+  font-weight: 800;
+  margin-bottom: 4px;
+}
+
+.ops-alert__detail {
+  color: rgba(254, 243, 199, 0.78);
+  font-size: 0.8rem;
+  margin-top: 4px;
+  overflow-wrap: anywhere;
 }
 
 .ops-card {
@@ -5787,6 +5944,52 @@ a {
   font-size: 0.74rem;
   color: var(--mg-text-soft);
   font-family: monospace;
+}
+
+@media (max-width: 760px) {
+  .ops-layout,
+  .ops-main,
+  .ops-page-stack {
+    min-width: 0;
+    max-width: 100vw;
+  }
+
+  .ops-rail {
+    width: 100%;
+    min-width: 0;
+    max-width: 100vw;
+  }
+
+  .ops-rail__nav {
+    width: max-content;
+    min-width: 100%;
+  }
+
+  .ops-page-stack {
+    width: 100%;
+    gap: 18px;
+  }
+
+  .ops-card {
+    padding: 18px;
+    border-radius: 16px;
+  }
+
+  .ops-form__row,
+  .ops-reward-editor__row,
+  .ops-benefit-layout,
+  .ops-benefit-dual {
+    grid-template-columns: 1fr;
+  }
+
+  .ops-form__input,
+  .ops-form__select {
+    min-width: 0;
+  }
+
+  .ops-benefit-sidebar {
+    position: static;
+  }
 }
 
 /* ───────────── Public Profile (Visitor View) ───────────── */

@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import Script from "next/script";
 
 import { auth } from "@/auth";
 import { AppShell } from "@/components/app-shell";
@@ -33,7 +32,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
     <html lang="zh-CN">
       <body>
         {process.env.ENABLE_FIGMA_CAPTURE === "true" || process.env.NODE_ENV !== "production" ? (
-          <Script src="https://mcp.figma.com/mcp/html-to-design/capture.js" strategy="afterInteractive" />
+          <script src="https://mcp.figma.com/mcp/html-to-design/capture.js" async />
         ) : null}
         <AppShell
           authActionSlot={session?.user?.id ? <SignOutButton /> : <SignInButton />}

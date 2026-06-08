@@ -1,9 +1,11 @@
 import { auth } from "@/auth";
+import { GatewayDependencyUnavailableCard } from "@/components/gateway-dependency-unavailable-card";
 import {
   getGatewayAccessCatalog,
   getOperatorGatewayProviderInventory,
   type GatewayAccessCatalogView,
 } from "@/lib/account-client";
+import { buildGatewayDependencyUnavailableNotice } from "@/lib/gateway-catalog-notice";
 import { isPlatformOperatorUserId, requirePlatformOperatorUserContext } from "@/lib/platform-session";
 import { NtBadge, NtCard, NtPanel, type NtBadgeTone } from "@/components/nt-primitives";
 import Link from "next/link";
@@ -152,10 +154,47 @@ export default async function AccessPage({ searchParams }: AccessPageProps) {
   const userContext = await requirePlatformOperatorUserContext();
 
   const query = (await searchParams) ?? {};
-  const [catalog, providerInventory] = await Promise.all([
+  const [catalogResult, providerInventoryResult] = await Promise.allSettled([
     getGatewayAccessCatalog(userContext),
     getOperatorGatewayProviderInventory(userContext),
   ]);
+
+  if (catalogResult.status === "rejected" || providerInventoryResult.status === "rejected") {
+    let dependencyError: unknown;
+    if (catalogResult.status === "rejected") {
+      dependencyError = catalogResult.reason;
+    } else if (providerInventoryResult.status === "rejected") {
+      dependencyError = providerInventoryResult.reason;
+    }
+    const notice = buildGatewayDependencyUnavailableNotice(dependencyError, {
+      resourceName: "Access Bundle 与平台密钥目录",
+      continuation: "Bundle、平台密钥和访问矩阵暂不可编辑；其他运营页面仍可继续使用。",
+    });
+
+    return (
+      <div className="nt-stack nt-gap-6">
+        <StatusBanner status={query.status} message={query.message} />
+        <NtPanel>
+          <div className="nt-stack nt-gap-4">
+            <div className="nt-stack nt-gap-1" style={{ maxWidth: 760 }}>
+              <span className="nt-kicker">Bundle</span>
+              <h1 style={{ margin: 0, color: "rgba(245,247,250,0.96)" }}>Bundle 与平台密钥</h1>
+              <span className="nt-text-sm nt-text-muted">
+                页面已降级为只读提示，避免 AI Gateway 离线时整页 500。
+              </span>
+            </div>
+            <GatewayDependencyUnavailableCard
+              notice={notice}
+              action={{ href: "/ops/gateway/providers/create", label: "打开创建服务商模板" }}
+            />
+          </div>
+        </NtPanel>
+      </div>
+    );
+  }
+
+  const catalog = catalogResult.value;
+  const providerInventory = providerInventoryResult.value;
   const providerAccounts = providerInventory.providers.map((entry) => entry.providerAccount);
   const defaultProjectId =
     catalog.accessKeys.find((key) => key.keyKind === "normal")?.resolvedProjectId ?? catalog.bundles[0]?.projectId ?? "";

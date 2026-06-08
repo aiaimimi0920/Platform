@@ -26,8 +26,9 @@ function getPlatformOperatorUserIdSet() {
   );
 }
 
-export function isPlatformOperatorUserId(userId: string) {
-  return getPlatformOperatorUserIdSet().has(userId);
+export function isPlatformOperatorUserId(userId: string, providerUserId?: string | null) {
+  const operatorIds = getPlatformOperatorUserIdSet();
+  return operatorIds.has(userId) || (providerUserId ? operatorIds.has(providerUserId) : false);
 }
 
 export function buildNotificationWebhookCatalogFromEnv(): NotificationWebhookCatalogView {

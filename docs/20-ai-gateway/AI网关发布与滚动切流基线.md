@@ -24,15 +24,23 @@ Rust `gateway` 的正式无停机发布主线仍然是：
 
 ---
 
-## 2. 当前正式 helper
+## 2. 当前正式 helper ownership
 
-当前正式无停机发布 helper 仍包括：
+当前正式无停机发布 helper 的 ownership 归 `../Gateway` 或仓库根级 Gateway
+自动化维护方，不再归 `Platform/deploy/`。
 
-- `deploy/build-gateway-binary.sh`
-- `deploy/reload-gateway-splitter.sh`
-- `deploy/release-gateway.sh`
+历史 helper 名称包括：
 
-更外层的镜像/集群 helper 可继续存在，但不得替代上述主链。
+- `build-gateway-binary.sh`
+- `reload-gateway-splitter.sh`
+- `release-gateway.sh`
+
+这些 helper 若需要恢复或替换，应在 Gateway-owned 发布链中维护。`Platform/`
+只保留本地预览、账户栈、调试 bootstrap 与协作 helper，不得为了满足本文档
+而把 Gateway 发布脚本重新引入 `Platform/deploy/`。
+
+更外层的镜像/集群 helper 可继续存在，但同样归 Gateway 自动化 owner，不得
+替代上述 `splitter -> worker` 主链。
 
 ---
 
