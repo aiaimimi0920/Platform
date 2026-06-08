@@ -5,8 +5,10 @@ import test from "node:test";
 
 const repoRoot = resolve(process.cwd(), "..");
 const harnessPath = resolve(repoRoot, "scripts", "smoke-platform-web-tea-ui-real.ps1");
+const nextConfigPath = resolve(repoRoot, "Platform", "web", "next.config.ts");
 const harnessExists = existsSync(harnessPath);
 const harnessSource = harnessExists ? readFileSync(harnessPath, "utf8") : "";
+const nextConfigSource = existsSync(nextConfigPath) ? readFileSync(nextConfigPath, "utf8") : "";
 
 test("Platform Web Tea UI real smoke harness exists and uses isolated product services", () => {
   assert.equal(harnessExists, true, "expected root smoke-platform-web-tea-ui-real.ps1 to exist");
@@ -41,6 +43,8 @@ test("Platform Web Tea UI real smoke verifies lifecycle, downloads, and credenti
   assert.match(harnessSource, /coreToTeaBearerPresent/);
   assert.match(harnessSource, /markdownDownloadContainsRun/);
   assert.match(harnessSource, /jsonDownloadContainsRun/);
+  assert.match(harnessSource, /markdown_download_contains_comment/);
+  assert.match(harnessSource, /json_download_contains_comment/);
 });
 
 test("Platform Web Tea UI real smoke records cleanup and refuses unsafe port collisions", () => {
@@ -52,4 +56,20 @@ test("Platform Web Tea UI real smoke records cleanup and refuses unsafe port col
   assert.match(harnessSource, /core_server_stopped/);
   assert.match(harnessSource, /next_server_stopped/);
   assert.match(harnessSource, /port_listener_count_after_stop/);
+});
+
+test("Platform Web Tea UI real smoke isolates Next dev artifacts from shared .next lock", () => {
+  assert.match(nextConfigSource, /NEXT_DIST_DIR/);
+  assert.match(nextConfigSource, /distDir/);
+  assert.match(harnessSource, /\.next-tea-ui-smoke-\$runId/);
+  assert.match(harnessSource, /NEXT_DIST_DIR/);
+  assert.match(harnessSource, /next_dist_dir/);
+  assert.doesNotMatch(harnessSource, /web\\\.next\\dev\\lock/);
+});
+
+test("Platform Web Tea UI real smoke restores tsconfig after isolated Next distDir writes", () => {
+  assert.match(harnessSource, /webTsconfigPath/);
+  assert.match(harnessSource, /ReadAllBytes/);
+  assert.match(harnessSource, /WriteAllBytes/);
+  assert.match(harnessSource, /web_tsconfig_restored/);
 });

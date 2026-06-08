@@ -8,13 +8,16 @@ import {
   createTeaTicket,
   exportTeaTicketJson,
   exportTeaTicketMarkdown,
+  getTeaConfiguration,
   getTeaTicketComments,
   getTeaTicketRuns,
+  getTeaStatus,
   listTeaTickets,
   rejectTeaTicket,
   retryTeaTicket,
   stopTeaTicket,
   TeaWebClientError,
+  updateTeaConfiguration,
 } from "./tea-client";
 
 type CapturedRequest = {
@@ -97,6 +100,70 @@ test("listTeaTickets calls Platform Core internal Tea routes with user context b
       assert.equal(getHeader(requests[0]?.init, "x-neuro-user-id"), "user-1");
       assert.equal(getHeader(requests[0]?.init, "x-neuro-provider-user-id"), "linuxdo-1");
       assert.equal(getHeader(requests[0]?.init, "x-neuro-username"), "vmjcv");
+      assert.equal(getHeader(requests[0]?.init, "authorization"), null);
+    },
+  );
+});
+
+test("Tea status and configuration helpers read ownership through Platform Core only", async () => {
+  await withCapturedFetch(
+    (input) => {
+      const url = String(input);
+      if (url.endsWith("/internal/tea/status")) {
+        return jsonResponse({
+          status: {
+            service: "tea",
+            status: "ok",
+            configuration_source: "loom-managed",
+            configuration: { owner: "loom", loom_panel_url: "loom://settings/tea" },
+          },
+        });
+      }
+      return jsonResponse({
+        configuration: {
+          configuration_source: "loom-managed",
+          configuration: { owner: "loom", loom_panel_url: "loom://settings/tea" },
+          config: { notifications_enabled: true },
+        },
+      });
+    },
+    async (requests) => {
+      const status = await getTeaStatus(userContext);
+      const configuration = await getTeaConfiguration(userContext);
+
+      assert.equal(status.configuration_source, "loom-managed");
+      assert.equal(configuration.configuration_source, "loom-managed");
+      assert.equal(requests[0]?.url, "http://core-test.local/internal/tea/status");
+      assert.equal(requests[1]?.url, "http://core-test.local/internal/tea/configuration");
+      assert.ok(requests.every((request) => getHeader(request.init, "authorization") === null));
+    },
+  );
+});
+
+test("updateTeaConfiguration writes through Platform Core without Tea bearer auth", async () => {
+  await withCapturedFetch(
+    () =>
+      jsonResponse({
+        configuration: {
+          configuration_source: "local",
+          config: {
+            notifications_enabled: false,
+            human_ticket_default_approval_policy: "human_before_execute",
+            hook_ticket_default_approval_policy: "plan_only",
+          },
+        },
+      }),
+    async (requests) => {
+      const configuration = await updateTeaConfiguration(userContext, {
+        notifications_enabled: false,
+        human_ticket_default_approval_policy: "human_before_execute",
+        hook_ticket_default_approval_policy: "plan_only",
+      });
+
+      assert.equal(configuration.configuration_source, "local");
+      assert.equal(requests.length, 1);
+      assert.equal(requests[0]?.url, "http://core-test.local/internal/tea/configuration");
+      assert.equal(requests[0]?.init?.method, "PUT");
       assert.equal(getHeader(requests[0]?.init, "authorization"), null);
     },
   );

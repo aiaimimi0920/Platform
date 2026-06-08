@@ -24,6 +24,12 @@ const rejectTicketSchema = z.object({
   reason: z.string().min(1),
 });
 
+const updateTeaConfigurationSchema = z.object({
+  notifications_enabled: z.boolean(),
+  human_ticket_default_approval_policy: z.string().min(1),
+  hook_ticket_default_approval_policy: z.string().min(1),
+});
+
 type TeaRouterOptions = {
   client?: TeaClient;
 };
@@ -37,6 +43,23 @@ export function createTeaRouter(options: TeaRouterOptions = {}): FastifyPluginAs
         status: await callTea(() => getClient().getStatus()),
       };
     });
+
+    app.get("/internal/tea/configuration", { preHandler: withInternalRequest }, async () => {
+      return {
+        configuration: await callTea(() => getClient().getConfiguration()),
+      };
+    });
+
+    app.put<{ Body: z.infer<typeof updateTeaConfigurationSchema> }>(
+      "/internal/tea/configuration",
+      { preHandler: withInternalRequest },
+      async (request) => {
+        const payload = parseRequest(updateTeaConfigurationSchema, request.body);
+        return {
+          configuration: await callTea(() => getClient().updateConfiguration(payload)),
+        };
+      },
+    );
 
     app.get<{ Querystring: z.infer<typeof listTicketsQuerySchema> }>(
       "/internal/tea/tickets",

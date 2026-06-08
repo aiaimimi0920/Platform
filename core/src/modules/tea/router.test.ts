@@ -94,6 +94,100 @@ describe("Platform Tea router", () => {
     }
   });
 
+  it("proxies Tea status and configuration ownership through Tea", async () => {
+    const requests: CapturedRequest[] = [];
+    const app = await buildTeaTestServer(async (input, init) => {
+      requests.push({ url: input.toString(), init });
+      const url = input.toString();
+      if (url.endsWith("/v1/status")) {
+        return jsonResponse({
+          service: "tea",
+          status: "ok",
+          configuration_source: "loom-managed",
+          configuration: {
+            owner: "loom",
+            loom_panel_url: "loom://settings/tea",
+          },
+        });
+      }
+      return jsonResponse({
+        configuration_source: "loom-managed",
+        configuration: { owner: "loom", loom_panel_url: "loom://settings/tea" },
+        config: { notifications_enabled: true },
+      });
+    });
+
+    try {
+      const status = await app.inject({
+        headers: { "x-internal-api-token": "internal-token" },
+        method: "GET",
+        url: "/internal/tea/status",
+      });
+      const configuration = await app.inject({
+        headers: { "x-internal-api-token": "internal-token" },
+        method: "GET",
+        url: "/internal/tea/configuration",
+      });
+
+      assert.equal(status.statusCode, 200);
+      assert.equal(status.json().status.configuration_source, "loom-managed");
+      assert.equal(configuration.statusCode, 200);
+      assert.equal(configuration.json().configuration.configuration_source, "loom-managed");
+      assert.equal(requests[0]?.url, "http://tea.local/v1/status");
+      assert.equal(requests[1]?.url, "http://tea.local/v1/configuration");
+      assert.equal((requests[0]?.init?.headers as Record<string, string>).authorization, "Bearer tea-token");
+      assert.equal((requests[1]?.init?.headers as Record<string, string>).authorization, "Bearer tea-token");
+    } finally {
+      await app.close();
+    }
+  });
+
+  it("validates and forwards Tea configuration updates", async () => {
+    const requests: CapturedRequest[] = [];
+    const app = await buildTeaTestServer(async (input, init) => {
+      requests.push({ url: input.toString(), init });
+      return jsonResponse({
+        configuration_source: "local",
+        config: {
+          notifications_enabled: false,
+          human_ticket_default_approval_policy: "human_before_execute",
+          hook_ticket_default_approval_policy: "plan_only",
+        },
+      });
+    });
+
+    try {
+      const invalid = await app.inject({
+        headers: { "x-internal-api-token": "internal-token" },
+        method: "PUT",
+        payload: { notifications_enabled: false },
+        url: "/internal/tea/configuration",
+      });
+      assert.equal(invalid.statusCode, 400);
+      assert.equal(requests.length, 0);
+
+      const valid = await app.inject({
+        headers: { "x-internal-api-token": "internal-token" },
+        method: "PUT",
+        payload: {
+          notifications_enabled: false,
+          human_ticket_default_approval_policy: "human_before_execute",
+          hook_ticket_default_approval_policy: "plan_only",
+        },
+        url: "/internal/tea/configuration",
+      });
+
+      assert.equal(valid.statusCode, 200);
+      assert.equal(valid.json().configuration.configuration_source, "local");
+      assert.equal(requests.length, 1);
+      assert.equal(requests[0]?.url, "http://tea.local/v1/configuration");
+      assert.equal(requests[0]?.init?.method, "PUT");
+      assert.equal((requests[0]?.init?.headers as Record<string, string>).authorization, "Bearer tea-token");
+    } finally {
+      await app.close();
+    }
+  });
+
   it("validates and forwards ticket rejection reasons", async () => {
     const requests: CapturedRequest[] = [];
     const app = await buildTeaTestServer(async (input, init) => {

@@ -14,7 +14,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { Input, Textarea } from "@/components/ui/input";
 import { createTeaTicketAction, teaTicketLifecycleAction } from "@/lib/tea-actions";
-import { listTeaTickets, type TeaTicketView } from "@/lib/tea-client";
+import { getTeaStatus, listTeaTickets, type TeaStatusView, type TeaTicketView } from "@/lib/tea-client";
 
 export const dynamic = "force-dynamic";
 
@@ -68,6 +68,26 @@ function lifecycleButton(ticket: TeaTicketView, action: string, label: string, v
   );
 }
 
+function configSource(status: TeaStatusView | null): string {
+  return typeof status?.configuration_source === "string" ? status.configuration_source : "unknown";
+}
+
+function configOwner(status: TeaStatusView | null): string {
+  return typeof status?.configuration?.owner === "string" ? status.configuration.owner : "unknown";
+}
+
+function configPanelHref(status: TeaStatusView | null): string {
+  const panelUrl = status?.configuration?.loom_panel_url;
+  if (typeof panelUrl === "string" && panelUrl.length > 0 && configSource(status) === "loom-managed") {
+    return panelUrl;
+  }
+  return "/tea/settings";
+}
+
+function configActionLabel(status: TeaStatusView | null): string {
+  return configSource(status) === "loom-managed" ? "在 Loom 中配置 Tea" : "打开 Tea 本地设置";
+}
+
 export default async function TeaPage({ searchParams }: TeaPageProps) {
   const session = await auth();
   if (!session?.user?.id) {
@@ -84,9 +104,10 @@ export default async function TeaPage({ searchParams }: TeaPageProps) {
   };
 
   let tickets: TeaTicketView[] = [];
+  let teaStatus: TeaStatusView | null = null;
   let loadError: string | null = null;
   try {
-    tickets = await listTeaTickets(userContext);
+    [tickets, teaStatus] = await Promise.all([listTeaTickets(userContext), getTeaStatus(userContext)]);
   } catch (error) {
     loadError = error instanceof Error ? error.message : "Tea 工单列表不可用。";
   }
@@ -217,6 +238,30 @@ export default async function TeaPage({ searchParams }: TeaPageProps) {
           </div>
 
           <div className="app-account-content-side">
+            <AccountHomeSection>
+              <AccountHomeSectionHead kicker="Configuration" title="配置归属" />
+              <Card className="app-stack">
+                <div className="app-action-row">
+                  <Badge variant={configSource(teaStatus) === "loom-managed" ? "cyan" : "glass"}>
+                    {configSource(teaStatus)}
+                  </Badge>
+                  <span className="app-note">owner: {configOwner(teaStatus)}</span>
+                </div>
+                <p className="mg-copy">
+                  {configSource(teaStatus) === "loom-managed"
+                    ? "当前 Tea 设置由 Loom 集中管理。此处只展示状态，配置按钮会跳转到 Loom 的 Tea 配置入口。"
+                    : configSource(teaStatus) === "fallback"
+                      ? `Loom 配置接管探测失败，Tea 临时使用本地 fallback 配置：${
+                          teaStatus?.configuration?.reason || "未提供原因"
+                        }`
+                      : "当前 Tea 使用本地配置。没有可用 Loom 接管声明时，Tea 保持独立可配置。"}
+                </p>
+                <Link className="mg-btn mg-btn--secondary" href={configPanelHref(teaStatus)}>
+                  {configActionLabel(teaStatus)}
+                </Link>
+              </Card>
+            </AccountHomeSection>
+
             <AccountHomeSection>
               <AccountHomeSectionHead kicker="Create" title="提交 AI 工单" />
               <form action={createTeaTicketAction} className="app-form-grid">

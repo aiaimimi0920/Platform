@@ -23,6 +23,12 @@ export type AddTeaTicketCommentRequest = {
   body: string;
 };
 
+export type UpdateTeaConfigurationRequest = {
+  notifications_enabled: boolean;
+  human_ticket_default_approval_policy: string;
+  hook_ticket_default_approval_policy: string;
+};
+
 export class TeaUpstreamError extends Error {
   statusCode: number;
   responseBody: unknown;
@@ -70,6 +76,9 @@ export function createTeaClient(config: TeaClientConfig) {
 
   return {
     getStatus: () => request("/v1/status"),
+    getConfiguration: () => request("/v1/configuration"),
+    updateConfiguration: (body: UpdateTeaConfigurationRequest) =>
+      request("/v1/configuration", { method: "PUT", body }),
     listTickets: (query?: TeaQuery) => request("/v1/tickets", { query }),
     createTicket: (body: CreateTeaTicketRequest) => request("/v1/tickets", { method: "POST", body }),
     getTicket: (ticketId: string) => request(`/v1/tickets/${encodeURIComponent(ticketId)}`),

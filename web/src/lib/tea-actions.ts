@@ -15,6 +15,7 @@ import {
   retryTeaTicket,
   runTeaTicket,
   stopTeaTicket,
+  updateTeaConfiguration,
 } from "@/lib/tea-client";
 import { requirePlatformUserContext } from "@/lib/platform-session";
 import {
@@ -203,6 +204,33 @@ export async function rejectTeaTicketAction(formData: FormData) {
       throw error;
     }
     target = buildStatusRedirect(redirectTo, "error", toMessage(error, "Tea 工单驳回失败。"));
+  }
+
+  redirect(target);
+}
+
+export async function updateTeaConfigurationAction(formData: FormData) {
+  const redirectTo = resolveRedirectPath(formData.get("redirectTo"), "/tea/settings");
+  const notificationsEnabled = String(formData.get("notifications_enabled") || "") === "true";
+  const humanPolicy =
+    String(formData.get("human_ticket_default_approval_policy") || "").trim() || "human_before_execute";
+  const hookPolicy =
+    String(formData.get("hook_ticket_default_approval_policy") || "").trim() || "plan_only";
+  let target = redirectTo;
+
+  try {
+    const userContext = await requirePlatformUserContext();
+    await updateTeaConfiguration(userContext, {
+      notifications_enabled: notificationsEnabled,
+      human_ticket_default_approval_policy: humanPolicy,
+      hook_ticket_default_approval_policy: hookPolicy,
+    });
+    target = buildStatusRedirect(redirectTo, "success", "Tea 本地配置已更新。");
+  } catch (error) {
+    if (isRedirectError(error)) {
+      throw error;
+    }
+    target = buildStatusRedirect(redirectTo, "error", toMessage(error, "Tea 配置更新失败。"));
   }
 
   redirect(target);

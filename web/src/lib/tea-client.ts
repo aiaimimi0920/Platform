@@ -65,6 +65,38 @@ export type TeaRunView = {
   [key: string]: unknown;
 };
 
+export type TeaConfigurationSource = "local" | "loom-managed" | "fallback";
+
+export type TeaConfigurationStatusView = {
+  owner?: "tea" | "loom" | string;
+  local_config_path?: string | null;
+  loom_base_url?: string | null;
+  loom_panel_url?: string | null;
+  reason?: string | null;
+  [key: string]: unknown;
+};
+
+export type TeaStatusView = {
+  service?: string;
+  status?: string;
+  configuration_source?: TeaConfigurationSource | string;
+  configuration?: TeaConfigurationStatusView;
+  [key: string]: unknown;
+};
+
+export type TeaConfigurationView = {
+  configuration_source?: TeaConfigurationSource | string;
+  configuration?: TeaConfigurationStatusView;
+  config?: unknown;
+  [key: string]: unknown;
+};
+
+export type UpdateTeaConfigurationInput = {
+  notifications_enabled: boolean;
+  human_ticket_default_approval_policy: string;
+  hook_ticket_default_approval_policy: string;
+};
+
 export type TeaTicketListQuery = {
   status?: string | null;
   source?: string | null;
@@ -101,7 +133,7 @@ export class TeaWebClientError extends Error {
 
 type CoreTeaRequestOptions = {
   body?: unknown;
-  method?: "GET" | "POST";
+  method?: "GET" | "POST" | "PUT";
   query?: Record<string, string | number | boolean | null | undefined>;
   userContext: InternalUserContext;
 };
@@ -126,6 +158,32 @@ export async function listTeaTickets(
     userContext,
   });
   return Array.isArray(response.tickets) ? response.tickets : [];
+}
+
+export async function getTeaStatus(userContext: InternalUserContext): Promise<TeaStatusView> {
+  const response = await coreTeaRequest<{ status: TeaStatusView }>("/internal/tea/status", {
+    userContext,
+  });
+  return response.status;
+}
+
+export async function getTeaConfiguration(userContext: InternalUserContext): Promise<TeaConfigurationView> {
+  const response = await coreTeaRequest<{ configuration: TeaConfigurationView }>("/internal/tea/configuration", {
+    userContext,
+  });
+  return response.configuration;
+}
+
+export async function updateTeaConfiguration(
+  userContext: InternalUserContext,
+  input: UpdateTeaConfigurationInput,
+): Promise<TeaConfigurationView> {
+  const response = await coreTeaRequest<{ configuration: TeaConfigurationView }>("/internal/tea/configuration", {
+    method: "PUT",
+    body: input,
+    userContext,
+  });
+  return response.configuration;
 }
 
 export async function createTeaTicket(
