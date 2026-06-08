@@ -6,7 +6,7 @@ import {
   isTerminalTeaTicketStatus,
 } from "./tea-detail-controls";
 
-test("active Tea tickets expose review mutations, stop/retry lifecycle controls, and download links", () => {
+test("active Tea tickets expose canonical decompose, review mutations, stop/retry controls, and download links", () => {
   const controls = getTeaTicketDetailControls("ticket/with space", "running");
 
   assert.equal(controls.canMutate, true);
@@ -14,7 +14,7 @@ test("active Tea tickets expose review mutations, stop/retry lifecycle controls,
   assert.equal(controls.showRejectForm, true);
   assert.deepEqual(
     controls.lifecycleControls.map((control) => control.action),
-    ["decompose", "analyze", "plan", "approve", "run", "stop", "retry", "accept", "close", "cancel"],
+    ["decompose", "approve", "run", "stop", "retry", "accept", "close", "cancel"],
   );
   assert.deepEqual(
     controls.lifecycleControls.filter((control) => control.requiresRun).map((control) => control.action),

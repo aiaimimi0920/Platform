@@ -232,8 +232,6 @@ export default async function TeaPage({ searchParams }: TeaPageProps) {
                               查看详情 / 审阅证据
                             </Link>
                             {lifecycleButton(ticket, "decompose", "拆解工单", "mg-btn--primary")}
-                            {lifecycleButton(ticket, "analyze", "AI 分析")}
-                            {lifecycleButton(ticket, "plan", "生成计划")}
                             {lifecycleButton(ticket, "approve", "审批", "mg-btn--secondary")}
                             {lifecycleButton(ticket, "run", "执行", "mg-btn--primary")}
                             {lifecycleButton(ticket, "accept", "验收")}

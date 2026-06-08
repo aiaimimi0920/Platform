@@ -10,4 +10,6 @@ test("Tea queue page exposes canonical decompose action and BrainProvider status
   assert.match(teaPageSource, /brainProviderMode/);
   assert.match(teaPageSource, /brainProviderCapability/);
   assert.match(teaPageSource, /tea\.ticket\.decompose\.v1/);
+  assert.doesNotMatch(teaPageSource, /AI 分析/);
+  assert.doesNotMatch(teaPageSource, /生成计划/);
 });
