@@ -10,6 +10,7 @@ import {
 } from "@/components/account-home/templates";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
+import { displayConfigurationSource, safeLocalLoomUrl } from "@/lib/loom-config";
 import { updateTeaConfigurationAction } from "@/lib/tea-actions";
 import { getTeaConfiguration, type TeaConfigurationView } from "@/lib/tea-client";
 
@@ -32,11 +33,6 @@ function ownerOf(configuration: TeaConfigurationView | null): string {
   return typeof configuration?.configuration?.owner === "string"
     ? configuration.configuration.owner
     : "unknown";
-}
-
-function loomPanelUrl(configuration: TeaConfigurationView | null): string | null {
-  const panelUrl = configuration?.configuration?.loom_panel_url;
-  return typeof panelUrl === "string" && panelUrl.length > 0 ? panelUrl : null;
 }
 
 function configRecord(configuration: TeaConfigurationView | null): Record<string, unknown> {
@@ -70,7 +66,7 @@ export default async function TeaSettingsPage({ searchParams }: TeaSettingsPageP
 
   const source = sourceOf(configuration);
   const config = configRecord(configuration);
-  const panelUrl = loomPanelUrl(configuration);
+  const panelUrl = safeLocalLoomUrl(configuration?.configuration?.loom_panel_url);
 
   return (
     <main className="app-page">
@@ -109,7 +105,7 @@ export default async function TeaSettingsPage({ searchParams }: TeaSettingsPageP
             <Card className="app-stack">
               <div className="app-action-row">
                 <Badge variant={source === "loom-managed" ? "cyan" : source === "fallback" ? "warning" : "glass"}>
-                  {source}
+                  {displayConfigurationSource(source)}
                 </Badge>
                 <span className="app-note">owner: {ownerOf(configuration)}</span>
               </div>
@@ -120,6 +116,10 @@ export default async function TeaSettingsPage({ searchParams }: TeaSettingsPageP
                     在 Loom 中配置 Tea
                   </Link>
                 </>
+              ) : source === "loom-managed" ? (
+                <p className="mg-copy">
+                  Loom 当前接管 Tea 配置。本地设置页只读；当前没有收到安全的本地 Loom settings URL。
+                </p>
               ) : (
                 <p className="mg-copy">
                   当前可使用 Tea 本地配置。CLI 可通过 <code>tea config show</code> 和
@@ -129,7 +129,10 @@ export default async function TeaSettingsPage({ searchParams }: TeaSettingsPageP
             </Card>
 
             <Card className="app-stack">
-              <AccountHomeSectionHead kicker="Current" title="当前本地配置" />
+              <AccountHomeSectionHead
+                kicker="Current"
+                title={source === "loom-managed" ? "当前 Loom 配置" : "当前本地配置"}
+              />
               <AccountHomeList>
                 <AccountHomeListRow
                   aside={<span className="app-note">{String(config.notifications_enabled ?? "unknown")}</span>}

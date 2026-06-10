@@ -13,6 +13,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { Input, Textarea } from "@/components/ui/input";
+import { safeLocalLoomUrl } from "@/lib/loom-config";
 import { createTeaTicketAction, teaTicketLifecycleAction } from "@/lib/tea-actions";
 import { getTeaStatus, listTeaTickets, type TeaStatusView, type TeaTicketView } from "@/lib/tea-client";
 
@@ -77,8 +78,8 @@ function configOwner(status: TeaStatusView | null): string {
 }
 
 function configPanelHref(status: TeaStatusView | null): string {
-  const panelUrl = status?.configuration?.loom_panel_url;
-  if (typeof panelUrl === "string" && panelUrl.length > 0 && configSource(status) === "loom-managed") {
+  const panelUrl = safeLocalLoomUrl(status?.configuration?.loom_panel_url);
+  if (panelUrl && configSource(status) === "loom-managed") {
     return panelUrl;
   }
   return "/tea/settings";
