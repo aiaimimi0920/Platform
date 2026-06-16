@@ -1,6 +1,5 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import Link from "next/link";
 
@@ -22,6 +21,7 @@ import {
   AccountHomeSection,
   AccountHomeSectionHead,
 } from "@/components/account-home/templates";
+import { useArchiveShowcaseConfig } from "./owner/archive-showcase-config";
 import { useAgentShowcaseConfig } from "./owner/agent-showcase-config";
 
 const HONOR_ABILITY_AXIS_COUNT = 6;
@@ -258,65 +258,6 @@ function formatHonorCurrencyValue(value: number, currencyLabel = "MIRA") {
   return `${formatAccountNumber(value)} ${currencyLabel}`;
 }
 
-function selectShowcasedProjects(
-  projectCatalog: AccountHonorArchiveSectionProps["projectCatalog"] | AccountHonorArchiveSectionProps["investmentProjectCatalog"],
-  showcasedProjectIds: string[],
-  limit = 4,
-) {
-  if (showcasedProjectIds.length === 0) {
-    return projectCatalog.slice(0, limit);
-  }
-
-  const catalogById = new Map(projectCatalog.map((project) => [project.id, project] as const));
-  return showcasedProjectIds
-    .map((projectId) => catalogById.get(projectId) ?? null)
-    .filter((project): project is (typeof projectCatalog)[number] => Boolean(project))
-    .slice(0, limit);
-}
-
-function buildLocalSponsorshipSummary(
-  investmentProjectCatalog: AccountHonorArchiveSectionProps["investmentProjectCatalog"],
-  showcasedProjectIds: string[],
-) {
-  const sponsoredProjects = selectShowcasedProjects(investmentProjectCatalog, showcasedProjectIds, 3);
-  return {
-    sponsoredCount: sponsoredProjects.length,
-    totalAmount: sponsoredProjects.reduce((sum, project) => sum + project.sponsoredAmount, 0),
-    currencyLabel:
-      sponsoredProjects[0]?.sponsoredCurrencyLabel ?? investmentProjectCatalog[0]?.sponsoredCurrencyLabel ?? "MIRA",
-    sponsoredProjects,
-  };
-}
-
-function selectShowcasedIssues(
-  issueCatalog: AccountHonorArchiveSectionProps["issueCatalog"] | AccountHonorArchiveSectionProps["investmentIssueCatalog"],
-  showcasedIssueIds: string[],
-  limit = 4,
-) {
-  if (showcasedIssueIds.length === 0) {
-    return issueCatalog.slice(0, limit);
-  }
-
-  const catalogById = new Map(issueCatalog.map((issue) => [issue.id, issue] as const));
-  return showcasedIssueIds
-    .map((issueId) => catalogById.get(issueId) ?? null)
-    .filter((issue): issue is (typeof issueCatalog)[number] => Boolean(issue))
-    .slice(0, limit);
-}
-
-function buildLocalIssueSupportSummary(
-  investmentIssueCatalog: AccountHonorArchiveSectionProps["investmentIssueCatalog"],
-  showcasedIssueIds: string[],
-) {
-  const supportedIssues = selectShowcasedIssues(investmentIssueCatalog, showcasedIssueIds, 3);
-  return {
-    supportedCount: supportedIssues.length,
-    totalAmount: supportedIssues.reduce((sum, issue) => sum + issue.supportedAmount, 0),
-    currencyLabel: supportedIssues[0]?.supportedCurrencyLabel ?? investmentIssueCatalog[0]?.supportedCurrencyLabel ?? "投票券",
-    supportedIssues,
-  };
-}
-
 export function AccountHonorExecutionPanel({
   agentCatalog,
   agentShowcase,
@@ -460,302 +401,16 @@ export function AccountHonorArchiveSection({
   sponsorshipSummary,
   showHeader = true,
 }: AccountHonorArchiveSectionProps) {
-  const [issueConfigOpen, setIssueConfigOpen] = useState(false);
-  const [investmentIssueConfigOpen, setInvestmentIssueConfigOpen] = useState(false);
-  const [projectConfigOpen, setProjectConfigOpen] = useState(false);
-  const [investmentConfigOpen, setInvestmentConfigOpen] = useState(false);
-  const [visibleIssueShowcase, setVisibleIssueShowcase] = useState(issueShowcase);
-  const [visibleIssueSupportSummary, setVisibleIssueSupportSummary] = useState(issueSupportSummary);
-  const [visibleProjectShowcase, setVisibleProjectShowcase] = useState(projectShowcase);
-  const [visibleSponsorshipSummary, setVisibleSponsorshipSummary] = useState(sponsorshipSummary);
-  const [issueDraftIds, setIssueDraftIds] = useState(issueShowcase.map((issue) => issue.id));
-  const [investmentIssueDraftIds, setInvestmentIssueDraftIds] = useState(
-    issueSupportSummary.supportedIssues.map((issue) => issue.id),
-  );
-  const [projectDraftIds, setProjectDraftIds] = useState(projectShowcase.map((project) => project.id));
-  const [investmentDraftIds, setInvestmentDraftIds] = useState(
-    sponsorshipSummary.sponsoredProjects.map((project) => project.id),
-  );
-  const [savingIssueShowcase, setSavingIssueShowcase] = useState(false);
-  const [savingInvestmentIssueShowcase, setSavingInvestmentIssueShowcase] = useState(false);
-  const [savingProjectShowcase, setSavingProjectShowcase] = useState(false);
-  const [savingInvestmentShowcase, setSavingInvestmentShowcase] = useState(false);
-  const [issueShowcaseError, setIssueShowcaseError] = useState<string | null>(null);
-  const [investmentIssueShowcaseError, setInvestmentIssueShowcaseError] = useState<string | null>(null);
-  const [projectShowcaseError, setProjectShowcaseError] = useState<string | null>(null);
-  const [investmentShowcaseError, setInvestmentShowcaseError] = useState<string | null>(null);
-
-  useEffect(() => {
-    setVisibleIssueShowcase(issueShowcase);
-    setIssueDraftIds(issueShowcase.map((issue) => issue.id));
-  }, [issueShowcase]);
-
-  useEffect(() => {
-    setVisibleIssueSupportSummary(issueSupportSummary);
-    setInvestmentIssueDraftIds(issueSupportSummary.supportedIssues.map((issue) => issue.id));
-  }, [issueSupportSummary]);
-
-  useEffect(() => {
-    setVisibleProjectShowcase(projectShowcase);
-    setProjectDraftIds(projectShowcase.map((project) => project.id));
-  }, [projectShowcase]);
-
-  useEffect(() => {
-    setVisibleSponsorshipSummary(sponsorshipSummary);
-    setInvestmentDraftIds(sponsorshipSummary.sponsoredProjects.map((project) => project.id));
-  }, [sponsorshipSummary]);
-
-  useEffect(() => {
-    if (!projectConfigOpen && !investmentConfigOpen && !issueConfigOpen && !investmentIssueConfigOpen) {
-      return;
-    }
-
-    function handleKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape") {
-        setIssueConfigOpen(false);
-        setInvestmentIssueConfigOpen(false);
-        setProjectConfigOpen(false);
-        setInvestmentConfigOpen(false);
-      }
-    }
-
-    window.addEventListener("keydown", handleKeyDown);
-    return () => {
-      window.removeEventListener("keydown", handleKeyDown);
-    };
-  }, [investmentConfigOpen, investmentIssueConfigOpen, issueConfigOpen, projectConfigOpen]);
-
-  function handleOpenIssueConfig() {
-    setProjectConfigOpen(false);
-    setInvestmentConfigOpen(false);
-    setInvestmentIssueConfigOpen(false);
-    setIssueDraftIds(visibleIssueShowcase.map((issue) => issue.id));
-    setIssueShowcaseError(null);
-    setIssueConfigOpen(true);
-  }
-
-  function handleOpenInvestmentIssueConfig() {
-    setIssueConfigOpen(false);
-    setProjectConfigOpen(false);
-    setInvestmentConfigOpen(false);
-    setInvestmentIssueDraftIds(visibleIssueSupportSummary.supportedIssues.map((issue) => issue.id));
-    setInvestmentIssueShowcaseError(null);
-    setInvestmentIssueConfigOpen(true);
-  }
-
-  function handleOpenProjectConfig() {
-    setIssueConfigOpen(false);
-    setInvestmentIssueConfigOpen(false);
-    setInvestmentConfigOpen(false);
-    setProjectDraftIds(visibleProjectShowcase.map((project) => project.id));
-    setProjectShowcaseError(null);
-    setProjectConfigOpen(true);
-  }
-
-  function handleOpenInvestmentConfig() {
-    setIssueConfigOpen(false);
-    setInvestmentIssueConfigOpen(false);
-    setProjectConfigOpen(false);
-    setInvestmentDraftIds(visibleSponsorshipSummary.sponsoredProjects.map((project) => project.id));
-    setInvestmentShowcaseError(null);
-    setInvestmentConfigOpen(true);
-  }
-
-  function toggleIssueDraft(issueId: string) {
-    setIssueShowcaseError(null);
-    setIssueDraftIds((current) => {
-      if (current.includes(issueId)) {
-        return current.filter((entry) => entry !== issueId);
-      }
-
-      if (current.length >= 4) {
-        setIssueShowcaseError("最多展示 4 个议题");
-        return current;
-      }
-
-      return [...current, issueId];
-    });
-  }
-
-  function toggleInvestmentIssueDraft(issueId: string) {
-    setInvestmentIssueShowcaseError(null);
-    setInvestmentIssueDraftIds((current) => {
-      if (current.includes(issueId)) {
-        return current.filter((entry) => entry !== issueId);
-      }
-
-      if (current.length >= 3) {
-        setInvestmentIssueShowcaseError("最多展示 3 个投资议题");
-        return current;
-      }
-
-      return [...current, issueId];
-    });
-  }
-
-  function toggleProjectDraft(projectId: string) {
-    setProjectShowcaseError(null);
-    setProjectDraftIds((current) => {
-      if (current.includes(projectId)) {
-        return current.filter((entry) => entry !== projectId);
-      }
-
-      if (current.length >= 4) {
-        setProjectShowcaseError("最多展示 4 个项目");
-        return current;
-      }
-
-      return [...current, projectId];
-    });
-  }
-
-  function toggleInvestmentDraft(projectId: string) {
-    setInvestmentShowcaseError(null);
-    setInvestmentDraftIds((current) => {
-      if (current.includes(projectId)) {
-        return current.filter((entry) => entry !== projectId);
-      }
-
-      if (current.length >= 3) {
-        setInvestmentShowcaseError("最多展示 3 个投资项目");
-        return current;
-      }
-
-      return [...current, projectId];
-    });
-  }
-
-  async function handleSaveProjectShowcase() {
-    if (savingProjectShowcase) {
-      return;
-    }
-
-    setSavingProjectShowcase(true);
-    setProjectShowcaseError(null);
-
-    try {
-      const response = await fetch("/api/account-honor/profile", {
-        method: "POST",
-        headers: {
-          "content-type": "application/json",
-        },
-        body: JSON.stringify({
-          honorShowcasedProjectIds: projectDraftIds,
-        }),
-      });
-
-      const payload = (await response.json().catch(() => null)) as { error?: string } | null;
-      if (!response.ok) {
-        throw new Error(payload?.error || "展示项目保存失败");
-      }
-
-      setVisibleProjectShowcase(selectShowcasedProjects(projectCatalog, projectDraftIds));
-      setProjectConfigOpen(false);
-    } catch (error) {
-      setProjectShowcaseError(error instanceof Error ? error.message : "展示项目保存失败");
-    } finally {
-      setSavingProjectShowcase(false);
-    }
-  }
-
-  async function handleSaveIssueShowcase() {
-    if (savingIssueShowcase) {
-      return;
-    }
-
-    setSavingIssueShowcase(true);
-    setIssueShowcaseError(null);
-
-    try {
-      const response = await fetch("/api/account-honor/profile", {
-        method: "POST",
-        headers: {
-          "content-type": "application/json",
-        },
-        body: JSON.stringify({
-          honorShowcasedIssueIds: issueDraftIds,
-        }),
-      });
-
-      const payload = (await response.json().catch(() => null)) as { error?: string } | null;
-      if (!response.ok) {
-        throw new Error(payload?.error || "议题展示保存失败");
-      }
-
-      setVisibleIssueShowcase(selectShowcasedIssues(issueCatalog, issueDraftIds));
-      setIssueConfigOpen(false);
-    } catch (error) {
-      setIssueShowcaseError(error instanceof Error ? error.message : "议题展示保存失败");
-    } finally {
-      setSavingIssueShowcase(false);
-    }
-  }
-
-  async function handleSaveInvestmentShowcase() {
-    if (savingInvestmentShowcase) {
-      return;
-    }
-
-    setSavingInvestmentShowcase(true);
-    setInvestmentShowcaseError(null);
-
-    try {
-      const response = await fetch("/api/account-honor/profile", {
-        method: "POST",
-        headers: {
-          "content-type": "application/json",
-        },
-        body: JSON.stringify({
-          honorShowcasedInvestmentProjectIds: investmentDraftIds,
-        }),
-      });
-
-      const payload = (await response.json().catch(() => null)) as { error?: string } | null;
-      if (!response.ok) {
-        throw new Error(payload?.error || "投资项目展示保存失败");
-      }
-
-      setVisibleSponsorshipSummary(buildLocalSponsorshipSummary(investmentProjectCatalog, investmentDraftIds));
-      setInvestmentConfigOpen(false);
-    } catch (error) {
-      setInvestmentShowcaseError(error instanceof Error ? error.message : "投资项目展示保存失败");
-    } finally {
-      setSavingInvestmentShowcase(false);
-    }
-  }
-
-  async function handleSaveInvestmentIssueShowcase() {
-    if (savingInvestmentIssueShowcase) {
-      return;
-    }
-
-    setSavingInvestmentIssueShowcase(true);
-    setInvestmentIssueShowcaseError(null);
-
-    try {
-      const response = await fetch("/api/account-honor/profile", {
-        method: "POST",
-        headers: {
-          "content-type": "application/json",
-        },
-        body: JSON.stringify({
-          honorShowcasedInvestmentIssueIds: investmentIssueDraftIds,
-        }),
-      });
-
-      const payload = (await response.json().catch(() => null)) as { error?: string } | null;
-      if (!response.ok) {
-        throw new Error(payload?.error || "投资议题展示保存失败");
-      }
-
-      setVisibleIssueSupportSummary(buildLocalIssueSupportSummary(investmentIssueCatalog, investmentIssueDraftIds));
-      setInvestmentIssueConfigOpen(false);
-    } catch (error) {
-      setInvestmentIssueShowcaseError(error instanceof Error ? error.message : "投资议题展示保存失败");
-    } finally {
-      setSavingInvestmentIssueShowcase(false);
-    }
-  }
+  const archiveShowcase = useArchiveShowcaseConfig({
+    investmentIssueCatalog,
+    investmentProjectCatalog,
+    issueCatalog,
+    issueShowcase,
+    issueSupportSummary,
+    projectCatalog,
+    projectShowcase,
+    sponsorshipSummary,
+  });
 
   return (
     <AccountHomeSection>
@@ -781,73 +436,20 @@ export function AccountHonorArchiveSection({
           <div className="app-account-honor-inline-head app-account-honor-inline-head--spread">
             <span className="mg-terminal-kicker">项目</span>
             <button
-              aria-expanded={projectConfigOpen}
+              aria-expanded={archiveShowcase.projectConfigOpen}
               aria-haspopup="dialog"
               className="app-account-honor-action-button"
               disabled={projectCatalog.length === 0}
-              onClick={() => {
-                if (projectConfigOpen) {
-                  setProjectConfigOpen(false);
-                  return;
-                }
-                handleOpenProjectConfig();
-              }}
+              onClick={archiveShowcase.toggleProjectConfig}
               type="button"
             >
               展示配置
             </button>
           </div>
-          {projectConfigOpen ? (
-            <div className="app-account-honor-inline-config" role="group" aria-label="项目展示配置">
-              <div className="app-account-honor-inline-config__summary">
-                <span>选择展示的被投资项目</span>
-                <strong>{`${projectDraftIds.length}/4`}</strong>
-              </div>
-              {projectShowcaseError ? <p className="app-account-honor-agent-config__error">{projectShowcaseError}</p> : null}
-              <div className="app-account-honor-inline-config__list">
-                {projectCatalog.map((project) => {
-                  const selected = projectDraftIds.includes(project.id);
-                  return (
-                    <button
-                      className={cn(
-                        "app-account-honor-inline-config__option",
-                        selected && "app-account-honor-inline-config__option--selected",
-                      )}
-                      key={project.id}
-                      onClick={() => toggleProjectDraft(project.id)}
-                      type="button"
-                    >
-                      <div className="app-account-honor-inline-config__copy">
-                        <strong>{project.name}</strong>
-                        <span>{`${formatAccountNumber(project.sponsorCount)} 人 / ${formatAccountNumber(project.sponsoredAmount)} ${project.sponsoredCurrencyLabel}`}</span>
-                      </div>
-                      <span className="app-account-honor-inline-config__state">{selected ? "已展示" : "可展示"}</span>
-                    </button>
-                  );
-                })}
-              </div>
-              <div className="app-account-honor-inline-config__actions">
-                <button
-                  className="app-account-honor-agent-config__secondary"
-                  onClick={() => setProjectConfigOpen(false)}
-                  type="button"
-                >
-                  取消
-                </button>
-                <button
-                  className="app-account-honor-agent-config__primary"
-                  disabled={savingProjectShowcase}
-                  onClick={() => void handleSaveProjectShowcase()}
-                  type="button"
-                >
-                  {savingProjectShowcase ? "保存中" : "保存展示"}
-                </button>
-              </div>
-            </div>
-          ) : null}
-          {visibleProjectShowcase.length > 0 ? (
+          {archiveShowcase.projectConfigPanel}
+          {archiveShowcase.visibleProjectShowcase.length > 0 ? (
             <AccountHomeList>
-              {visibleProjectShowcase.slice(0, 4).map((project) => (
+              {archiveShowcase.visibleProjectShowcase.slice(0, 4).map((project) => (
                 <div className="mg-terminal-list__row app-account-honor-project-row" key={project.id}>
                   <div className="app-account-honor-project-row__body">
                     <div className="mg-terminal-list__meta">
@@ -877,85 +479,30 @@ export function AccountHonorArchiveSection({
             <div className="app-account-honor-inline-head app-account-honor-inline-head--spread">
               <span className="mg-terminal-kicker">投资项目</span>
               <button
-                aria-expanded={investmentConfigOpen}
+                aria-expanded={archiveShowcase.investmentProjectConfigOpen}
                 aria-haspopup="dialog"
                 className="app-account-honor-action-button"
                 disabled={investmentProjectCatalog.length === 0}
-                onClick={() => {
-                  if (investmentConfigOpen) {
-                    setInvestmentConfigOpen(false);
-                    return;
-                  }
-                  handleOpenInvestmentConfig();
-                }}
+                onClick={archiveShowcase.toggleInvestmentProjectConfig}
                 type="button"
               >
                 展示配置
               </button>
             </div>
-            {investmentConfigOpen ? (
-              <div className="app-account-honor-inline-config" role="group" aria-label="投资项目展示配置">
-                <div className="app-account-honor-inline-config__summary">
-                  <span>选择展示的投资项目</span>
-                  <strong>{`${investmentDraftIds.length}/3`}</strong>
-                </div>
-                {investmentShowcaseError ? (
-                  <p className="app-account-honor-agent-config__error">{investmentShowcaseError}</p>
-                ) : null}
-                <div className="app-account-honor-inline-config__list">
-                  {investmentProjectCatalog.map((project) => {
-                    const selected = investmentDraftIds.includes(project.id);
-                    return (
-                      <button
-                        className={cn(
-                          "app-account-honor-inline-config__option",
-                          selected && "app-account-honor-inline-config__option--selected",
-                        )}
-                        key={project.id}
-                        onClick={() => toggleInvestmentDraft(project.id)}
-                        type="button"
-                      >
-                        <div className="app-account-honor-inline-config__copy">
-                          <strong>{project.name}</strong>
-                          <span>{`${formatAccountNumber(project.sponsoredAmount)} ${project.sponsoredCurrencyLabel}`}</span>
-                        </div>
-                        <span className="app-account-honor-inline-config__state">{selected ? "已展示" : "可展示"}</span>
-                      </button>
-                    );
-                  })}
-                </div>
-                <div className="app-account-honor-inline-config__actions">
-                  <button
-                    className="app-account-honor-agent-config__secondary"
-                    onClick={() => setInvestmentConfigOpen(false)}
-                    type="button"
-                  >
-                    取消
-                  </button>
-                  <button
-                    className="app-account-honor-agent-config__primary"
-                    disabled={savingInvestmentShowcase}
-                    onClick={() => void handleSaveInvestmentShowcase()}
-                    type="button"
-                  >
-                    {savingInvestmentShowcase ? "保存中" : "保存展示"}
-                  </button>
-                </div>
-              </div>
-            ) : null}
+            {archiveShowcase.investmentProjectConfigPanel}
             <div className="app-account-honor-sponsor-summary">
               <div>
                 <span>总投资额</span>
-                <strong>{`${formatAccountNumber(visibleSponsorshipSummary.totalAmount)} ${visibleSponsorshipSummary.currencyLabel}`}</strong>
+                <strong>{`${formatAccountNumber(archiveShowcase.visibleSponsorshipSummary.totalAmount)} ${archiveShowcase.visibleSponsorshipSummary.currencyLabel}`}</strong>
               </div>
               <div>
                 <span>投资项目数</span>
-                <strong>{formatAccountNumber(visibleSponsorshipSummary.sponsoredCount)}</strong>
+                <strong>{formatAccountNumber(archiveShowcase.visibleSponsorshipSummary.sponsoredCount)}</strong>
               </div>
             </div>
-            {visibleSponsorshipSummary.sponsoredProjects.length > 0 ? (
+            {archiveShowcase.visibleSponsorshipSummary.sponsoredProjects.length > 0 ? (
               <AccountHomeList className="app-account-honor-inline-details">
-                {visibleSponsorshipSummary.sponsoredProjects.slice(0, 3).map((project) => (
+                {archiveShowcase.visibleSponsorshipSummary.sponsoredProjects.slice(0, 3).map((project) => (
                   <div
                     className="mg-terminal-list__row app-account-honor-inline-dialog__project-row"
                     key={project.id}
@@ -985,73 +532,20 @@ export function AccountHonorArchiveSection({
           <div className="app-account-honor-inline-head app-account-honor-inline-head--spread">
             <span className="mg-terminal-kicker">议题</span>
             <button
-              aria-expanded={issueConfigOpen}
+              aria-expanded={archiveShowcase.issueConfigOpen}
               aria-haspopup="dialog"
               className="app-account-honor-action-button"
               disabled={issueCatalog.length === 0}
-              onClick={() => {
-                if (issueConfigOpen) {
-                  setIssueConfigOpen(false);
-                  return;
-                }
-                handleOpenIssueConfig();
-              }}
+              onClick={archiveShowcase.toggleIssueConfig}
               type="button"
             >
               展示配置
             </button>
           </div>
-          {issueConfigOpen ? (
-            <div className="app-account-honor-inline-config" role="group" aria-label="议题展示配置">
-              <div className="app-account-honor-inline-config__summary">
-                <span>选择展示的被投资议题</span>
-                <strong>{`${issueDraftIds.length}/4`}</strong>
-              </div>
-              {issueShowcaseError ? <p className="app-account-honor-agent-config__error">{issueShowcaseError}</p> : null}
-              <div className="app-account-honor-inline-config__list">
-                {issueCatalog.map((issue) => {
-                  const selected = issueDraftIds.includes(issue.id);
-                  return (
-                    <button
-                      className={cn(
-                        "app-account-honor-inline-config__option",
-                        selected && "app-account-honor-inline-config__option--selected",
-                      )}
-                      key={issue.id}
-                      onClick={() => toggleIssueDraft(issue.id)}
-                      type="button"
-                    >
-                      <div className="app-account-honor-inline-config__copy">
-                        <strong>{issue.name}</strong>
-                        <span>{`${formatAccountNumber(issue.supporterCount)} 人 / ${formatAccountNumber(issue.supportedAmount)} ${issue.supportedCurrencyLabel}`}</span>
-                      </div>
-                      <span className="app-account-honor-inline-config__state">{selected ? "已展示" : "可展示"}</span>
-                    </button>
-                  );
-                })}
-              </div>
-              <div className="app-account-honor-inline-config__actions">
-                <button
-                  className="app-account-honor-agent-config__secondary"
-                  onClick={() => setIssueConfigOpen(false)}
-                  type="button"
-                >
-                  取消
-                </button>
-                <button
-                  className="app-account-honor-agent-config__primary"
-                  disabled={savingIssueShowcase}
-                  onClick={() => void handleSaveIssueShowcase()}
-                  type="button"
-                >
-                  {savingIssueShowcase ? "保存中" : "保存展示"}
-                </button>
-              </div>
-            </div>
-          ) : null}
-          {visibleIssueShowcase.length > 0 ? (
+          {archiveShowcase.issueConfigPanel}
+          {archiveShowcase.visibleIssueShowcase.length > 0 ? (
             <AccountHomeList>
-              {visibleIssueShowcase.slice(0, 4).map((issue) => (
+              {archiveShowcase.visibleIssueShowcase.slice(0, 4).map((issue) => (
                 <div className="mg-terminal-list__row app-account-honor-project-row" key={issue.id}>
                   <div className="app-account-honor-project-row__body">
                     <div className="mg-terminal-list__meta">
@@ -1087,85 +581,30 @@ export function AccountHonorArchiveSection({
             <div className="app-account-honor-inline-head app-account-honor-inline-head--spread">
               <span className="mg-terminal-kicker">投资议题</span>
               <button
-                aria-expanded={investmentIssueConfigOpen}
+                aria-expanded={archiveShowcase.investmentIssueConfigOpen}
                 aria-haspopup="dialog"
                 className="app-account-honor-action-button"
                 disabled={investmentIssueCatalog.length === 0}
-                onClick={() => {
-                  if (investmentIssueConfigOpen) {
-                    setInvestmentIssueConfigOpen(false);
-                    return;
-                  }
-                  handleOpenInvestmentIssueConfig();
-                }}
+                onClick={archiveShowcase.toggleInvestmentIssueConfig}
                 type="button"
               >
                 展示配置
               </button>
             </div>
-            {investmentIssueConfigOpen ? (
-              <div className="app-account-honor-inline-config" role="group" aria-label="投资议题展示配置">
-                <div className="app-account-honor-inline-config__summary">
-                  <span>选择展示的投资议题</span>
-                  <strong>{`${investmentIssueDraftIds.length}/3`}</strong>
-                </div>
-                {investmentIssueShowcaseError ? (
-                  <p className="app-account-honor-agent-config__error">{investmentIssueShowcaseError}</p>
-                ) : null}
-                <div className="app-account-honor-inline-config__list">
-                  {investmentIssueCatalog.map((issue) => {
-                    const selected = investmentIssueDraftIds.includes(issue.id);
-                    return (
-                      <button
-                        className={cn(
-                          "app-account-honor-inline-config__option",
-                          selected && "app-account-honor-inline-config__option--selected",
-                        )}
-                        key={issue.id}
-                        onClick={() => toggleInvestmentIssueDraft(issue.id)}
-                        type="button"
-                      >
-                        <div className="app-account-honor-inline-config__copy">
-                          <strong>{issue.name}</strong>
-                          <span>{`${formatAccountNumber(issue.supportedAmount)} ${issue.supportedCurrencyLabel}`}</span>
-                        </div>
-                        <span className="app-account-honor-inline-config__state">{selected ? "已展示" : "可展示"}</span>
-                      </button>
-                    );
-                  })}
-                </div>
-                <div className="app-account-honor-inline-config__actions">
-                  <button
-                    className="app-account-honor-agent-config__secondary"
-                    onClick={() => setInvestmentIssueConfigOpen(false)}
-                    type="button"
-                  >
-                    取消
-                  </button>
-                  <button
-                    className="app-account-honor-agent-config__primary"
-                    disabled={savingInvestmentIssueShowcase}
-                    onClick={() => void handleSaveInvestmentIssueShowcase()}
-                    type="button"
-                  >
-                    {savingInvestmentIssueShowcase ? "保存中" : "保存展示"}
-                  </button>
-                </div>
-              </div>
-            ) : null}
+            {archiveShowcase.investmentIssueConfigPanel}
             <div className="app-account-honor-sponsor-summary app-account-honor-sponsor-summary--tickets">
               <div>
                 <span>总投出票数</span>
-                <strong>{`${formatAccountNumber(visibleIssueSupportSummary.totalAmount)} ${visibleIssueSupportSummary.currencyLabel}`}</strong>
+                <strong>{`${formatAccountNumber(archiveShowcase.visibleIssueSupportSummary.totalAmount)} ${archiveShowcase.visibleIssueSupportSummary.currencyLabel}`}</strong>
               </div>
               <div>
                 <span>投资议题数</span>
-                <strong>{formatAccountNumber(visibleIssueSupportSummary.supportedCount)}</strong>
+                <strong>{formatAccountNumber(archiveShowcase.visibleIssueSupportSummary.supportedCount)}</strong>
               </div>
             </div>
-            {visibleIssueSupportSummary.supportedIssues.length > 0 ? (
+            {archiveShowcase.visibleIssueSupportSummary.supportedIssues.length > 0 ? (
               <AccountHomeList className="app-account-honor-inline-details">
-                {visibleIssueSupportSummary.supportedIssues.slice(0, 3).map((issue) => (
+                {archiveShowcase.visibleIssueSupportSummary.supportedIssues.slice(0, 3).map((issue) => (
                   <div
                     className="mg-terminal-list__row app-account-honor-inline-dialog__project-row"
                     key={issue.id}

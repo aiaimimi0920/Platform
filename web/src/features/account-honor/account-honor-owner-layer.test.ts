@@ -8,6 +8,7 @@ const panelSource = readFileSync(new URL("./account-honor-panel.tsx", featureDir
 const ownerIndexSource = readFileSync(new URL("./owner/index.ts", featureDir), "utf8");
 const taglineEditorUrl = new URL("./owner/tagline-editor.tsx", featureDir);
 const agentShowcaseConfigUrl = new URL("./owner/agent-showcase-config.tsx", featureDir);
+const archiveShowcaseConfigUrl = new URL("./owner/archive-showcase-config.tsx", featureDir);
 
 test("account honor tagline editing lives in the owner layer instead of the center shell", () => {
   assert.equal(existsSync(taglineEditorUrl), true);
@@ -36,4 +37,27 @@ test("account honor agent showcase editing state lives in the owner layer", () =
   assert.match(agentShowcaseConfigSource, /export function useAgentShowcaseConfig/);
   assert.match(agentShowcaseConfigSource, /honorShowcasedAgentIds/);
   assert.match(ownerIndexSource, /useAgentShowcaseConfig/);
+});
+
+test("account honor archive showcase editing state lives in the owner layer", () => {
+  assert.equal(existsSync(archiveShowcaseConfigUrl), true);
+
+  const archiveShowcaseConfigSource = readFileSync(archiveShowcaseConfigUrl, "utf8");
+
+  assert.match(panelSource, /from\s+["']\.\/owner\/archive-showcase-config["']/);
+  assert.doesNotMatch(
+    panelSource,
+    /set(Project|Investment|Issue|InvestmentIssue)ConfigOpen|set(Project|Investment|Issue|InvestmentIssue)DraftIds|saving(Project|Investment|Issue|InvestmentIssue)Showcase/,
+  );
+  assert.doesNotMatch(
+    panelSource,
+    /honorShowcased(ProjectIds|IssueIds|InvestmentProjectIds|InvestmentIssueIds)/,
+  );
+
+  assert.match(archiveShowcaseConfigSource, /export function useArchiveShowcaseConfig/);
+  assert.match(archiveShowcaseConfigSource, /honorShowcasedProjectIds/);
+  assert.match(archiveShowcaseConfigSource, /honorShowcasedIssueIds/);
+  assert.match(archiveShowcaseConfigSource, /honorShowcasedInvestmentProjectIds/);
+  assert.match(archiveShowcaseConfigSource, /honorShowcasedInvestmentIssueIds/);
+  assert.match(ownerIndexSource, /useArchiveShowcaseConfig/);
 });

@@ -16,6 +16,7 @@ account-honor/
     index.ts                   从根文件重导出现有 owner 组件
     tagline-editor.tsx         ✅ 已提取 — 签名编辑、保存、错误状态
     agent-showcase-config.tsx  ✅ 已提取 — Agent 展示配置弹窗、保存、错误状态
+    archive-showcase-config.tsx ✅ 已提取 — 项目/议题/投资展示配置、保存、错误状态
   visitor/                 ✅ 已创建 — 游客公开视图专属（只读）
     visitor-archive.tsx        只读档案正文（组合 shared，无配置按钮）
     visitor-profile.tsx        只读档案壳层（头像/名/签名/rank + archive）
@@ -35,11 +36,12 @@ account-honor/
 4. ✅ 更新 `index.ts` 导出三层结构
 5. ✅ 将 `account-honor-center.tsx` 中的签名编辑逻辑提取到 `owner/tagline-editor.tsx`
 6. ✅ 将 `AccountHonorExecutionPanel` 中的 Agent 展示配置状态、POST 保存和弹窗提取到 `owner/agent-showcase-config.tsx`
+7. ✅ 将 `AccountHonorArchiveSection` 中剩余的项目/议题/投资展示配置状态、POST 保存和配置块渲染提取到 `owner/archive-showcase-config.tsx`
 
 ## 待完成（后续增量迁移）
 
-- [ ] 将 `account-honor-panel.tsx` 中剩余的项目/议题/投资展示配置状态逻辑（config dialogs、POST calls）提取到 `owner/` 独立文件
-- [ ] 让 `account-honor-panel.tsx` 中的 `AccountHonorArchiveSection` 和 `AccountHonorExecutionPanel` 改为组合 `shared/` 组件 + `owner/` 编辑逻辑
+- [x] 将 `account-honor-panel.tsx` 中剩余的项目/议题/投资展示配置状态逻辑（config dialogs、POST calls）提取到 `owner/` 独立文件
+- [ ] 让 `account-honor-panel.tsx` 中的 `AccountHonorArchiveSection` 和 `AccountHonorExecutionPanel` 进一步改为组合 `shared/` 展示组件 + `owner/` 编辑逻辑
 - [x] 让 `account-honor-center.tsx` 中的 tagline 编辑逻辑提取到 `owner/tagline-editor.tsx`
 - [ ] 最终使 `account-honor-panel.tsx` 只剩下对 `shared/` 和 `owner/` 的组合调用
 
@@ -48,6 +50,7 @@ account-honor/
 - 新增结构契约：`account-honor-owner-layer.test.ts`
 - 已验证 `account-honor-center.tsx` 不再直接保存签名。
 - 已验证 `account-honor-panel.tsx` 不再包含 Agent 展示配置状态、`honorShowcasedAgentIds` 写入和重复的 `selectShowcasedAgents`。
+- 已验证 `account-honor-panel.tsx` 不再包含项目/议题/投资展示配置状态和 `honorShowcasedProjectIds` / `honorShowcasedIssueIds` / `honorShowcasedInvestmentProjectIds` / `honorShowcasedInvestmentIssueIds` 写入。
 - 验证命令：
   - `npm test -- src/features/account-honor/account-honor-owner-layer.test.ts`
   - `npm run typecheck`

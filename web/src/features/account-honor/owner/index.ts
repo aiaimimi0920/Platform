@@ -11,6 +11,8 @@ export {
 
 export { AccountHonorCenter } from "../account-honor-center";
 export { AccountHonorEntry } from "../account-honor-entry";
+export { useArchiveShowcaseConfig } from "./archive-showcase-config";
+export type { UseArchiveShowcaseConfigProps } from "./archive-showcase-config";
 export { useAgentShowcaseConfig } from "./agent-showcase-config";
 export type { UseAgentShowcaseConfigProps } from "./agent-showcase-config";
 export { AccountHonorTaglineEditor } from "./tagline-editor";
