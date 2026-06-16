@@ -43,6 +43,13 @@ const taskActionNames = [
   "taskLifecycleAction",
 ] as const;
 
+const accountEconomyActionNames = [
+  "redeemCodeAction",
+  "claimMailboxAttachmentAction",
+  "claimMissionAction",
+  "exchangeObsidianToMiraAction",
+] as const;
+
 function assertServerActionBoundary(args: {
   platformActions: string;
   domainActions: string;
@@ -107,6 +114,18 @@ describe("platform action module boundaries", () => {
       domainActions: taskActions,
       domainModule: "platform-task-actions.ts",
       actionNames: taskActionNames,
+    });
+  });
+
+  it("keeps account economy actions in their domain module", () => {
+    const platformActions = readFileSync(join(libDir, "platform-actions.ts"), "utf8");
+    const accountEconomyActions = readFileSync(join(libDir, "platform-account-economy-actions.ts"), "utf8");
+
+    assertServerActionBoundary({
+      platformActions,
+      domainActions: accountEconomyActions,
+      domainModule: "platform-account-economy-actions.ts",
+      actionNames: accountEconomyActionNames,
     });
   });
 });
