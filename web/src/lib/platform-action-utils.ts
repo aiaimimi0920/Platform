@@ -99,6 +99,29 @@ export function appendQueryStringToRedirectTarget(redirectTo: string, params: UR
   return `${base}${base.includes("?") ? "&" : "?"}${params.toString()}${hash}`;
 }
 
+export function setRedirectTargetQueryParams(
+  redirectTo: string,
+  entries: Record<string, string | null | undefined>,
+) {
+  const hashIndex = redirectTo.indexOf("#");
+  const base = hashIndex >= 0 ? redirectTo.slice(0, hashIndex) : redirectTo;
+  const hash = hashIndex >= 0 ? redirectTo.slice(hashIndex) : "";
+  const queryIndex = base.indexOf("?");
+  const pathname = queryIndex >= 0 ? base.slice(0, queryIndex) : base;
+  const params = new URLSearchParams(queryIndex >= 0 ? base.slice(queryIndex + 1) : "");
+
+  for (const [key, value] of Object.entries(entries)) {
+    if (value && value.trim().length > 0) {
+      params.set(key, value);
+    } else {
+      params.delete(key);
+    }
+  }
+
+  const query = params.toString();
+  return `${pathname}${query ? `?${query}` : ""}${hash}`;
+}
+
 export function buildStatusRedirect(redirectTo: string, status: "success" | "error", message: string) {
   return appendQueryStringToRedirectTarget(redirectTo, new URLSearchParams({ status, message }));
 }

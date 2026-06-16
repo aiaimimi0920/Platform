@@ -32,6 +32,17 @@ const opinionActionNames = [
   "batchRestoreOpinionMonthlySettlementItemsAction",
 ] as const;
 
+const taskActionNames = [
+  "createTaskAction",
+  "applyTaskAction",
+  "dispatchTaskAction",
+  "createTaskAgentProposalAction",
+  "acceptTaskAgentProposalAction",
+  "rejectTaskAgentProposalAction",
+  "updateDevelopmentQueueStatusAction",
+  "taskLifecycleAction",
+] as const;
+
 function assertServerActionBoundary(args: {
   platformActions: string;
   domainActions: string;
@@ -84,6 +95,18 @@ describe("platform action module boundaries", () => {
       domainActions: opinionActions,
       domainModule: "platform-opinion-actions.ts",
       actionNames: opinionActionNames,
+    });
+  });
+
+  it("keeps task and development queue actions in their domain module", () => {
+    const platformActions = readFileSync(join(libDir, "platform-actions.ts"), "utf8");
+    const taskActions = readFileSync(join(libDir, "platform-task-actions.ts"), "utf8");
+
+    assertServerActionBoundary({
+      platformActions,
+      domainActions: taskActions,
+      domainModule: "platform-task-actions.ts",
+      actionNames: taskActionNames,
     });
   });
 });
