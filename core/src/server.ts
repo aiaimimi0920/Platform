@@ -14,6 +14,7 @@ import { ensureFeatureModules } from "@/platform/feature-modules/service";
 import { publicSurfaceRouter } from "@/platform/public-surfaces/router";
 import { ensurePublicSurfaceSnapshot } from "@/platform/public-surfaces/service";
 import { HttpError } from "@/platform/errors";
+import { platformCorsOrigin, serializePlatformError } from "@/platform/http-server";
 import { outboxRouter } from "@/platform/outbox/router";
 import { opinionHubRouter } from "@/modules/opinion-hub/router";
 import { productOrderItemRouter } from "@/modules/product-order-item/router";
@@ -25,7 +26,7 @@ export async function buildServer() {
   const app = Fastify({ logger: true });
 
   await app.register(cors, {
-    origin: true,
+    origin: platformCorsOrigin,
     credentials: true,
   });
 
@@ -57,24 +58,12 @@ export async function buildServer() {
   await app.register(teaRouter);
 
   app.setErrorHandler((error, _request, reply) => {
-    if (error instanceof HttpError) {
-      return reply.status(error.statusCode).send({
-        error: {
-          code: error.code,
-          message: error.message,
-          moduleKey: error.moduleKey,
-        },
-      });
+    if (!(error instanceof HttpError)) {
+      app.log.error(error);
     }
 
-    const unexpected = error as Error;
-    app.log.error(unexpected);
-    return reply.status(500).send({
-      error: {
-        code: "BAD_REQUEST",
-        message: unexpected.message || "Unexpected error",
-      },
-    });
+    const serialized = serializePlatformError(error);
+    return reply.status(serialized.statusCode).send(serialized.body);
   });
 
   return app;

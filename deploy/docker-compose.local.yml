@@ -159,6 +159,7 @@ services:
       DATABASE_URL: postgres://neuroloom:neuroloom@postgres:5432/neuroloom
       REDIS_URL: redis://valkey:6379
       INTERNAL_API_TOKEN: local-internal-token
+      PLATFORM_ALLOWED_ORIGINS: http://localhost:${WEB_HOST_PORT:-3028},http://127.0.0.1:${WEB_HOST_PORT:-3028}
       PLATFORM_OPERATOR_USER_IDS: local-operator,local-dev-account
       OAUTH_CLIENT_ID: local-client
       OAUTH_CLIENT_SECRET: local-secret
@@ -201,6 +202,7 @@ services:
       REDIS_URL: redis://valkey:6379
       ACCOUNT_REDIS_URL: redis://valkey:6379
       INTERNAL_API_TOKEN: local-internal-token
+      PLATFORM_ALLOWED_ORIGINS: http://localhost:${WEB_HOST_PORT:-3028},http://127.0.0.1:${WEB_HOST_PORT:-3028}
       BENEFIT_SERVICE_API_KEY_SECRET: local-benefit-api-secret
       AI_GATEWAY_API_KEY_SECRET: local-benefit-api-secret
       AI_GATEWAY_INTERNAL_URL: http://gateway:4200

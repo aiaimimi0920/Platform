@@ -79,7 +79,15 @@ export type InternalUserContext = {
   username?: string;
 };
 
-export type ApiErrorCode = "MODULE_DISABLED" | "UNAUTHORIZED" | "NOT_FOUND" | "BAD_REQUEST" | "CONFLICT" | "CONTENT_FILTERED" | "QUOTA_EXCEEDED";
+export type ApiErrorCode =
+  | "MODULE_DISABLED"
+  | "UNAUTHORIZED"
+  | "NOT_FOUND"
+  | "BAD_REQUEST"
+  | "CONFLICT"
+  | "CONTENT_FILTERED"
+  | "QUOTA_EXCEEDED"
+  | "INTERNAL_SERVER_ERROR";
 
 export type ApiErrorPayload = {
   code: ApiErrorCode;

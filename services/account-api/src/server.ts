@@ -37,6 +37,10 @@ import {
 } from "@neuro/backend-foundation/platform/internal-auth";
 import { HttpError } from "@neuro/backend-foundation/platform/errors";
 import { ensureFeatureModules } from "@neuro/backend-foundation/platform/feature-modules/service";
+import {
+  platformCorsOrigin,
+  serializePlatformError,
+} from "@neuro/backend-foundation/platform/http-server";
 
 import {
   buildNotificationWebhookCatalogFromEnv,
@@ -110,7 +114,7 @@ export async function buildServer() {
   const app = Fastify({ logger: true });
 
   await app.register(cors, {
-    origin: true,
+    origin: platformCorsOrigin,
     credentials: true,
   });
   await app.register(multipart, {
@@ -604,24 +608,12 @@ export async function buildServer() {
   );
 
   app.setErrorHandler((error, _request, reply) => {
-    if (error instanceof HttpError) {
-      return reply.status(error.statusCode).send({
-        error: {
-          code: error.code,
-          message: error.message,
-          moduleKey: error.moduleKey,
-        },
-      });
+    if (!(error instanceof HttpError)) {
+      app.log.error(error);
     }
 
-    const unexpected = error as Error;
-    app.log.error(unexpected);
-    return reply.status(500).send({
-      error: {
-        code: "BAD_REQUEST",
-        message: unexpected.message || "Unexpected error",
-      },
-    });
+    const serialized = serializePlatformError(error);
+    return reply.status(serialized.statusCode).send(serialized.body);
   });
 
   return app;
