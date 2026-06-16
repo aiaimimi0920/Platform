@@ -10,9 +10,22 @@ type PendingEvent = {
   maxAttempts: number;
 };
 
+type StaleProcessingRow = {
+  id: string;
+  attempts: number | string;
+  max_attempts: number | string | null;
+  last_error: string | null;
+};
+
+type StaleProcessingRecoveryResult = {
+  requeuedCount: number;
+  deadLetterCount: number;
+};
+
 const BACKOFF_BASE_SECONDS = 5;
 const BACKOFF_CAP_SECONDS = 300;
 const MAX_ERROR_MESSAGE_LENGTH = 1024;
+const DEFAULT_STALE_PROCESSING_SCAN_LIMIT = 100;
 
 function computeBackoffSeconds(attempts: number): number {
   const exponent = Math.max(0, attempts - 1);
@@ -26,6 +39,92 @@ function normalizeErrorMessage(message?: string): string | null {
   if (!trimmed) return null;
   if (trimmed.length <= MAX_ERROR_MESSAGE_LENGTH) return trimmed;
   return `${trimmed.slice(0, MAX_ERROR_MESSAGE_LENGTH)}...`;
+}
+
+function shouldDeadLetterRecoveredProcessingEvent(attempts: number, maxAttempts: number) {
+  return attempts >= maxAttempts;
+}
+
+function buildProcessingRecoveryErrorMessage(
+  previousError: string | null | undefined,
+  outcome: "requeued" | "dead_letter",
+) {
+  const suffix =
+    outcome === "dead_letter"
+      ? "processing lease expired before completion; moved to dead_letter"
+      : "processing lease expired before completion; requeued for retry";
+  return normalizeErrorMessage(previousError ? `${previousError} | ${suffix}` : suffix);
+}
+
+export async function requeueStaleProcessingEvents(
+  staleAfterMs: number,
+  limit = DEFAULT_STALE_PROCESSING_SCAN_LIMIT,
+): Promise<StaleProcessingRecoveryResult> {
+  const client = await pgPool.connect();
+  try {
+    await client.query("begin");
+    const result = await client.query<StaleProcessingRow>(
+      `
+        select id, attempts, max_attempts, last_error
+        from outbox_events
+        where status = 'processing'
+          and consumer_service = 'account'
+          and updated_at <= now() - ($1::int * interval '1 millisecond')
+        order by updated_at asc
+        limit $2
+        for update skip locked
+      `,
+      [staleAfterMs, limit],
+    );
+
+    let requeuedCount = 0;
+    let deadLetterCount = 0;
+
+    for (const row of result.rows) {
+      const attempts = Number(row.attempts);
+      const maxAttempts = Number(row.max_attempts ?? 5) || 5;
+      if (shouldDeadLetterRecoveredProcessingEvent(attempts, maxAttempts)) {
+        await client.query(
+          `
+            update outbox_events
+            set
+              status = 'dead_letter',
+              last_error = $2,
+              updated_at = now()
+            where id = $1
+          `,
+          [row.id, buildProcessingRecoveryErrorMessage(row.last_error, "dead_letter")],
+        );
+        deadLetterCount += 1;
+        continue;
+      }
+
+      await client.query(
+        `
+          update outbox_events
+          set
+            status = 'pending',
+            available_at = now(),
+            last_error = $2,
+            updated_at = now()
+          where id = $1
+        `,
+        [row.id, buildProcessingRecoveryErrorMessage(row.last_error, "requeued")],
+      );
+      requeuedCount += 1;
+    }
+
+    await client.query("commit");
+    return {
+      requeuedCount,
+      deadLetterCount,
+    };
+  } catch (error) {
+    await client.query("rollback");
+    throw error;
+  } finally {
+    client.release();
+  }
 }
 
 export async function pollPendingEvents(limit = 10): Promise<PendingEvent[]> {

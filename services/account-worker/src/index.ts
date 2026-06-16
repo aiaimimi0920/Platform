@@ -60,7 +60,12 @@ import {
   startWorkerHealthServer,
 } from "@/health";
 import { dispatchMailboxOpsCampaigns, handleEvent } from "@/handlers";
-import { markEventFailed, markEventProcessed, pollPendingEvents } from "@/outbox";
+import {
+  markEventFailed,
+  markEventProcessed,
+  pollPendingEvents,
+  requeueStaleProcessingEvents,
+} from "@/outbox";
 
 let nextProductShadowSyncAt = 0;
 let nextBenefitGrantSyncAt = 0;
@@ -75,6 +80,16 @@ let nextGatewayRateLimitHotspotSnapshotAt = 0;
 let nextGatewayRateLimitHotspotAnomalySnapshotAt = 0;
 
 async function cycle() {
+  const recovered = await requeueStaleProcessingEvents(
+    env.processingLeaseTimeoutMs,
+    env.processingRecoveryLimit,
+  );
+  if (recovered.requeuedCount > 0 || recovered.deadLetterCount > 0) {
+    console.warn(
+      `[account-worker] recovered stale processing events: requeued=${recovered.requeuedCount}, deadLetter=${recovered.deadLetterCount}`,
+    );
+  }
+
   const events = await pollPendingEvents();
   for (const event of events) {
     try {
