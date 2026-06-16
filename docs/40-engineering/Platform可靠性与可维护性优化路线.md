@@ -180,16 +180,39 @@
 
 目的：降低 Web server actions 的单文件认知负担，避免 account / gateway / tea / agent execution 逻辑互相耦合。
 
+当前已落地：
+
+- `web/src/lib/platform-action-utils.ts`
+  - 抽出跨 action 复用的 redirect、query、表单值解析和错误消息工具。
+- `web/src/lib/platform-commerce-actions.ts`
+  - 承载商品、订单、优惠码、CSV 预览/导入、市场挂牌/购买相关 server actions。
+- `web/src/lib/platform-opinion-actions.ts`
+  - 承载议题、投票、讨论、审核、月度候补池结算及批量排除/恢复相关 server actions。
+- `web/src/lib/platform-actions-boundary.test.ts`
+  - 固化 domain action 文件必须以 `"use server";` 开头。
+  - 固化旧 `platform-actions.ts` 入口只保留薄 wrapper，避免业务实现重新回流到总文件。
+- `web/src/lib/platform-actions.ts`
+  - 保持现有页面 import path 兼容。
+  - 从约 6911 行降到 6245 行。
+
+实现约束：
+
+- Next.js `"use server"` 文件不能使用 `export { fooAction } from "@/lib/foo-actions"` 这类 re-export；构建会报 `Only async functions are allowed to be exported in a "use server" file.`。
+- 兼容旧 import path 时必须使用显式 async wrapper：
+  - `import { fooAction as fooActionImpl } from "@/lib/foo-actions";`
+  - `export async function fooAction(formData: FormData) { return fooActionImpl(formData); }`
+- 后续每拆一个 domain，都要同步扩展 `platform-actions-boundary.test.ts`，防止 wrapper 退化为 re-export 或 domain 实现回流。
+
 建议拆分方向：
 
-1. `web/src/lib/platform-actions.ts` 只保留薄导出或删除。
-2. 按业务线拆入：
+1. 继续让 `web/src/lib/platform-actions.ts` 收敛为薄 wrapper；等所有页面调用路径迁走后再删除。
+2. 按业务线继续拆入：
    - account actions
    - agent execution actions
    - gateway ops actions
    - tea actions
    - economy / wallet actions
-3. 每个 actions 文件只依赖对应 client：
+3. 每个 actions 文件尽量只依赖对应 client：
    - `core-client`
    - `account-request`
    - `gateway-request`
