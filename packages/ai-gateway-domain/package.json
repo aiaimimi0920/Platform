@@ -9,7 +9,8 @@
     "pretypecheck": "npm run build --workspace @neuro/contracts && npm run build --workspace @neuro/backend-foundation",
     "build": "tsc -p tsconfig.build.json && tsc-alias -p tsconfig.build.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "db:migrate": "node dist/scripts/migrate.js"
+    "db:migrate": "node dist/scripts/migrate.js",
+    "test": "node --test --import tsx src/modules/gateway/adaptive-concurrency.test.ts src/modules/gateway/analysis-alert.test.ts src/modules/gateway/analysis-anomaly.test.ts src/modules/gateway/analysis-auto-remediation.test.ts src/modules/gateway/analysis-baseline.test.ts src/modules/gateway/analysis-diff.test.ts src/modules/gateway/analysis-escalation.test.ts src/modules/gateway/analysis-export.test.ts src/modules/gateway/analysis-incident.test.ts src/modules/gateway/analysis-inventory.test.ts src/modules/gateway/analysis-policy.test.ts src/modules/gateway/analysis-provider-routing.test.ts src/modules/gateway/analysis-remediation.test.ts src/modules/gateway/analysis-remediation-execution.test.ts src/modules/gateway/analysis-remediation-impact.test.ts src/modules/gateway/analysis-remediation-effectiveness.test.ts src/modules/gateway/analysis-remediation-snapshot-anomaly.test.ts src/modules/gateway/analysis-remediation-snapshot-inventory.test.ts src/modules/gateway/analysis-remediation-snapshot-trend.test.ts src/modules/gateway/analysis-timeline.test.ts src/modules/gateway/analysis-trend.test.ts src/modules/gateway/balance-status.test.ts src/modules/gateway/content-filter.test.ts src/modules/gateway/standard-error.test.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.918.0",

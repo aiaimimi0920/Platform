@@ -9,7 +9,8 @@
     "pretypecheck": "npm run build --workspace @neuro/contracts && npm run build --workspace @neuro/backend-foundation",
     "build": "tsc -p tsconfig.json && tsc-alias -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "db:migrate": "node dist/scripts/migrate.js"
+    "db:migrate": "node dist/scripts/migrate.js",
+    "test": "node --test --import tsx src/modules/email-native/model.test.ts src/modules/email-ingress/model.test.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.918.0",
