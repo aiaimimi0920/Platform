@@ -50,6 +50,22 @@ const accountEconomyActionNames = [
   "exchangeObsidianToMiraAction",
 ] as const;
 
+const fulfillmentActionNames = [
+  "reportItemUnitIssueAction",
+  "reconcileItemAction",
+  "resolveItemManualReviewAction",
+  "claimItemManualReviewAction",
+  "releaseItemManualReviewAction",
+  "triggerManualReviewAutoRebalanceAction",
+  "triggerManualReviewAutoAssignSlaAction",
+  "releaseStaleItemManualReviewsAction",
+  "claimNextManualReviewAction",
+  "escalateFulfillmentAnomaliesAction",
+  "assignBalancedManualReviewAction",
+  "rebalanceManualReviewQueueAction",
+  "assignManualReviewAction",
+] as const;
+
 function assertServerActionBoundary(args: {
   platformActions: string;
   domainActions: string;
@@ -126,6 +142,18 @@ describe("platform action module boundaries", () => {
       domainActions: accountEconomyActions,
       domainModule: "platform-account-economy-actions.ts",
       actionNames: accountEconomyActionNames,
+    });
+  });
+
+  it("keeps fulfillment and manual review actions in their domain module", () => {
+    const platformActions = readFileSync(join(libDir, "platform-actions.ts"), "utf8");
+    const fulfillmentActions = readFileSync(join(libDir, "platform-fulfillment-actions.ts"), "utf8");
+
+    assertServerActionBoundary({
+      platformActions,
+      domainActions: fulfillmentActions,
+      domainModule: "platform-fulfillment-actions.ts",
+      actionNames: fulfillmentActionNames,
     });
   });
 });
