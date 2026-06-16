@@ -184,16 +184,19 @@
 
 - `web/src/lib/platform-action-utils.ts`
   - 抽出跨 action 复用的 redirect、query、表单值解析和错误消息工具。
+  - 新增 `setRedirectTargetQueryParams(...)`，供拆出的 task/agent 等 domain action 复用。
 - `web/src/lib/platform-commerce-actions.ts`
   - 承载商品、订单、优惠码、CSV 预览/导入、市场挂牌/购买相关 server actions。
 - `web/src/lib/platform-opinion-actions.ts`
   - 承载议题、投票、讨论、审核、月度候补池结算及批量排除/恢复相关 server actions。
+- `web/src/lib/platform-task-actions.ts`
+  - 承载任务发布/申请/派发、Agent 提案、开发排期状态和任务生命周期相关 server actions。
 - `web/src/lib/platform-actions-boundary.test.ts`
   - 固化 domain action 文件必须以 `"use server";` 开头。
   - 固化旧 `platform-actions.ts` 入口只保留薄 wrapper，避免业务实现重新回流到总文件。
 - `web/src/lib/platform-actions.ts`
   - 保持现有页面 import path 兼容。
-  - 从约 6911 行降到 6245 行。
+  - 从约 6911 行降到 6078 行。
 
 实现约束：
 
