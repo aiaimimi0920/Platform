@@ -28,7 +28,11 @@
     "compose:up": "docker compose -f deploy/docker-compose.local.yml up --build",
     "compose:down": "docker compose -f deploy/docker-compose.local.yml down -v",
     "test:focused": "node --test --import tsx core/src/modules/agent-execution/callback-governance.test.ts core/src/modules/agent-execution/auto-remediation-analysis.test.ts core/src/modules/agent-execution/operator-run-analysis.test.ts core/src/modules/agent-execution/operator-callback-analysis.test.ts core/src/modules/agent-execution/operator-remediation-analysis.test.ts core/src/modules/agent-execution/operator-runtime-session-analysis.test.ts core/src/modules/agent-registry/callback-compatibility-analysis.test.ts core/src/modules/product-order-item/operator-ops-analysis.test.ts core/src/modules/user-progression/service.test.ts core/src/platform/outbox/ops-analysis.test.ts worker/src/outbox.test.ts core/src/modules/arbitration/case-analysis.test.ts core/src/modules/development-queue/types.test.ts core/src/modules/tea/client.test.ts core/src/modules/tea/router.test.ts core/src/modules/tea/real-daemon-smoke.test.ts services/account-api/src/notification-webhook-catalog.test.ts services/account-worker/src/notification-webhook.test.ts web/src/lib/agent-execution-launch-presets.test.ts web/src/lib/agent-execution-runtime-guidance.test.ts web/src/lib/agent-execution-runtime-session-playbook.test.ts web/src/lib/agent-execution-remediation-slices.test.ts web/src/lib/agent-execution-callback-guidance.test.ts web/src/lib/agent-callback-policies.test.ts web/src/lib/economy.test.ts web/src/lib/gateway-conversation-archive-client.test.ts web/src/lib/tea-client.test.ts web/src/lib/tea-route-utils.test.ts web/src/lib/tea-api-handlers.test.ts web/src/lib/tea-detail-controls.test.ts web/src/lib/tea-real-core-smoke.test.ts web/src/lib/tea-web-ui-smoke-harness-contract.test.ts web/src/app/ops/gateway/providers/provider-create-catalog.test.ts",
-    "test:unit": "npm run test -ws --if-present"
+    "test:unit": "npm run test -ws --if-present",
+    "test:integration": "npm run test:integration -ws --if-present",
+    "test:vitest": "npm run test:vitest -ws --if-present",
+    "test:debt": "npm run test:debt -ws --if-present",
+    "test:all": "npm run test && npm run test:vitest && npm run test:integration"
   },
   "devDependencies": {
     "tsc-alias": "^1.8.16"

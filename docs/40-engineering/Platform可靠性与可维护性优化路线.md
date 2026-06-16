@@ -144,6 +144,21 @@
 
 目的：让“稳定单元测试”和“需要外部依赖/特殊 runner 的测试”边界清楚。
 
+当前已落地：
+
+- 根级入口：
+  - `npm run test`
+  - `npm run test:unit`
+  - `npm run test:vitest`
+  - `npm run test:integration`
+  - `npm run test:all`
+  - `npm run test:debt`
+- `@neuro/ai-gateway-domain`：
+  - `test`：稳定 Node runner 单元测试集合。
+  - `test:vitest`：已确认可稳定运行的 Vitest 子集。
+  - `test:integration`：需要 `AI_GATEWAY_INTEGRATION_TESTS=1`、`DATABASE_URL`、`REDIS_URL` 才执行；默认显式 skip，避免本地/CI 无依赖时挂住。
+  - `test:debt`：保留仍需清理的历史测试债务，当前包括旧 Vitest 断言漂移和 Node experimental module mock 重复注册问题。
+
 建议动作：
 
 1. 给每个 workspace 增加明确分层：
@@ -285,4 +300,3 @@
    - 受影响 workspace 的 `npm run test --workspace ...`
    - 受影响 workspace 的 `npm run typecheck --workspace ...`
    - 根级 `npm run test`，除非明确只改文档。
-
