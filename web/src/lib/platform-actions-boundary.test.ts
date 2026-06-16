@@ -17,32 +17,73 @@ const commerceActionNames = [
   "purchaseListingAction",
 ] as const;
 
+const opinionActionNames = [
+  "createOpinionTopicAction",
+  "supportOpinionTopicAction",
+  "opposeOpinionTopicAction",
+  "archiveOpinionTopicAction",
+  "adoptOpinionTopicAction",
+  "createOpinionTopicCommentAction",
+  "updateOpinionHubSettingsAction",
+  "moderateOpinionTopicAction",
+  "runOpinionMonthlyLeaderSettlementAction",
+  "updateOpinionMonthlySettlementItemDecisionAction",
+  "batchExcludeOpinionMonthlySettlementItemsAction",
+  "batchRestoreOpinionMonthlySettlementItemsAction",
+] as const;
+
+function assertServerActionBoundary(args: {
+  platformActions: string;
+  domainActions: string;
+  domainModule: string;
+  actionNames: readonly string[];
+}) {
+  assert.match(args.domainActions, /^"use server";/);
+
+  for (const actionName of args.actionNames) {
+    const implementationName = `${actionName}Impl`;
+    assert.match(
+      args.domainActions,
+      new RegExp(`export async function ${actionName}\\(`),
+      `${actionName} should be implemented in ${args.domainModule}`,
+    );
+    assert.match(
+      args.platformActions,
+      new RegExp(`${actionName} as ${implementationName}`),
+      `${actionName} should be imported as a compatibility wrapper implementation`,
+    );
+    assert.match(
+      args.platformActions,
+      new RegExp(`export async function ${actionName}\\(formData: FormData\\) \\{\\s+return ${implementationName}\\(formData\\);\\s+\\}`),
+      `${actionName} should only delegate from the platform-actions compatibility layer`,
+    );
+  }
+
+  assert.match(args.platformActions, new RegExp(`from "@\\/lib\\/${args.domainModule.replace(".ts", "")}"`));
+}
+
 describe("platform action module boundaries", () => {
   it("keeps commerce/product/discount actions in their domain module", () => {
     const platformActions = readFileSync(join(libDir, "platform-actions.ts"), "utf8");
     const commerceActions = readFileSync(join(libDir, "platform-commerce-actions.ts"), "utf8");
 
-    assert.match(commerceActions, /^"use server";/);
+    assertServerActionBoundary({
+      platformActions,
+      domainActions: commerceActions,
+      domainModule: "platform-commerce-actions.ts",
+      actionNames: commerceActionNames,
+    });
+  });
 
-    for (const actionName of commerceActionNames) {
-      const implementationName = `${actionName}Impl`;
-      assert.match(
-        commerceActions,
-        new RegExp(`export async function ${actionName}\\(`),
-        `${actionName} should be implemented in platform-commerce-actions.ts`,
-      );
-      assert.match(
-        platformActions,
-        new RegExp(`${actionName} as ${implementationName}`),
-        `${actionName} should be imported as a compatibility wrapper implementation`,
-      );
-      assert.match(
-        platformActions,
-        new RegExp(`export async function ${actionName}\\(formData: FormData\\) \\{\\s+return ${implementationName}\\(formData\\);\\s+\\}`),
-        `${actionName} should only delegate from the platform-actions compatibility layer`,
-      );
-    }
+  it("keeps opinion actions in their domain module", () => {
+    const platformActions = readFileSync(join(libDir, "platform-actions.ts"), "utf8");
+    const opinionActions = readFileSync(join(libDir, "platform-opinion-actions.ts"), "utf8");
 
-    assert.match(platformActions, /from "@\/lib\/platform-commerce-actions"/);
+    assertServerActionBoundary({
+      platformActions,
+      domainActions: opinionActions,
+      domainModule: "platform-opinion-actions.ts",
+      actionNames: opinionActionNames,
+    });
   });
 });
