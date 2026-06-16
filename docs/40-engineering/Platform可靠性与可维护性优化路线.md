@@ -191,12 +191,14 @@
   - 承载议题、投票、讨论、审核、月度候补池结算及批量排除/恢复相关 server actions。
 - `web/src/lib/platform-task-actions.ts`
   - 承载任务发布/申请/派发、Agent 提案、开发排期状态和任务生命周期相关 server actions。
+- `web/src/lib/platform-account-economy-actions.ts`
+  - 承载兑换码、邮箱附件领取、任务奖励领取和曜石兑换米拉相关 server actions。
 - `web/src/lib/platform-actions-boundary.test.ts`
   - 固化 domain action 文件必须以 `"use server";` 开头。
   - 固化旧 `platform-actions.ts` 入口只保留薄 wrapper，避免业务实现重新回流到总文件。
 - `web/src/lib/platform-actions.ts`
   - 保持现有页面 import path 兼容。
-  - 从约 6911 行降到 6078 行。
+  - 从约 6911 行降到 6028 行。
 
 实现约束：
 
