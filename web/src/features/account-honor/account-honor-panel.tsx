@@ -3,7 +3,6 @@
 import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import Link from "next/link";
-import { createPortal } from "react-dom";
 
 import { formatAccountNumber, formatAccountRate } from "@/lib/account-center";
 import { cn } from "@/lib/cn";
@@ -23,6 +22,7 @@ import {
   AccountHomeSection,
   AccountHomeSectionHead,
 } from "@/components/account-home/templates";
+import { useAgentShowcaseConfig } from "./owner/agent-showcase-config";
 
 const HONOR_ABILITY_AXIS_COUNT = 6;
 const HONOR_ABILITY_CHART_SIZE = 288;
@@ -68,21 +68,6 @@ function buildProgressSignal(progression: AccountHonorArchiveSectionProps["progr
   }
 
   return `距下一阶 ${formatAccountNumber(progression.experienceToNextLevel)} XP`;
-}
-
-function InlineDialogCloseIcon() {
-  return (
-    <svg aria-hidden="true" className="app-account-honor-inline-action__icon" viewBox="0 0 24 24">
-      <path
-        d="M7 7 17 17M17 7 7 17"
-        fill="none"
-        stroke="currentColor"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        strokeWidth="1.8"
-      />
-    </svg>
-  );
 }
 
 function renderHonorAvatar(avatarUrl: string | null, fallback: ReactNode) {
@@ -273,21 +258,6 @@ function formatHonorCurrencyValue(value: number, currencyLabel = "MIRA") {
   return `${formatAccountNumber(value)} ${currencyLabel}`;
 }
 
-function selectShowcasedAgents(
-  agentCatalog: AccountHonorPanelData["agentCatalog"],
-  showcasedAgentIds: string[],
-) {
-  if (showcasedAgentIds.length === 0) {
-    return agentCatalog.slice(0, 4);
-  }
-
-  const catalogById = new Map(agentCatalog.map((agent) => [agent.id, agent] as const));
-  return showcasedAgentIds
-    .map((agentId) => catalogById.get(agentId) ?? null)
-    .filter((agent): agent is (typeof agentCatalog)[number] => Boolean(agent))
-    .slice(0, 4);
-}
-
 function selectShowcasedProjects(
   projectCatalog: AccountHonorArchiveSectionProps["projectCatalog"] | AccountHonorArchiveSectionProps["investmentProjectCatalog"],
   showcasedProjectIds: string[],
@@ -355,172 +325,10 @@ export function AccountHonorExecutionPanel({
 }: Pick<AccountHonorPanelData, "agentCatalog" | "agentShowcase" | "taskPerformance"> & {
   className?: string;
 }) {
-  const [agentConfigOpen, setAgentConfigOpen] = useState(false);
-  const [visibleAgentShowcase, setVisibleAgentShowcase] = useState(agentShowcase);
-  const [agentDraftIds, setAgentDraftIds] = useState(agentShowcase.map((agent) => agent.id));
-  const [savingAgentShowcase, setSavingAgentShowcase] = useState(false);
-  const [agentShowcaseError, setAgentShowcaseError] = useState<string | null>(null);
-
-  useEffect(() => {
-    setVisibleAgentShowcase(agentShowcase);
-    setAgentDraftIds(agentShowcase.map((agent) => agent.id));
-  }, [agentShowcase]);
-
-  useEffect(() => {
-    if (!agentConfigOpen) {
-      return;
-    }
-
-    function handleKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape") {
-        setAgentConfigOpen(false);
-      }
-    }
-
-    window.addEventListener("keydown", handleKeyDown);
-    return () => {
-      window.removeEventListener("keydown", handleKeyDown);
-    };
-  }, [agentConfigOpen]);
-
-  function handleOpenAgentConfig() {
-    setAgentDraftIds(visibleAgentShowcase.map((agent) => agent.id));
-    setAgentShowcaseError(null);
-    setAgentConfigOpen(true);
-  }
-
-  function toggleAgentDraft(agentId: string) {
-    setAgentShowcaseError(null);
-    setAgentDraftIds((current) => {
-      if (current.includes(agentId)) {
-        return current.filter((entry) => entry !== agentId);
-      }
-
-      if (current.length >= 4) {
-        setAgentShowcaseError("最多展示 4 个 Agent");
-        return current;
-      }
-
-      return [...current, agentId];
-    });
-  }
-
-  async function handleSaveAgentShowcase() {
-    if (savingAgentShowcase) {
-      return;
-    }
-
-    setSavingAgentShowcase(true);
-    setAgentShowcaseError(null);
-
-    try {
-      const response = await fetch("/api/account-honor/profile", {
-        method: "POST",
-        headers: {
-          "content-type": "application/json",
-        },
-        body: JSON.stringify({
-          honorShowcasedAgentIds: agentDraftIds,
-        }),
-      });
-
-      const payload = (await response.json().catch(() => null)) as { error?: string } | null;
-      if (!response.ok) {
-        throw new Error(payload?.error || "展示 Agent 保存失败");
-      }
-
-      setVisibleAgentShowcase(selectShowcasedAgents(agentCatalog, agentDraftIds));
-      setAgentConfigOpen(false);
-    } catch (error) {
-      setAgentShowcaseError(error instanceof Error ? error.message : "展示 Agent 保存失败");
-    } finally {
-      setSavingAgentShowcase(false);
-    }
-  }
-
-  const agentConfigDialog =
-    agentConfigOpen && typeof document !== "undefined"
-      ? createPortal(
-          <>
-            <button
-              aria-label="关闭 Agent 展示配置"
-              className="app-account-honor-inline-dialog__backdrop"
-              onClick={() => setAgentConfigOpen(false)}
-              type="button"
-            />
-            <div
-              aria-label="Agent 展示配置"
-              aria-modal="true"
-              className="app-account-honor-inline-dialog app-account-honor-inline-dialog--agent-config"
-              role="dialog"
-            >
-              <div className="app-account-honor-inline-dialog__head">
-                <span className="mg-terminal-kicker">展示 Agent</span>
-                <button
-                  aria-label="关闭 Agent 展示配置"
-                  className="app-account-honor-inline-dialog__close"
-                  onClick={() => setAgentConfigOpen(false)}
-                  type="button"
-                >
-                  <InlineDialogCloseIcon />
-                </button>
-              </div>
-
-              <div className="app-account-honor-agent-config__summary">
-                <span>最多展示 4 个 Agent</span>
-                <strong>{`${agentDraftIds.length}/4`}</strong>
-              </div>
-
-              {agentShowcaseError ? <p className="app-account-honor-agent-config__error">{agentShowcaseError}</p> : null}
-
-              <div className="app-account-honor-agent-config__list">
-                {agentCatalog.map((agent) => {
-                  const selected = agentDraftIds.includes(agent.id);
-
-                  return (
-                    <button
-                      className={cn(
-                        "app-account-honor-agent-config__option",
-                        selected && "app-account-honor-agent-config__option--selected",
-                      )}
-                      key={agent.id}
-                      onClick={() => toggleAgentDraft(agent.id)}
-                      type="button"
-                    >
-                      <div className="app-account-honor-agent-config__option-copy">
-                        <strong>{agent.name}</strong>
-                        <span>{agent.direction}</span>
-                      </div>
-                      <span className="app-account-honor-agent-config__option-state">
-                        {selected ? "已展示" : agent.enabled ? "可展示" : "未启用"}
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
-
-              <div className="app-account-honor-agent-config__actions">
-                <button
-                  className="app-account-honor-agent-config__secondary"
-                  onClick={() => setAgentConfigOpen(false)}
-                  type="button"
-                >
-                  取消
-                </button>
-                <button
-                  className="app-account-honor-agent-config__primary"
-                  disabled={savingAgentShowcase}
-                  onClick={() => void handleSaveAgentShowcase()}
-                  type="button"
-                >
-                  {savingAgentShowcase ? "保存中" : "保存展示"}
-                </button>
-              </div>
-            </div>
-          </>,
-          document.body,
-        )
-      : null;
+  const { agentConfigDialog, openAgentConfig, visibleAgentShowcase } = useAgentShowcaseConfig({
+    agentCatalog,
+    agentShowcase,
+  });
 
   return (
     <>
@@ -536,7 +344,7 @@ export function AccountHonorExecutionPanel({
             aria-haspopup="dialog"
             className="app-account-honor-action-button"
             disabled={agentCatalog.length === 0}
-            onClick={handleOpenAgentConfig}
+            onClick={openAgentConfig}
             type="button"
           >
             展示配置
