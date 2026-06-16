@@ -156,6 +156,8 @@ import {
   type ModerateOpinionTopicInput,
 } from "@neuro/contracts";
 
+import { fetchInternal, resolveInternalRequestTimeoutMs } from "@/lib/internal-request";
+
 export type { ManualReviewWorkloadView } from "@neuro/contracts";
 export type {
   AgentExecutionLaunchPresetView,
@@ -179,6 +181,10 @@ export type {
 
 const coreInternalUrl = process.env.CORE_INTERNAL_URL || "http://127.0.0.1:4000";
 const internalApiToken = process.env.INTERNAL_API_TOKEN || "";
+const coreRequestTimeoutMs = resolveInternalRequestTimeoutMs(
+  process.env.CORE_INTERNAL_FETCH_TIMEOUT_MS,
+  process.env.INTERNAL_FETCH_TIMEOUT_MS,
+);
 export const FEATURE_SNAPSHOT_UNAVAILABLE_NOTE = "Feature snapshot unavailable; module state unknown.";
 export const PUBLIC_SURFACE_SNAPSHOT_UNAVAILABLE_NOTE = "Public surface snapshot unavailable; defaulting to visible.";
 
@@ -455,11 +461,12 @@ function buildAgentExecutionRunQueryString(args?: AgentExecutionRunQueryArgs) {
 
 async function coreRequest<T>(pathname: string, options: CoreRequestOptions = {}): Promise<T> {
   const hasJsonBody = options.body !== undefined;
-  const response = await fetch(`${coreInternalUrl}${pathname}`, {
+  const response = await fetchInternal(`${coreInternalUrl}${pathname}`, {
     method: options.method || "GET",
     headers: buildHeaders(options.userContext, hasJsonBody),
     body: hasJsonBody ? JSON.stringify(options.body) : undefined,
     cache: "no-store",
+    timeoutMs: coreRequestTimeoutMs,
   });
 
   if (!response.ok) {

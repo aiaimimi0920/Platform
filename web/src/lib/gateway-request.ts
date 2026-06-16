@@ -1,19 +1,17 @@
 import type { ApiErrorPayload, InternalUserContext } from "@neuro/contracts";
 
+import { fetchInternal, resolveInternalRequestTimeoutMs } from "@/lib/internal-request";
+
 const gatewayInternalUrl = process.env.AI_GATEWAY_INTERNAL_URL || "http://127.0.0.1:4200";
 const gatewayManagementToken =
   process.env.AI_GATEWAY_MANAGEMENT_TOKEN ||
   process.env.GATEWAY_MANAGEMENT_TOKEN ||
   process.env.INTERNAL_API_TOKEN ||
   "";
-const gatewayRequestRetryDelaysMs = [200, 600] as const;
-const retryableGatewayFetchErrorCodes = new Set([
-  "ENOTFOUND",
-  "ECONNREFUSED",
-  "ECONNRESET",
-  "EHOSTUNREACH",
-  "ETIMEDOUT",
-]);
+const gatewayRequestTimeoutMs = resolveInternalRequestTimeoutMs(
+  process.env.GATEWAY_INTERNAL_FETCH_TIMEOUT_MS,
+  process.env.INTERNAL_FETCH_TIMEOUT_MS,
+);
 
 type GatewayRequestError = Error & {
   code?: ApiErrorPayload["code"];
@@ -30,18 +28,6 @@ type ApiErrorResponseBody = {
   message?: string;
   code?: ApiErrorPayload["code"];
 } | null;
-
-function isRetryableGatewayFetchError(error: unknown) {
-  if (!(error instanceof Error)) {
-    return false;
-  }
-  const cause = error.cause as { code?: string } | undefined;
-  return typeof cause?.code === "string" && retryableGatewayFetchErrorCodes.has(cause.code);
-}
-
-async function waitForGatewayRetry(delayMs: number) {
-  await new Promise((resolve) => setTimeout(resolve, delayMs));
-}
 
 function buildGatewayHeaders(userContext?: InternalUserContext | null, hasJsonBody = false): HeadersInit {
   const headers: Record<string, string> = {};
@@ -85,28 +71,13 @@ async function parseApiErrorResponse(response: Response): Promise<ApiErrorRespon
 
 export async function gatewayRequest<T>(pathname: string, options: GatewayRequestOptions = {}): Promise<T> {
   const hasJsonBody = options.body !== undefined;
-  let response: Response | null = null;
-
-  for (let attempt = 0; attempt <= gatewayRequestRetryDelaysMs.length; attempt += 1) {
-    try {
-      response = await fetch(`${gatewayInternalUrl}${pathname}`, {
-        method: options.method || "GET",
-        headers: buildGatewayHeaders(options.userContext, hasJsonBody),
-        body: hasJsonBody ? JSON.stringify(options.body) : undefined,
-        cache: "no-store",
-      });
-      break;
-    } catch (error) {
-      if (!isRetryableGatewayFetchError(error) || attempt === gatewayRequestRetryDelaysMs.length) {
-        throw error;
-      }
-      await waitForGatewayRetry(gatewayRequestRetryDelaysMs[attempt]);
-    }
-  }
-
-  if (!response) {
-    throw new Error(`Gateway request failed before response: ${pathname}`);
-  }
+  const response = await fetchInternal(`${gatewayInternalUrl}${pathname}`, {
+    method: options.method || "GET",
+    headers: buildGatewayHeaders(options.userContext, hasJsonBody),
+    body: hasJsonBody ? JSON.stringify(options.body) : undefined,
+    cache: "no-store",
+    timeoutMs: gatewayRequestTimeoutMs,
+  });
 
   if (!response.ok) {
     const payload = await parseApiErrorResponse(response);
