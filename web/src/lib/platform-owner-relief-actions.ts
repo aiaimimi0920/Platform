@@ -4,7 +4,9 @@ import { redirect } from "next/navigation";
 
 import {
   clearOperatorAgentExecutionOwnerReliefHandoffDefault,
+  finalizeOperatorAgentExecutionOwnerReliefRun,
   openOperatorAgentExecutionOwnerReliefRunHandoff,
+  reopenOperatorAgentExecutionOwnerReliefRun,
   resolveOperatorAgentExecutionOwnerReliefRunHandoff,
   saveOperatorAgentExecutionOwnerReliefHandoffDefault,
 } from "@/lib/account-client";
@@ -13,6 +15,7 @@ import {
   parseOwnerReliefRunHandoffFocusSection,
   parseOwnerReliefRunHandoffFollowUpProfile,
   parseOwnerReliefRunHandoffTargetType,
+  parseOwnerReliefRunResultStatus,
   readAgentCallbackOpsFollowUp,
   readOwnerReliefAction,
   readOwnerReliefRunId,
@@ -172,6 +175,122 @@ export async function resolveAgentExecutionOwnerReliefHandoffAction(formData: Fo
         ...followUp,
         ownerReliefAction,
         ownerReliefRunId,
+      }),
+    );
+  }
+}
+
+export async function finalizeAgentExecutionOwnerReliefRunAction(formData: FormData) {
+  const userContext = await requirePlatformOperatorUserContext();
+  const followUp = readAgentCallbackOpsFollowUp(formData);
+  const ownerReliefAction = readOwnerReliefAction(formData);
+  const ownerReliefRunId = readOwnerReliefRunId(formData);
+  const resultStatus = parseOwnerReliefRunResultStatus(formData.get("ownerReliefRunResultStatus"));
+  const note = String(formData.get("ownerReliefRunResultNote") || "").trim() || null;
+  const handoffTargetType = parseOwnerReliefRunHandoffTargetType(
+    formData.get("ownerReliefRunHandoffTargetType"),
+  );
+  const handoffTarget = String(formData.get("ownerReliefRunHandoffTarget") || "").trim() || null;
+
+  if (!ownerReliefRunId) {
+    redirect(
+      buildAgentCallbackOpsRedirect({
+        result: "error",
+        message: "当前没有可结案的 owner relief run。",
+        ...followUp,
+        ownerReliefAction,
+      }),
+    );
+  }
+  if (!resultStatus) {
+    redirect(
+      buildAgentCallbackOpsRedirect({
+        result: "error",
+        message: "请选择有效的 owner relief closeout 结果。",
+        ...followUp,
+        ownerReliefAction,
+        ownerReliefRunId,
+      }),
+    );
+  }
+  if (resultStatus === "handed_off" && !handoffTargetType) {
+    redirect(
+      buildAgentCallbackOpsRedirect({
+        result: "error",
+        message: "结案为 handed off 时必须选择 handoff target type。",
+        ...followUp,
+        ownerReliefAction,
+        ownerReliefRunId,
+      }),
+    );
+  }
+  try {
+    const run = await finalizeOperatorAgentExecutionOwnerReliefRun(userContext, ownerReliefRunId, {
+      resultStatus,
+      note,
+      handoffTargetType,
+      handoffTarget,
+    });
+    const resultLabel =
+      resultStatus === "handed_off"
+        ? `handed off (${handoffTargetType}${handoffTarget ? ` / ${handoffTarget}` : ""})`
+        : resultStatus;
+    redirect(
+      buildAgentCallbackOpsRedirect({
+        result: "success",
+        message: `Owner relief run 已结案为 ${resultLabel}。最近结果：recovered ${run.latestSummary.recoveredCount} / processed ${run.latestSummary.processedCount} / failed ${run.latestSummary.failedCount}。`,
+        ...followUp,
+        ownerReliefAction,
+        ownerReliefRunId: run.id,
+      }),
+    );
+  } catch (error) {
+    redirect(
+      buildAgentCallbackOpsRedirect({
+        result: "error",
+        message: toMessage(error, "结案 owner relief run 失败，请稍后重试。"),
+        ...followUp,
+        ownerReliefAction,
+        ownerReliefRunId,
+      }),
+    );
+  }
+}
+
+export async function reopenAgentExecutionOwnerReliefRunAction(formData: FormData) {
+  const userContext = await requirePlatformOperatorUserContext();
+  const followUp = readAgentCallbackOpsFollowUp(formData);
+  const ownerReliefRunId = readOwnerReliefRunId(formData);
+
+  if (!ownerReliefRunId) {
+    redirect(
+      buildAgentCallbackOpsRedirect({
+        result: "error",
+        message: "当前没有可复开的 owner relief run。",
+        ...followUp,
+      }),
+    );
+  }
+
+  try {
+    const run = await reopenOperatorAgentExecutionOwnerReliefRun(userContext, ownerReliefRunId);
+    redirect(
+      buildAgentCallbackOpsRedirect({
+        result: "success",
+        message: `已复开 owner relief run ${run.id}${run.reopenedFromRunId ? `，来源 ${run.reopenedFromRunId}` : ""}。`,
+        ...followUp,
+        ownerReliefRunId: run.id,
+        fragment: "runtime-session-watch",
+      }),
+    );
+  } catch (error) {
+    redirect(
+      buildAgentCallbackOpsRedirect({
+        result: "error",
+        message: toMessage(error, "复开 owner relief run 失败，请稍后重试。"),
+        ...followUp,
+        ownerReliefRunId,
+        fragment: "runtime-session-watch",
       }),
     );
   }

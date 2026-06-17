@@ -91,6 +91,8 @@ const ownerReliefActionNames = [
   "clearAgentExecutionOwnerReliefHandoffDefaultAction",
   "openAgentExecutionOwnerReliefRunHandoffAction",
   "resolveAgentExecutionOwnerReliefHandoffAction",
+  "finalizeAgentExecutionOwnerReliefRunAction",
+  "reopenAgentExecutionOwnerReliefRunAction",
 ] as const;
 
 const agentExecutionSupportActionNames = [
