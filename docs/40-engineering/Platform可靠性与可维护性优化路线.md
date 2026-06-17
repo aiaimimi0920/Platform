@@ -40,8 +40,8 @@
 
 后续可增强：
 
-- 给恢复数量、dead-letter 数量加 metrics。
-- 在 `/ops/account-worker` 页面展示最近一次 recovery 时间、数量和异常。
+- 将 recovery 快照接入持久化 metrics 后端，便于跨 worker 重启观察长期趋势。
+- 如果后续 account-worker 做多实例部署，需要把当前进程内 totals 迁到共享 metrics，避免只看到单实例计数。
 
 ### 1.2 Web internal request timeout/retry baseline
 
@@ -68,7 +68,7 @@
 
 后续可增强：
 
-- 把 timeout / retry 事件接入 operator-visible dependency notice。
+- 将当前进程内 telemetry 接入 operator-visible dependency notice 或 metrics 后端。
 - 对非幂等写请求只允许显式 opt-in retry，并要求 idempotency key。
 
 ### 1.3 Core / Account API CORS 与错误响应基线
@@ -100,8 +100,9 @@
 
 后续可增强：
 
-- 对 rejected Origin 增加低频 debug 日志，避免误配时无证据。
-- 统一 Core 与 backend-foundation 的 helper 来源；当前保留最小重复是为了避免改动 Core 的包依赖边界。
+- 将当前进程内 CORS observability 迁到集中 metrics，便于多实例聚合。
+- 可按需增加低频 debug 日志，但默认不要把 raw Origin 暴露到公开响应。
+- Core 已复用 `backend-foundation` helper；后续继续保持该 helper 无 DB / Redis / env side effect。
 
 ### 1.4 Workspace test scripts baseline
 
@@ -359,25 +360,80 @@
 
 目的：让可靠性 baseline 变成 operator-visible 状态，而不是只存在于日志。
 
+当前已落地：
+
+- Web internal request：
+  - `web/src/lib/internal-request.ts`
+    - `targetService` 标记：`core` / `account` / `gateway` / `unknown`。
+    - 进程内 telemetry 快照：`getInternalRequestTelemetrySnapshot()`。
+    - 计数项：
+      - `timeoutCount`
+      - `retryCount`
+      - `networkErrorCount`
+      - `lastEventAt`
+    - `core-client` / `account-request` / `gateway-request` 已分别传入目标服务标签。
+  - 当前边界：
+    - telemetry 是 Web server 进程内状态；多实例或重启后不会自动聚合。
+    - 当前先提供基础计数 API，后续再接入具体 ops notice 组件或集中 metrics。
+- Account worker stale outbox recovery：
+  - `services/account-worker/src/outbox.ts`
+    - `getStaleProcessingRecoverySnapshot()` 提供最近 recovery / error 快照。
+    - successful recovery 记录：
+      - `lastRecoveryAt`
+      - `lastRequeuedCount`
+      - `lastDeadLetterCount`
+      - `totalRequeuedCount`
+      - `totalDeadLetterCount`
+    - recovery 失败记录：
+      - `lastErrorAt`
+      - `lastErrorMessage`
+  - `services/account-worker/src/health.ts`
+    - `/health` / `/ready` state 增加 outbox recovery 字段：
+      - `lastOutboxRecoveryAt`
+      - `lastOutboxRecoveryStatus`
+      - `lastOutboxRecoveryRequeuedCount`
+      - `lastOutboxRecoveryDeadLetterCount`
+      - `totalOutboxRecoveryRequeuedCount`
+      - `totalOutboxRecoveryDeadLetterCount`
+      - `lastOutboxRecoveryErrorAt`
+      - `lastOutboxRecoveryErrorMessage`
+  - `web/src/app/ops/account-worker/page.tsx`
+    - Operator 页面新增 `Outbox Recovery` 概览卡与 runtime 明细行。
+- CORS：
+  - `packages/backend-foundation/src/platform/http-server.ts`
+    - `platformCorsOrigin(...)` 记录 allow/reject decision。
+    - `getPlatformCorsObservabilitySnapshot()` 暴露：
+      - 当前 `allowedOrigins`
+      - `checkedCount`
+      - `allowedCount`
+      - `rejectedCount`
+      - `lastCheckedAt`
+      - `lastRejectedAt`
+  - Core / Account API operator-only internal endpoint：
+    - `GET /v1/internal/platform/http/cors`
+    - 需要 `x-internal-api-token`。
+    - 需要 `x-neuro-user-id` 命中 `PLATFORM_OPERATOR_USER_IDS`。
+    - 只返回 allowlist 与聚合计数，不返回 raw rejected Origin。
+
 建议增加：
 
-1. Internal request：
-   - timeout count
-   - retry count
-   - network error count
-   - target service label：core / account / gateway
-2. Account worker outbox recovery：
-   - recovered count
-   - dead-lettered count
-   - last recovery time
-3. CORS：
-   - rejected origin debug count
-   - current allowlist debug endpoint，仅限 operator/internal。
+1. 将上述进程内 telemetry 接入统一 metrics sink。
+2. 在 Web ops dependency notice 中消费 internal request telemetry，明确区分：
+   - 目标服务离线 / network error。
+   - timeout。
+   - 上游 5xx。
+   - internal auth / operator auth。
+   - CORS allowlist 误配。
+3. 多实例部署时补实例维度：
+   - service name。
+   - instance id。
+   - process startedAt。
 
 完成标准：
 
-- 运维页面能解释“为什么页面不可用”：目标服务离线、超时、5xx、鉴权、CORS 配置。
-- worker 页面能解释“是否发生过 stale processing 恢复”。
+- Worker 页面已经能解释“是否发生过 stale processing 恢复”。
+- CORS internal endpoint 已能解释当前进程 allowlist 和 rejected-origin 计数。
+- Web internal request 已有 core/account/gateway 维度 timeout / retry / network error 基础计数；后续只需把快照接入具体 ops notice 或集中 metrics，即可在页面上解释“目标服务离线、超时、5xx、鉴权、CORS 配置”等不可用原因。
 
 ## 3. 推荐执行纪律
 
