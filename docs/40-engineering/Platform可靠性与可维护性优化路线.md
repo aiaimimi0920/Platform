@@ -263,6 +263,18 @@
 
 目的：让 `services/account-api/src/server.ts` 从总控文件回到 bootstrap 文件。
 
+当前已落地：
+
+- `services/account-api/src/notification-webhook-ops-router.ts`
+  - 承载 notification webhook catalog、incident saved views、incident listing 和 acknowledge/silence/clear-silence lifecycle routes。
+  - 保留原有 platform operator 鉴权、incident key 校验、saved view filter/playbook 解析与批量治理语义。
+- `services/account-api/src/server-router-boundary.test.ts`
+  - 固化 notification webhook ops routes 必须留在 router 模块。
+  - 固化 `server.ts` 只注册 `notificationWebhookOpsRouter`，不重新承载 notification webhook route path。
+- `services/account-api/src/server.ts`
+  - notification webhook 业务 route 已移出。
+  - 当前约 113 行，只保留 Fastify bootstrap、基础 plugin、health/ready、domain router 注册和 error handler。
+
 建议拆分方向：
 
 1. 抽出 notification webhook ops router：
