@@ -93,6 +93,15 @@ const ownerReliefActionNames = [
   "resolveAgentExecutionOwnerReliefHandoffAction",
 ] as const;
 
+const agentExecutionSupportActionNames = [
+  "advanceArbitrationReviewRoundAction",
+  "createAgentExecutionSubtaskAction",
+  "updateAgentExecutionStatusAction",
+  "updateAgentExecutionSubtaskStatusAction",
+  "requeueAgentExecutionAction",
+  "addAgentExecutionArtifactAction",
+] as const;
+
 function assertServerActionBoundary(args: {
   platformActions: string;
   domainActions: string;
@@ -229,6 +238,18 @@ describe("platform action module boundaries", () => {
       domainActions: ownerReliefActions,
       domainModule: "platform-owner-relief-actions.ts",
       actionNames: ownerReliefActionNames,
+    });
+  });
+
+  it("keeps agent execution support operations in their domain module", () => {
+    const platformActions = readFileSync(join(libDir, "platform-actions.ts"), "utf8");
+    const agentExecutionSupportActions = readFileSync(join(libDir, "platform-agent-execution-support-actions.ts"), "utf8");
+
+    assertServerActionBoundary({
+      platformActions,
+      domainActions: agentExecutionSupportActions,
+      domainModule: "platform-agent-execution-support-actions.ts",
+      actionNames: agentExecutionSupportActionNames,
     });
   });
 });
