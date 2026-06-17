@@ -105,6 +105,8 @@ type WorkerEnv = {
   notificationWebhookEvents: EventName[];
   notificationWebhookRouteProfiles: NotificationWebhookRouteProfileConfig[];
   notificationWebhookRoutes: NotificationWebhookRouteConfig[];
+  processingLeaseTimeoutMs: number;
+  processingRecoveryLimit: number;
   webPublicBaseUrl: string | null;
   usesDedicatedDatabase: boolean;
   usesDedicatedRedis: boolean;
@@ -208,6 +210,8 @@ const DEFAULT_GATEWAY_RATE_LIMIT_HOTSPOT_ANOMALY_SNAPSHOT_LOCK_TTL_MS = 600000;
 const DEFAULT_HEALTH_PORT = 7303;
 const DEFAULT_NOTIFICATION_WEBHOOK_TIMEOUT_MS = 5000;
 const DEFAULT_NOTIFICATION_WEBHOOK_STATE_TTL_HOURS = 24;
+const DEFAULT_PROCESSING_LEASE_TIMEOUT_MS = 5 * 60 * 1000;
+const DEFAULT_PROCESSING_RECOVERY_LIMIT = 100;
 
 const sharedDatabaseUrl = requireEnv("DATABASE_URL");
 const sharedRedisUrl = requireEnv("REDIS_URL");
@@ -498,6 +502,16 @@ export const env: WorkerEnv = {
     defaultNotificationWebhookEvents,
     defaultNotificationWebhookFormat,
     defaultNotificationWebhookTimeoutMs,
+  ),
+  processingLeaseTimeoutMs: parseNumber(
+    process.env.ACCOUNT_WORKER_PROCESSING_LEASE_TIMEOUT_MS,
+    DEFAULT_PROCESSING_LEASE_TIMEOUT_MS,
+    5_000,
+  ),
+  processingRecoveryLimit: parseNumber(
+    process.env.ACCOUNT_WORKER_PROCESSING_RECOVERY_LIMIT,
+    DEFAULT_PROCESSING_RECOVERY_LIMIT,
+    1,
   ),
   webPublicBaseUrl: process.env.WEB_PUBLIC_BASE_URL?.trim() || null,
   usesDedicatedDatabase: Boolean(accountDatabaseUrl),

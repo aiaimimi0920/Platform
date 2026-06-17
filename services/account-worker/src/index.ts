@@ -55,12 +55,18 @@ import {
   markGatewayRateLimitHotspotAnomalySnapshotLockSkipped,
   markGatewayRateLimitHotspotSnapshot,
   markGatewayRateLimitHotspotSnapshotLockSkipped,
+  markOutboxRecovery,
   markProductShadowSync,
   markWorkerCycle,
   startWorkerHealthServer,
 } from "@/health";
 import { dispatchMailboxOpsCampaigns, handleEvent } from "@/handlers";
-import { markEventFailed, markEventProcessed, pollPendingEvents } from "@/outbox";
+import {
+  markEventFailed,
+  markEventProcessed,
+  pollPendingEvents,
+  requeueStaleProcessingEvents,
+} from "@/outbox";
 
 let nextProductShadowSyncAt = 0;
 let nextBenefitGrantSyncAt = 0;
@@ -74,7 +80,31 @@ let nextGatewayAnomalyRemediationEffectivenessAnomalySnapshotAt = 0;
 let nextGatewayRateLimitHotspotSnapshotAt = 0;
 let nextGatewayRateLimitHotspotAnomalySnapshotAt = 0;
 
-async function cycle() {
+async function cycle(healthState: ReturnType<typeof createWorkerHealthState>) {
+  let recovered: Awaited<ReturnType<typeof requeueStaleProcessingEvents>>;
+  try {
+    recovered = await requeueStaleProcessingEvents(
+      env.processingLeaseTimeoutMs,
+      env.processingRecoveryLimit,
+    );
+    markOutboxRecovery(healthState, {
+      status: "success",
+      requeuedCount: recovered.requeuedCount,
+      deadLetterCount: recovered.deadLetterCount,
+    });
+  } catch (error) {
+    markOutboxRecovery(healthState, {
+      status: "error",
+      error: extractErrorMessage(error),
+    });
+    throw error;
+  }
+  if (recovered.requeuedCount > 0 || recovered.deadLetterCount > 0) {
+    console.warn(
+      `[account-worker] recovered stale processing events: requeued=${recovered.requeuedCount}, deadLetter=${recovered.deadLetterCount}`,
+    );
+  }
+
   const events = await pollPendingEvents();
   for (const event of events) {
     try {
@@ -965,7 +995,7 @@ async function main() {
 
   while (true) {
     try {
-      await cycle();
+      await cycle(healthState);
       const mailboxOpsDispatchResult = await dispatchMailboxOpsCampaigns();
       if (mailboxOpsDispatchResult.dueCount > 0) {
         console.log(

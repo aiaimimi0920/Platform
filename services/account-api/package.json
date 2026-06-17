@@ -8,7 +8,8 @@
     "prebuild": "npm run build --workspace @neuro/account-domain",
     "pretypecheck": "npm run build --workspace @neuro/account-domain",
     "build": "tsc -p tsconfig.json && tsc-alias -p tsconfig.json",
-    "test": "node --test --import tsx src/notification-webhook-catalog.test.ts",
+    "pretest": "npm run build --workspace @neuro/backend-foundation",
+    "test": "node --test --import tsx \"src/**/*.test.ts\"",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "start": "node dist/index.js",
     "dev": "tsx watch src/index.ts"

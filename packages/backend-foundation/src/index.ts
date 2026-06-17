@@ -4,6 +4,7 @@ export { redis } from "./db/redis";
 export { createPgPool, createRedisClient } from "./db/factories";
 export * from "./db/schema";
 export * from "./platform/errors";
+export * from "./platform/http-server";
 export * from "./platform/internal-auth";
 export * from "./platform/feature-modules/schema";
 export * from "./platform/feature-modules/service";

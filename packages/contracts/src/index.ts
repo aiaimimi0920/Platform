@@ -79,7 +79,15 @@ export type InternalUserContext = {
   username?: string;
 };
 
-export type ApiErrorCode = "MODULE_DISABLED" | "UNAUTHORIZED" | "NOT_FOUND" | "BAD_REQUEST" | "CONFLICT" | "CONTENT_FILTERED" | "QUOTA_EXCEEDED";
+export type ApiErrorCode =
+  | "MODULE_DISABLED"
+  | "UNAUTHORIZED"
+  | "NOT_FOUND"
+  | "BAD_REQUEST"
+  | "CONFLICT"
+  | "CONTENT_FILTERED"
+  | "QUOTA_EXCEEDED"
+  | "INTERNAL_SERVER_ERROR";
 
 export type ApiErrorPayload = {
   code: ApiErrorCode;
@@ -3939,6 +3947,14 @@ export type AccountWorkerHealthView = {
   lastSuccessAt: string | null;
   lastErrorAt: string | null;
   lastErrorMessage: string | null;
+  lastOutboxRecoveryAt: string | null;
+  lastOutboxRecoveryStatus: "success" | "error" | null;
+  lastOutboxRecoveryRequeuedCount: number | null;
+  lastOutboxRecoveryDeadLetterCount: number | null;
+  totalOutboxRecoveryRequeuedCount: number;
+  totalOutboxRecoveryDeadLetterCount: number;
+  lastOutboxRecoveryErrorAt: string | null;
+  lastOutboxRecoveryErrorMessage: string | null;
   lastProductShadowSyncAt: string | null;
   lastProductShadowSyncStatus: "success" | "error" | null;
   lastProductShadowSyncError: string | null;

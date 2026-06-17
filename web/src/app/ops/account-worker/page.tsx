@@ -393,23 +393,37 @@ export default async function AccountWorkerOpsPage({ searchParams }: AccountWork
                   平均发送 {averagePerRun(totalFlushed, recentRuns.length)} / 失败率 {failureRate(recentRuns)}
                 </p>
               </Card>
-              <Card className="app-currency-card">
-                <p className="mg-subtitle">Worker</p>
-                <h2 className="app-card-title">Shadow Sync</h2>
-                <div className="app-inline-actions">
-                  <Badge variant={getWorkerHealthStatusBadgeVariant(workerHealth?.lastProductShadowSyncStatus ?? null)}>
+                <Card className="app-currency-card">
+                  <p className="mg-subtitle">Worker</p>
+                  <h2 className="app-card-title">Shadow Sync</h2>
+                  <div className="app-inline-actions">
+                    <Badge variant={getWorkerHealthStatusBadgeVariant(workerHealth?.lastProductShadowSyncStatus ?? null)}>
                     {getWorkerHealthStatusLabel(workerHealth?.lastProductShadowSyncStatus ?? null)}
                   </Badge>
                 </div>
                 <p className="app-note">
-                  最近同步：{toLocaleDateTime(workerHealth?.lastProductShadowSyncAt ?? null)}
-                </p>
-              </Card>
-              <Card className="app-currency-card">
-                <p className="mg-subtitle">Subscriptions</p>
-                <h2 className="app-card-title">Rules</h2>
-                <div className="app-currency-card__value">{subscriptions.length}</div>
-                <p className="app-note">Pending digest {pendingDigests.length} 条。</p>
+                    最近同步：{toLocaleDateTime(workerHealth?.lastProductShadowSyncAt ?? null)}
+                  </p>
+                </Card>
+                <Card className="app-currency-card">
+                  <p className="mg-subtitle">Worker</p>
+                  <h2 className="app-card-title">Outbox Recovery</h2>
+                  <div className="app-inline-actions">
+                    <Badge variant={getWorkerHealthStatusBadgeVariant(workerHealth?.lastOutboxRecoveryStatus ?? null)}>
+                      {getWorkerHealthStatusLabel(workerHealth?.lastOutboxRecoveryStatus ?? null)}
+                    </Badge>
+                  </div>
+                  <p className="app-note">
+                    最近恢复：{toLocaleDateTime(workerHealth?.lastOutboxRecoveryAt ?? null)} / Requeued{" "}
+                    {workerHealth?.lastOutboxRecoveryRequeuedCount ?? "暂无"} / Dead-letter{" "}
+                    {workerHealth?.lastOutboxRecoveryDeadLetterCount ?? "暂无"}
+                  </p>
+                </Card>
+                <Card className="app-currency-card">
+                  <p className="mg-subtitle">Subscriptions</p>
+                  <h2 className="app-card-title">Rules</h2>
+                  <div className="app-currency-card__value">{subscriptions.length}</div>
+                  <p className="app-note">Pending digest {pendingDigests.length} 条。</p>
               </Card>
             </div>
 
@@ -595,6 +609,29 @@ export default async function AccountWorkerOpsPage({ searchParams }: AccountWork
                     <span className="app-detail-list__value">
                       {toLocaleDateTime(workerHealth.lastProductShadowSyncAt)} /{" "}
                       {workerHealth.lastProductShadowSyncError ?? "无"}
+                    </span>
+                  </div>
+                  <div className="app-detail-list__row">
+                    <span className="app-detail-list__label">Last Outbox Recovery</span>
+                    <span className="app-detail-list__value">
+                      {toLocaleDateTime(workerHealth.lastOutboxRecoveryAt)} /{" "}
+                      {workerHealth.lastOutboxRecoveryStatus ?? "unknown"} / Requeued{" "}
+                      {workerHealth.lastOutboxRecoveryRequeuedCount ?? "暂无"} / Dead-letter{" "}
+                      {workerHealth.lastOutboxRecoveryDeadLetterCount ?? "暂无"}
+                    </span>
+                  </div>
+                  <div className="app-detail-list__row">
+                    <span className="app-detail-list__label">Outbox Recovery Totals</span>
+                    <span className="app-detail-list__value">
+                      Requeued {workerHealth.totalOutboxRecoveryRequeuedCount} / Dead-letter{" "}
+                      {workerHealth.totalOutboxRecoveryDeadLetterCount}
+                    </span>
+                  </div>
+                  <div className="app-detail-list__row">
+                    <span className="app-detail-list__label">Outbox Recovery Error</span>
+                    <span className="app-detail-list__value">
+                      {toLocaleDateTime(workerHealth.lastOutboxRecoveryErrorAt)} /{" "}
+                      {workerHealth.lastOutboxRecoveryErrorMessage ?? "无"}
                     </span>
                   </div>
                 </div>

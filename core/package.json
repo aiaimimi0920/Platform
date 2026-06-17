@@ -5,17 +5,23 @@
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "scripts": {
+    "prepare:backend-foundation": "npm run build --workspace @neuro/contracts && npm run build --workspace @neuro/backend-foundation",
+    "prebuild": "npm run prepare:backend-foundation",
     "build": "tsc -p tsconfig.json && tsc-alias -p tsconfig.json",
+    "pretypecheck": "npm run prepare:backend-foundation",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "start": "node dist/index.js",
     "dev": "tsx watch src/index.ts",
-    "db:migrate": "node dist/scripts/migrate.js"
+    "db:migrate": "node dist/scripts/migrate.js",
+    "pretest": "npm run prepare:backend-foundation",
+    "test": "node --test --import tsx src/modules/agent-execution/callback-governance.test.ts src/modules/agent-execution/auto-remediation-analysis.test.ts src/modules/agent-execution/operator-run-analysis.test.ts src/modules/agent-execution/operator-callback-analysis.test.ts src/modules/agent-execution/operator-remediation-analysis.test.ts src/modules/agent-execution/operator-runtime-session-analysis.test.ts src/modules/agent-registry/callback-compatibility-analysis.test.ts src/modules/product-order-item/operator-ops-analysis.test.ts src/modules/user-progression/service.test.ts src/platform/outbox/ops-analysis.test.ts src/modules/arbitration/case-analysis.test.ts src/modules/development-queue/types.test.ts src/modules/tea/client.test.ts src/modules/tea/router.test.ts src/modules/tea/real-daemon-smoke.test.ts src/platform/http-server.test.ts src/platform/http-foundation-boundary.test.ts src/platform/http-debug-router.test.ts src/server-bootstrap.test.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.901.0",
     "@aws-sdk/s3-request-presigner": "^3.901.0",
     "@fastify/cors": "^11.1.0",
     "@neuro/account-domain": "*",
+    "@neuro/backend-foundation": "*",
     "@neuro/contracts": "*",
     "drizzle-orm": "^0.45.2",
     "fastify": "^5.8.5",
