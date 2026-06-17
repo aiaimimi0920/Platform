@@ -191,6 +191,8 @@
   - 承载议题、投票、讨论、审核、月度候补池结算及批量排除/恢复相关 server actions。
 - `web/src/lib/platform-task-actions.ts`
   - 承载任务发布/申请/派发、Agent 提案、开发排期状态和任务生命周期相关 server actions。
+- `web/src/lib/platform-managed-agent-actions.ts`
+  - 承载 Agent 创建、managed light/cloud/heavy 保存、批量启停/删除、批量 JSON 导入和能力添加相关 server actions。
 - `web/src/lib/platform-account-economy-actions.ts`
   - 承载兑换码、邮箱附件领取、任务奖励领取和曜石兑换米拉相关 server actions。
 - `web/src/lib/platform-fulfillment-actions.ts`
@@ -224,7 +226,7 @@
   - 固化旧 `platform-actions.ts` 入口只保留薄 wrapper，避免业务实现重新回流到总文件。
 - `web/src/lib/platform-actions.ts`
   - 保持现有页面 import path 兼容。
-  - 从约 6911 行降到 2276 行。
+  - 从约 6911 行降到 1124 行。
 
 实现约束：
 
