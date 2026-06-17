@@ -195,12 +195,14 @@
   - 承载兑换码、邮箱附件领取、任务奖励领取和曜石兑换米拉相关 server actions。
 - `web/src/lib/platform-fulfillment-actions.ts`
   - 承载履约单元问题上报、手动对账、人工复核认领/释放/派单、SLA 自动分派和履约异常升级相关 server actions。
+- `web/src/lib/platform-outbox-actions.ts`
+  - 承载 outbox 单事件重放、dead-letter 批量重放和主动告警派发相关 server actions。
 - `web/src/lib/platform-actions-boundary.test.ts`
   - 固化 domain action 文件必须以 `"use server";` 开头。
   - 固化旧 `platform-actions.ts` 入口只保留薄 wrapper，避免业务实现重新回流到总文件。
 - `web/src/lib/platform-actions.ts`
   - 保持现有页面 import path 兼容。
-  - 从约 6911 行降到 5595 行。
+  - 从约 6911 行降到 5505 行。
 
 实现约束：
 
