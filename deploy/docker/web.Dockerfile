@@ -26,6 +26,7 @@ COPY worker worker
 COPY web web
 
 RUN npm run build --workspace @neuro/contracts
+RUN npm run build --workspace @neuro/backend-foundation
 RUN npm run build --workspace neuroplatform-web
 
 FROM node:20-bookworm-slim AS runtime
@@ -35,6 +36,7 @@ ENV NODE_ENV=production
 
 COPY --from=build /app/package.json /app/package-lock.json /app/
 COPY --from=build /app/node_modules /app/node_modules
+COPY --from=build /app/packages/backend-foundation /app/packages/backend-foundation
 COPY --from=build /app/packages/contracts /app/packages/contracts
 COPY --from=build /app/web /app/web
 
