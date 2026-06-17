@@ -334,20 +334,26 @@
 
 当前状态：
 
-- Core 有本地 `core/src/platform/http-server.ts`。
-- Account API 通过 `@neuro/backend-foundation/platform/http-server` 使用 shared helper。
+- Core 的 `core/src/platform/errors.ts` 和 `core/src/platform/http-server.ts` 已改为 re-export `@neuro/backend-foundation/platform/errors` 与 `@neuro/backend-foundation/platform/http-server`。
+- Account API 继续通过 `@neuro/backend-foundation/platform/http-server` 使用 shared helper。
+- `core/src/platform/http-foundation-boundary.test.ts`
+  - 固化 Core 与 backend-foundation 使用同一个 `HttpError` class。
+  - 固化 Core 的 CORS / error serialization helper 是 shared helper 的同一函数引用。
+- `core/package.json`
+  - 增加 `@neuro/backend-foundation` 依赖。
+  - `build` / `typecheck` / `test` 前先构建 `@neuro/contracts` 与 `@neuro/backend-foundation`，避免 deep wrapper 依赖缺失或过期的 `dist`。
 
 建议顺序：
 
-1. 先梳理 Core 是否可以依赖 `@neuro/backend-foundation` 的 platform helper，而不引入 DB / Redis side effects。
-2. 如果不能，拆一个更小的无副作用包，例如 `@neuro/platform-http-foundation`。
-3. 迁移 Core / Account API 到同一个 helper。
-4. 移除重复实现。
+1. 继续保持 `@neuro/backend-foundation/platform/errors` 与 `@neuro/backend-foundation/platform/http-server` 无 DB / Redis / env side effect。
+2. 若后续 `backend-foundation` 根级入口仍因 env/db export 有副作用，不要让 Core 改为根级 import；继续使用 deep platform helper import。
+3. 后续如需更轻依赖，可再拆一个更小的无副作用包，例如 `@neuro/platform-http-foundation`。
 
 完成标准：
 
 - CORS allowlist 与 error serialization 只有一个实现来源。
-- deep import 兼容层仍可工作，或给出明确迁移窗口。
+- Core 与 Account API 抛出的 `HttpError` 由同一个 class 承载，避免 `instanceof` 跨包失效。
+- deep import 兼容层仍可工作，且 Core 默认测试入口会先构建 shared helper 的 `dist`。
 
 ### Phase F：运行时可观测性补齐
 
