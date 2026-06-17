@@ -285,6 +285,7 @@ services:
     environment:
       LOOM_DAEMON_HOST: 0.0.0.0
       LOOM_DAEMON_PORT: 8765
+      LOOM_DAEMON_TOKEN: ${TEA_LOOM_AUTH_TOKEN:-local-internal-token}
     ports:
       - "${LOOM_HOST_PORT:-48766}:8765"
     healthcheck:
@@ -294,7 +295,9 @@ services:
           "loom",
           "status",
           "--daemon-url",
-          "http://127.0.0.1:8765"
+          "http://127.0.0.1:8765",
+          "--daemon-token",
+          "${TEA_LOOM_AUTH_TOKEN:-local-internal-token}"
         ]
       interval: 30s
       timeout: 5s
@@ -313,7 +316,7 @@ services:
       TEA_AI_BRAIN_BASE_URL: ${TEA_AI_BRAIN_BASE_URL:-}
       TEA_AI_BRAIN_AUTH_TOKEN: ${TEA_AI_BRAIN_AUTH_TOKEN:-}
       TEA_LOOM_BASE_URL: ${TEA_LOOM_BASE_URL:-http://loom:8765}
-      TEA_LOOM_AUTH_TOKEN: ${TEA_LOOM_AUTH_TOKEN:-}
+      TEA_LOOM_AUTH_TOKEN: ${TEA_LOOM_AUTH_TOKEN:-local-internal-token}
     depends_on:
       loom:
         condition: service_healthy
@@ -347,8 +350,8 @@ services:
       OAUTH_CLIENT_ID: local-client
       OAUTH_CLIENT_SECRET: local-secret
       NEXTAUTH_SECRET: local-nextauth-secret
-      NEXTAUTH_URL: http://localhost:${WEB_HOST_PORT:-3028}
-      NEXT_PUBLIC_APP_URL: http://localhost:${WEB_HOST_PORT:-3028}
+      NEXTAUTH_URL: http://127.0.0.1:${WEB_HOST_PORT:-3028}
+      NEXT_PUBLIC_APP_URL: http://127.0.0.1:${WEB_HOST_PORT:-3028}
       ENABLE_FIGMA_CAPTURE: "true"
       DEV_AUTH_BYPASS_ENABLED: "true"
       DEV_AUTH_BYPASS_PROVIDER_USER_ID: local-dev-account
