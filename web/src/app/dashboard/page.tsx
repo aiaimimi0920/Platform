@@ -25,6 +25,7 @@ import {
   formatAccountNumber,
 } from "@/lib/account-center";
 import { getCurrentUser } from "@/lib/account-client";
+import { resolveAccountLoginSourceLabel } from "@/lib/account-session-display";
 import { getFeatureSnapshot, getPublicSurfaceSnapshot, isFeatureSnapshotUnavailable } from "@/lib/core-client";
 import {
   buildAccountCenterSurfaceVisibility,
@@ -72,6 +73,10 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
 
   const accountDisplayName = user.username || session.user.username || "NeuroLoom User";
   const accountAvatarUrl = user.avatarUrl || session.user.avatarUrl || null;
+  const loginSourceLabel = resolveAccountLoginSourceLabel({
+    accountProvider: user.provider,
+    sessionProviderUserId: session.user.providerUserId,
+  });
   const userInitial = accountDisplayName.slice(0, 1).toUpperCase();
   const walletSnapshot = user.snapshot?.wallet ?? null;
   const mailboxSnapshot = user.snapshot?.mailbox ?? null;
@@ -186,7 +191,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
             <AccountHomeRailCard>
               <AccountHomeSectionHead kicker="Session" title="当前身份" />
               <AccountHomeList>
-                <AccountHomeListRow aside={<span className="app-note">{user.provider}</span>} title="登录来源" />
+                <AccountHomeListRow aside={<span className="app-note">{loginSourceLabel}</span>} title="登录来源" />
                 <AccountHomeListRow aside={<span className="app-note">{user.trustLevel ?? "未同步"}</span>} title="Trust Level" />
                 <AccountHomeListRow aside={<span className="app-note">{formatAccountDateTime(user.lastLoginAt)}</span>} title="最近登录" />
                 <AccountHomeListRow
