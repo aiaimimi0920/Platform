@@ -43,6 +43,18 @@ const taskActionNames = [
   "taskLifecycleAction",
 ] as const;
 
+const managedAgentActionNames = [
+  "createAgentAction",
+  "saveManagedLightAgentAction",
+  "saveManagedCloudAgentAction",
+  "saveManagedHeavyAgentAction",
+  "applyManagedLightAgentBatchAction",
+  "applyManagedCloudAgentBatchAction",
+  "applyManagedHeavyAgentBatchAction",
+  "bulkImportAgentsAction",
+  "addAgentCapabilityAction",
+] as const;
+
 const accountEconomyActionNames = [
   "redeemCodeAction",
   "claimMailboxAttachmentAction",
@@ -207,6 +219,18 @@ describe("platform action module boundaries", () => {
       domainActions: taskActions,
       domainModule: "platform-task-actions.ts",
       actionNames: taskActionNames,
+    });
+  });
+
+  it("keeps managed agent operations in their domain module", () => {
+    const platformActions = readFileSync(join(libDir, "platform-actions.ts"), "utf8");
+    const managedAgentActions = readFileSync(join(libDir, "platform-managed-agent-actions.ts"), "utf8");
+
+    assertServerActionBoundary({
+      platformActions,
+      domainActions: managedAgentActions,
+      domainModule: "platform-managed-agent-actions.ts",
+      actionNames: managedAgentActionNames,
     });
   });
 
