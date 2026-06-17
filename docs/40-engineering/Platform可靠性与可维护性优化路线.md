@@ -300,6 +300,20 @@
 
 目的：降低 Core 路由测试对 DB / Redis seed 的隐式依赖。
 
+当前已落地：
+
+- `core/src/server.ts`
+  - `buildServer(options)` 支持注入 `initializePlatform`、`readyCheck` 和 `registerDomainRouters`。
+  - 抽出 `registerCoreHealthRoutes(...)`、`registerCoreDomainRouters(...)`、`registerCoreErrorHandler(...)`。
+  - 默认生产路径仍执行 feature module / public surface seed、ready DB/Redis probe 和全部 domain router 注册。
+  - 测试路径可用 `initializePlatform: false`、`registerDomainRouters: false` 和 fake `readyCheck` 构建只含基础 HTTP 行为的 Fastify app。
+  - DB / Redis / seed services / domain routers 改为默认路径动态 import，避免仅 import `server.ts` 就触发 Redis 连接或 DB env/connection side effect。
+- `core/src/server-bootstrap.test.ts`
+  - 固化 Core bootstrap 可以在无 DB/Redis 初始化下测试 health、ready 和 error handler。
+  - 固化注入的 platform initializer 只执行一次。
+- `core/package.json`
+  - 将 bootstrap 边界测试纳入 `@neuro/core` 默认稳定测试入口。
+
 建议动作：
 
 1. 将 `buildServer()` 改成可注入初始化策略：
