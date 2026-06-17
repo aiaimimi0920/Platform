@@ -175,3 +175,20 @@ export function parseNullableQuotaValue(formData: FormData, modeField: string, v
   }
   return parsePositiveIntFormValue(formData.get(valueField), valueField);
 }
+
+export function parseOptionalJsonRecord(value: FormDataEntryValue | null, fieldLabel: string) {
+  const raw = String(value || "").trim();
+  if (!raw) {
+    return null;
+  }
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    throw new Error(`${fieldLabel} 不是合法 JSON。`);
+  }
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    throw new Error(`${fieldLabel} 需要是 JSON 对象。`);
+  }
+  return parsed as Record<string, unknown>;
+}

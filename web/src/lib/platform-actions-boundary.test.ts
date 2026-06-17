@@ -72,6 +72,14 @@ const outboxActionNames = [
   "emitOutboxAlertsAction",
 ] as const;
 
+const agentMarketplaceActionNames = [
+  "upsertAgentMarketplaceListingAction",
+  "updateAgentMarketplaceListingStatusAction",
+  "runAgentMarketplaceAutoProposalSweepAction",
+  "invokeAgentMarketplaceListingAction",
+  "invokeAgentMarketplaceListingBatchAction",
+] as const;
+
 function assertServerActionBoundary(args: {
   platformActions: string;
   domainActions: string;
@@ -172,6 +180,18 @@ describe("platform action module boundaries", () => {
       domainActions: outboxActions,
       domainModule: "platform-outbox-actions.ts",
       actionNames: outboxActionNames,
+    });
+  });
+
+  it("keeps agent marketplace operations in their domain module", () => {
+    const platformActions = readFileSync(join(libDir, "platform-actions.ts"), "utf8");
+    const agentMarketplaceActions = readFileSync(join(libDir, "platform-agent-marketplace-actions.ts"), "utf8");
+
+    assertServerActionBoundary({
+      platformActions,
+      domainActions: agentMarketplaceActions,
+      domainModule: "platform-agent-marketplace-actions.ts",
+      actionNames: agentMarketplaceActionNames,
     });
   });
 });
