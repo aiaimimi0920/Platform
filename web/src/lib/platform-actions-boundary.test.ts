@@ -96,6 +96,20 @@ const agentCallbackRemediationActionNames = [
   "replayRejectedCallbackPayloadAction",
 ] as const;
 
+const notificationWebhookIncidentActionNames = [
+  "acknowledgeNotificationWebhookIncidentAction",
+  "silenceNotificationWebhookIncidentAction",
+  "clearNotificationWebhookIncidentSilenceAction",
+  "acknowledgeNotificationWebhookIncidentBatchAction",
+  "silenceNotificationWebhookIncidentBatchAction",
+  "clearNotificationWebhookIncidentSilenceBatchAction",
+  "runNotificationWebhookIncidentSavedViewPlaybookAction",
+  "saveNotificationWebhookIncidentViewAction",
+  "overwriteNotificationWebhookIncidentViewAction",
+  "setDefaultNotificationWebhookIncidentViewAction",
+  "deleteNotificationWebhookIncidentViewAction",
+] as const;
+
 const ownerReliefActionNames = [
   "saveAgentExecutionOwnerReliefHandoffDefaultAction",
   "clearAgentExecutionOwnerReliefHandoffDefaultAction",
@@ -268,6 +282,21 @@ describe("platform action module boundaries", () => {
       domainActions: agentCallbackRemediationActions,
       domainModule: "platform-agent-callback-remediation-actions.ts",
       actionNames: agentCallbackRemediationActionNames,
+    });
+  });
+
+  it("keeps notification webhook incident operations in their domain module", () => {
+    const platformActions = readFileSync(join(libDir, "platform-actions.ts"), "utf8");
+    const notificationWebhookIncidentActions = readFileSync(
+      join(libDir, "platform-notification-webhook-incident-actions.ts"),
+      "utf8",
+    );
+
+    assertServerActionBoundary({
+      platformActions,
+      domainActions: notificationWebhookIncidentActions,
+      domainModule: "platform-notification-webhook-incident-actions.ts",
+      actionNames: notificationWebhookIncidentActionNames,
     });
   });
 
