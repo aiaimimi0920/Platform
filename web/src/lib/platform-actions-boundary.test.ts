@@ -109,6 +109,14 @@ const agentExecutionPresetActionNames = [
   "deleteAgentExecutionLaunchPresetAction",
 ] as const;
 
+const agentExecutionRuntimeActionNames = [
+  "recoverStalePlatformExecutionsAction",
+  "runPlatformExecutorNowAction",
+  "retryAgentExecutionSettlementAction",
+  "sweepRuntimeSessionsAction",
+  "recoverThenRunPlatformExecutorAction",
+] as const;
+
 function assertServerActionBoundary(args: {
   platformActions: string;
   domainActions: string;
@@ -269,6 +277,18 @@ describe("platform action module boundaries", () => {
       domainActions: agentExecutionPresetActions,
       domainModule: "platform-agent-execution-preset-actions.ts",
       actionNames: agentExecutionPresetActionNames,
+    });
+  });
+
+  it("keeps agent execution runtime operations in their domain module", () => {
+    const platformActions = readFileSync(join(libDir, "platform-actions.ts"), "utf8");
+    const agentExecutionRuntimeActions = readFileSync(join(libDir, "platform-agent-execution-runtime-actions.ts"), "utf8");
+
+    assertServerActionBoundary({
+      platformActions,
+      domainActions: agentExecutionRuntimeActions,
+      domainModule: "platform-agent-execution-runtime-actions.ts",
+      actionNames: agentExecutionRuntimeActionNames,
     });
   });
 });
