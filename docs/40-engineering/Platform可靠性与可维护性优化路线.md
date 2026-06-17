@@ -207,12 +207,16 @@
   - 承载 `/ops/agent-callbacks` follow-up 参数读取、redirect 构造和 owner relief 表单解析 helper，供剩余 callback/runtime actions 与拆出模块共享。
 - `web/src/lib/platform-agent-execution-support-actions.ts`
   - 承载 arbitration review 推进、execution subtask/status/requeue 和 execution artifact 提交相关 server actions。
+- `web/src/lib/platform-agent-execution-preset-actions.ts`
+  - 承载 Agent execution launch preset 保存、默认 preset 切换、建议 runtime profile 应用和 preset 删除相关 server actions。
+- `web/src/lib/platform-agent-execution-action-utils.ts`
+  - 承载 `/agent-executions` redirect target 与 focus fragment 构造 helper，供保留在总文件的创建 execution action 与拆出的 preset actions 共享。
 - `web/src/lib/platform-actions-boundary.test.ts`
   - 固化 domain action 文件必须以 `"use server";` 开头。
   - 固化旧 `platform-actions.ts` 入口只保留薄 wrapper，避免业务实现重新回流到总文件。
 - `web/src/lib/platform-actions.ts`
   - 保持现有页面 import path 兼容。
-  - 从约 6911 行降到 4667 行。
+  - 从约 6911 行降到 4310 行。
 
 实现约束：
 
