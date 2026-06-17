@@ -80,6 +80,12 @@ const agentMarketplaceActionNames = [
   "invokeAgentMarketplaceListingBatchAction",
 ] as const;
 
+const agentCallbackActionNames = [
+  "updateAgentCallbackRemediationPolicyAction",
+  "rotateAgentCallbackSecretAction",
+  "updateAgentCallbackProtocolVersionAction",
+] as const;
+
 function assertServerActionBoundary(args: {
   platformActions: string;
   domainActions: string;
@@ -192,6 +198,18 @@ describe("platform action module boundaries", () => {
       domainActions: agentMarketplaceActions,
       domainModule: "platform-agent-marketplace-actions.ts",
       actionNames: agentMarketplaceActionNames,
+    });
+  });
+
+  it("keeps agent callback settings operations in their domain module", () => {
+    const platformActions = readFileSync(join(libDir, "platform-actions.ts"), "utf8");
+    const agentCallbackActions = readFileSync(join(libDir, "platform-agent-callback-actions.ts"), "utf8");
+
+    assertServerActionBoundary({
+      platformActions,
+      domainActions: agentCallbackActions,
+      domainModule: "platform-agent-callback-actions.ts",
+      actionNames: agentCallbackActionNames,
     });
   });
 });

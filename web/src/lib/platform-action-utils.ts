@@ -92,6 +92,17 @@ export function resolveRedirectPath(value: FormDataEntryValue | null, fallback: 
   return raw;
 }
 
+export function resolveCookiePathFromRedirectTarget(redirectTo: string) {
+  const hashIndex = redirectTo.indexOf("#");
+  const withoutHash = hashIndex >= 0 ? redirectTo.slice(0, hashIndex) : redirectTo;
+  const queryIndex = withoutHash.indexOf("?");
+  const pathname = queryIndex >= 0 ? withoutHash.slice(0, queryIndex) : withoutHash;
+  if (!pathname.startsWith("/") || pathname.startsWith("//")) {
+    return "/";
+  }
+  return pathname || "/";
+}
+
 export function appendQueryStringToRedirectTarget(redirectTo: string, params: URLSearchParams) {
   const hashIndex = redirectTo.indexOf("#");
   const base = hashIndex >= 0 ? redirectTo.slice(0, hashIndex) : redirectTo;
