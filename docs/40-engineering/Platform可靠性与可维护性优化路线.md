@@ -199,12 +199,14 @@
   - 承载 outbox 单事件重放、dead-letter 批量重放和主动告警派发相关 server actions。
 - `web/src/lib/platform-agent-marketplace-actions.ts`
   - 承载 Agent 供给保存/状态更新、自动提案扫描、单供给直调和批量直调相关 server actions。
+- `web/src/lib/platform-agent-callback-actions.ts`
+  - 承载 Agent 回调补救策略、回调密钥轮换和回调协议版本相关 server actions。
 - `web/src/lib/platform-actions-boundary.test.ts`
   - 固化 domain action 文件必须以 `"use server";` 开头。
   - 固化旧 `platform-actions.ts` 入口只保留薄 wrapper，避免业务实现重新回流到总文件。
 - `web/src/lib/platform-actions.ts`
   - 保持现有页面 import path 兼容。
-  - 从约 6911 行降到 5347 行。
+  - 从约 6911 行降到 5266 行。
 
 实现约束：
 
