@@ -35,6 +35,7 @@ import {
 import { emailProviderIngressRouter } from "./email-provider-ingress";
 import { emailProviderIngressOpsRouter } from "./email-provider-ingress-ops";
 import { notificationWebhookOpsRouter } from "./notification-webhook-ops-router";
+import { platformHttpDebugRouter } from "./platform-http-debug-router";
 
 export async function buildServer() {
   const app = Fastify({ logger: true });
@@ -96,6 +97,7 @@ export async function buildServer() {
   await app.register(announcementsRouter);
   await app.register(productShadowRouter);
 
+  await app.register(platformHttpDebugRouter);
   await app.register(notificationWebhookOpsRouter);
 
   app.setErrorHandler((error, _request, reply) => {

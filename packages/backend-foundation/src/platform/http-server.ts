@@ -17,6 +17,23 @@ export type SerializedPlatformError = {
   body: PlatformErrorResponseBody;
 };
 
+export type PlatformCorsObservabilitySnapshot = {
+  allowedOrigins: string[];
+  checkedCount: number;
+  allowedCount: number;
+  rejectedCount: number;
+  lastCheckedAt: string | null;
+  lastRejectedAt: string | null;
+};
+
+const platformCorsObservability = {
+  checkedCount: 0,
+  allowedCount: 0,
+  rejectedCount: 0,
+  lastCheckedAt: null as string | null,
+  lastRejectedAt: null as string | null,
+};
+
 export function resolvePlatformAllowedOrigins(
   value: string | undefined = process.env.PLATFORM_ALLOWED_ORIGINS,
 ): string[] {
@@ -41,11 +58,48 @@ export function isAllowedPlatformOrigin(
   return origin === undefined || allowedOrigins.includes(origin);
 }
 
+function recordPlatformCorsDecision(allowed: boolean) {
+  const timestamp = new Date().toISOString();
+  platformCorsObservability.checkedCount += 1;
+  platformCorsObservability.lastCheckedAt = timestamp;
+
+  if (allowed) {
+    platformCorsObservability.allowedCount += 1;
+    return;
+  }
+
+  platformCorsObservability.rejectedCount += 1;
+  platformCorsObservability.lastRejectedAt = timestamp;
+}
+
 export function platformCorsOrigin(
   origin: string | undefined,
   callback: (error: Error | null, allow: boolean) => void,
 ): void {
-  callback(null, isAllowedPlatformOrigin(origin));
+  const allowed = isAllowedPlatformOrigin(origin);
+  recordPlatformCorsDecision(allowed);
+  callback(null, allowed);
+}
+
+export function getPlatformCorsObservabilitySnapshot(
+  value: string | undefined = process.env.PLATFORM_ALLOWED_ORIGINS,
+): PlatformCorsObservabilitySnapshot {
+  return {
+    allowedOrigins: resolvePlatformAllowedOrigins(value),
+    checkedCount: platformCorsObservability.checkedCount,
+    allowedCount: platformCorsObservability.allowedCount,
+    rejectedCount: platformCorsObservability.rejectedCount,
+    lastCheckedAt: platformCorsObservability.lastCheckedAt,
+    lastRejectedAt: platformCorsObservability.lastRejectedAt,
+  };
+}
+
+export function resetPlatformCorsObservabilityForTests() {
+  platformCorsObservability.checkedCount = 0;
+  platformCorsObservability.allowedCount = 0;
+  platformCorsObservability.rejectedCount = 0;
+  platformCorsObservability.lastCheckedAt = null;
+  platformCorsObservability.lastRejectedAt = null;
 }
 
 export function serializePlatformError(error: unknown): SerializedPlatformError {

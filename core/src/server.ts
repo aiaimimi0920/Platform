@@ -11,6 +11,7 @@ export type CoreReadyCheck = () => Promise<void>;
 export type CoreServerBuildOptions = {
   initializePlatform?: CorePlatformInitializer | false;
   readyCheck?: CoreReadyCheck;
+  registerHttpDebugRoutes?: boolean;
   registerDomainRouters?: boolean;
 };
 
@@ -91,6 +92,12 @@ export async function registerCoreDomainRouters(app: FastifyInstance) {
   await app.register(teaRouter);
 }
 
+export async function registerCoreHttpDebugRoutes(app: FastifyInstance) {
+  const { platformHttpDebugRouter } = await import("@/platform/http-debug-router");
+
+  await app.register(platformHttpDebugRouter);
+}
+
 export function registerCoreErrorHandler(app: FastifyInstance) {
   app.setErrorHandler((error, _request, reply) => {
     if (!(error instanceof HttpError)) {
@@ -116,6 +123,10 @@ export async function buildServer(options: CoreServerBuildOptions = {}) {
   }
 
   registerCoreHealthRoutes(app, options.readyCheck ?? defaultReadyCheck);
+
+  if (options.registerHttpDebugRoutes ?? true) {
+    await registerCoreHttpDebugRoutes(app);
+  }
 
   if (options.registerDomainRouters ?? true) {
     await registerCoreDomainRouters(app);

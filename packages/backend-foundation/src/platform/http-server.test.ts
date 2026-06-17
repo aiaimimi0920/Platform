@@ -1,10 +1,30 @@
 import assert from "node:assert/strict";
-import { describe, it } from "node:test";
+import { afterEach, describe, it } from "node:test";
 
 import { HttpError } from "./errors";
-import { isAllowedPlatformOrigin, resolvePlatformAllowedOrigins, serializePlatformError } from "./http-server";
+import {
+  getPlatformCorsObservabilitySnapshot,
+  isAllowedPlatformOrigin,
+  platformCorsOrigin,
+  resetPlatformCorsObservabilityForTests,
+  resolvePlatformAllowedOrigins,
+  serializePlatformError,
+} from "./http-server";
+
+function resolveCors(origin: string | undefined): boolean {
+  let allowed = false;
+  platformCorsOrigin(origin, (error, allow) => {
+    assert.equal(error, null);
+    allowed = allow;
+  });
+  return allowed;
+}
 
 describe("backend foundation HTTP server helpers", () => {
+  afterEach(() => {
+    resetPlatformCorsObservabilityForTests();
+  });
+
   it("uses the local web app origins as the development default", () => {
     assert.deepEqual(resolvePlatformAllowedOrigins(undefined), [
       "http://localhost:3028",
@@ -41,5 +61,24 @@ describe("backend foundation HTTP server helpers", () => {
         },
       },
     });
+  });
+
+  it("records CORS allow/reject decisions and exposes the active allowlist", () => {
+    process.env.PLATFORM_ALLOWED_ORIGINS = "https://ops.neuro.test, http://localhost:3028";
+    try {
+      assert.equal(resolveCors("https://ops.neuro.test"), true);
+      assert.equal(resolveCors("https://evil.test"), false);
+      assert.equal(resolveCors(undefined), true);
+
+      const snapshot = getPlatformCorsObservabilitySnapshot();
+      assert.deepEqual(snapshot.allowedOrigins, ["https://ops.neuro.test", "http://localhost:3028"]);
+      assert.equal(snapshot.checkedCount, 3);
+      assert.equal(snapshot.allowedCount, 2);
+      assert.equal(snapshot.rejectedCount, 1);
+      assert.match(snapshot.lastCheckedAt ?? "", /^\d{4}-\d{2}-\d{2}T/);
+      assert.match(snapshot.lastRejectedAt ?? "", /^\d{4}-\d{2}-\d{2}T/);
+    } finally {
+      delete process.env.PLATFORM_ALLOWED_ORIGINS;
+    }
   });
 });
