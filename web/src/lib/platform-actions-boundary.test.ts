@@ -86,6 +86,13 @@ const agentCallbackActionNames = [
   "updateAgentCallbackProtocolVersionAction",
 ] as const;
 
+const ownerReliefActionNames = [
+  "saveAgentExecutionOwnerReliefHandoffDefaultAction",
+  "clearAgentExecutionOwnerReliefHandoffDefaultAction",
+  "openAgentExecutionOwnerReliefRunHandoffAction",
+  "resolveAgentExecutionOwnerReliefHandoffAction",
+] as const;
+
 function assertServerActionBoundary(args: {
   platformActions: string;
   domainActions: string;
@@ -210,6 +217,18 @@ describe("platform action module boundaries", () => {
       domainActions: agentCallbackActions,
       domainModule: "platform-agent-callback-actions.ts",
       actionNames: agentCallbackActionNames,
+    });
+  });
+
+  it("keeps owner relief handoff operations in their domain module", () => {
+    const platformActions = readFileSync(join(libDir, "platform-actions.ts"), "utf8");
+    const ownerReliefActions = readFileSync(join(libDir, "platform-owner-relief-actions.ts"), "utf8");
+
+    assertServerActionBoundary({
+      platformActions,
+      domainActions: ownerReliefActions,
+      domainModule: "platform-owner-relief-actions.ts",
+      actionNames: ownerReliefActionNames,
     });
   });
 });
