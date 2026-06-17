@@ -66,6 +66,12 @@ const fulfillmentActionNames = [
   "assignManualReviewAction",
 ] as const;
 
+const outboxActionNames = [
+  "retryOutboxEventAction",
+  "retryOutboxEventsBatchAction",
+  "emitOutboxAlertsAction",
+] as const;
+
 function assertServerActionBoundary(args: {
   platformActions: string;
   domainActions: string;
@@ -154,6 +160,18 @@ describe("platform action module boundaries", () => {
       domainActions: fulfillmentActions,
       domainModule: "platform-fulfillment-actions.ts",
       actionNames: fulfillmentActionNames,
+    });
+  });
+
+  it("keeps outbox operations in their domain module", () => {
+    const platformActions = readFileSync(join(libDir, "platform-actions.ts"), "utf8");
+    const outboxActions = readFileSync(join(libDir, "platform-outbox-actions.ts"), "utf8");
+
+    assertServerActionBoundary({
+      platformActions,
+      domainActions: outboxActions,
+      domainModule: "platform-outbox-actions.ts",
+      actionNames: outboxActionNames,
     });
   });
 });
