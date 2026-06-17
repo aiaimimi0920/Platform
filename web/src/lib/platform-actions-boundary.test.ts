@@ -86,6 +86,16 @@ const agentCallbackActionNames = [
   "updateAgentCallbackProtocolVersionAction",
 ] as const;
 
+const agentCallbackRemediationActionNames = [
+  "requestRejectedCallbackRetryAction",
+  "cleanupExpiredAgentCallbackCompatibilityAction",
+  "autoRemediateRejectedCallbackPayloadsAction",
+  "emitCallbackRemediationAlertsAction",
+  "emitRuntimePressureAlertsAction",
+  "requestRejectedCallbackRetryBatchAction",
+  "replayRejectedCallbackPayloadAction",
+] as const;
+
 const ownerReliefActionNames = [
   "saveAgentExecutionOwnerReliefHandoffDefaultAction",
   "clearAgentExecutionOwnerReliefHandoffDefaultAction",
@@ -243,6 +253,21 @@ describe("platform action module boundaries", () => {
       domainActions: agentCallbackActions,
       domainModule: "platform-agent-callback-actions.ts",
       actionNames: agentCallbackActionNames,
+    });
+  });
+
+  it("keeps agent callback remediation operations in their domain module", () => {
+    const platformActions = readFileSync(join(libDir, "platform-actions.ts"), "utf8");
+    const agentCallbackRemediationActions = readFileSync(
+      join(libDir, "platform-agent-callback-remediation-actions.ts"),
+      "utf8",
+    );
+
+    assertServerActionBoundary({
+      platformActions,
+      domainActions: agentCallbackRemediationActions,
+      domainModule: "platform-agent-callback-remediation-actions.ts",
+      actionNames: agentCallbackRemediationActionNames,
     });
   });
 
