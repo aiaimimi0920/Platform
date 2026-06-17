@@ -102,6 +102,13 @@ const agentExecutionSupportActionNames = [
   "addAgentExecutionArtifactAction",
 ] as const;
 
+const agentExecutionPresetActionNames = [
+  "saveAgentExecutionLaunchPresetAction",
+  "setAgentExecutionLaunchPresetDefaultAction",
+  "applyAgentExecutionLaunchPresetSuggestedRuntimeProfileAction",
+  "deleteAgentExecutionLaunchPresetAction",
+] as const;
+
 function assertServerActionBoundary(args: {
   platformActions: string;
   domainActions: string;
@@ -250,6 +257,18 @@ describe("platform action module boundaries", () => {
       domainActions: agentExecutionSupportActions,
       domainModule: "platform-agent-execution-support-actions.ts",
       actionNames: agentExecutionSupportActionNames,
+    });
+  });
+
+  it("keeps agent execution launch preset operations in their domain module", () => {
+    const platformActions = readFileSync(join(libDir, "platform-actions.ts"), "utf8");
+    const agentExecutionPresetActions = readFileSync(join(libDir, "platform-agent-execution-preset-actions.ts"), "utf8");
+
+    assertServerActionBoundary({
+      platformActions,
+      domainActions: agentExecutionPresetActions,
+      domainModule: "platform-agent-execution-preset-actions.ts",
+      actionNames: agentExecutionPresetActionNames,
     });
   });
 });
