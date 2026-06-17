@@ -2,6 +2,12 @@ import assert from "node:assert/strict";
 import test, { describe, it } from "node:test";
 
 import {
+  gatewayProtocolFamilies,
+  gatewayProtocolProfiles,
+  gatewayProviderAdapters,
+} from "@neuro/contracts";
+
+import {
   appendProviderCredentialOperatorWarningMessage,
   getProviderCredentialOperatorWarning,
   getProviderCreateDefaults,
@@ -13,6 +19,29 @@ function requireSpec(key: string) {
   assert.ok(spec, `missing provider-create-catalog spec: ${key}`);
   return spec;
 }
+
+test("provider create catalog stays inside the public gateway contracts", () => {
+  const adapters = new Set<string>(gatewayProviderAdapters);
+  const protocolFamilies = new Set<string>(gatewayProtocolFamilies);
+  const protocolProfiles = new Set<string>(gatewayProtocolProfiles);
+
+  const missingAdapters = PROVIDER_CREATE_HTTP_SPECS
+    .map((spec) => spec.adapter)
+    .filter((value, index, values) => values.indexOf(value) === index)
+    .filter((value) => !adapters.has(value));
+  const missingProtocolFamilies = PROVIDER_CREATE_HTTP_SPECS
+    .map((spec) => spec.protocolFamily)
+    .filter((value, index, values) => values.indexOf(value) === index)
+    .filter((value) => !protocolFamilies.has(value));
+  const missingProtocolProfiles = PROVIDER_CREATE_HTTP_SPECS
+    .map((spec) => spec.protocolProfile)
+    .filter((value, index, values) => values.indexOf(value) === index)
+    .filter((value) => !protocolProfiles.has(value));
+
+  assert.deepEqual(missingAdapters, []);
+  assert.deepEqual(missingProtocolFamilies, []);
+  assert.deepEqual(missingProtocolProfiles, []);
+});
 
 test("provider create catalog exposes Accio web reverse api line", () => {
   const spec = PROVIDER_CREATE_HTTP_SPECS.find((entry) => entry.adapter === "accio_compatible");

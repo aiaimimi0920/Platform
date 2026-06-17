@@ -56,17 +56,10 @@ import type {
   GatewayPersistedAnalysisExportView,
   GatewaySyncRateLimitHotspotAnomalyIncidentsResult,
   GatewaySyncProviderRoutingAnalysisAnomalyIncidentsResult,
-  GatewayCustomHttpProviderPayload,
   GatewayEndpointExecutionModeMap,
   GatewayExecutionMode,
-  GatewayGrokCompatibleProviderPayload,
-  GatewayKiroCompatibleProviderPayload,
-  GatewayLinkupCompatibleProviderPayload,
   GatewaySearchApiCompatibleProviderPayload,
   GatewayOpenAiCompatibleProviderPayload,
-  GatewayProducerCompatibleProviderPayload,
-  GatewayUdioCompatibleProviderPayload,
-  GatewayKeepaliveConfig,
   GatewayModelAliasView,
   GatewayModelAliasScopeType,
   GatewayProjectView,
@@ -237,6 +230,8 @@ import {
   normalizeRoutePolicyRateLimitMap,
 } from "@/modules/gateway/route-policy-rate-limits";
 import { buildGatewayProviderRoutingScore } from "@/modules/gateway/provider-routing-score";
+import { maskGatewayProviderPayload } from "@/modules/gateway/provider-payload-mask";
+import { chooseProviderPayloadStorageMode } from "@/modules/gateway/provider-payload-storage";
 import { deleteGatewayObject, listGatewayObjects, putGatewayObject, readGatewayObject } from "@/modules/gateway/object-storage";
 import {
   gatewayApiKeys,
@@ -1565,56 +1560,6 @@ function normalizeStringList(values: string[] | null | undefined, options?: { lo
   return normalized.length > 0 ? normalized : null;
 }
 
-function maskSecretValue(value: string | null | undefined) {
-  const raw = value?.trim() ?? "";
-  if (!raw) {
-    return raw || null;
-  }
-  if (raw.length <= 8) {
-    return `${raw.slice(0, 2)}***`;
-  }
-  return `${raw.slice(0, 4)}***${raw.slice(-2)}`;
-}
-
-function maskSecretHeaders(headers: Record<string, string> | null | undefined) {
-  if (!headers) {
-    return headers ?? null;
-  }
-  return Object.fromEntries(
-    Object.entries(headers).map(([key, value]) => {
-      const normalizedKey = key.trim().toLowerCase();
-      if (
-        normalizedKey.includes("authorization") ||
-        normalizedKey.includes("token") ||
-        normalizedKey.includes("secret") ||
-        normalizedKey.includes("cookie") ||
-        normalizedKey.includes("key")
-      ) {
-        return [key, maskSecretValue(value) ?? "***"];
-      }
-      return [key, value];
-    }),
-  );
-}
-
-function maskKeepaliveConfig(config: GatewayKeepaliveConfig | null | undefined) {
-  if (!config) {
-    return config ?? null;
-  }
-  return {
-    ...config,
-    authToken: maskSecretValue(config.authToken),
-  } satisfies GatewayKeepaliveConfig;
-}
-
-function maskSessionBackedProviderRuntime<T extends GatewaySessionBackedProviderRuntime>(payload: T): T {
-  return {
-    ...payload,
-    sessionAuth: payload.sessionAuth ? { ...payload.sessionAuth } : payload.sessionAuth ?? null,
-    keepalive: maskKeepaliveConfig(payload.keepalive),
-  };
-}
-
 function normalizeSessionAuthTransport(value: string | null | undefined) {
   const normalized = value?.trim().toLowerCase() ?? "";
   if (normalized === "bearer" || normalized === "header" || normalized === "cookie") {
@@ -2137,115 +2082,6 @@ function validateGatewayProviderPayload(input: UpsertGatewayProviderAccountInput
   void sourceProfile;
 }
 
-function maskProviderPayload(payload: GatewayProviderAccountPayload): GatewayProviderAccountPayload {
-  if (payload.adapter === "openai_compatible") {
-    return maskSessionBackedProviderRuntime({
-      ...payload,
-      apiKey: maskSecretValue(payload.apiKey) ?? "***",
-      apiKeys: (payload.apiKeys ?? []).map((value) => maskSecretValue(value) ?? "***"),
-      headers: maskSecretHeaders(payload.headers ?? null),
-    } satisfies GatewayOpenAiCompatibleProviderPayload);
-  }
-  if (payload.adapter === "anthropic_compatible") {
-    return maskSessionBackedProviderRuntime({
-      ...payload,
-      apiKey: maskSecretValue(payload.apiKey) ?? "***",
-      headers: maskSecretHeaders(payload.headers ?? null),
-    });
-  }
-  if (payload.adapter === "grok_compatible") {
-    return maskSessionBackedProviderRuntime({
-      ...payload,
-      apiKey: maskSecretValue(payload.apiKey) ?? "***",
-      headers: maskSecretHeaders(payload.headers ?? null),
-    } satisfies GatewayGrokCompatibleProviderPayload);
-  }
-  if (payload.adapter === "kiro_compatible") {
-    return maskSessionBackedProviderRuntime({
-      ...payload,
-      apiKey: maskSecretValue(payload.apiKey) ?? "***",
-      headers: maskSecretHeaders(payload.headers ?? null),
-    } satisfies GatewayKiroCompatibleProviderPayload);
-  }
-  if (isGatewaySearchProviderPayload(payload)) {
-    return maskSessionBackedProviderRuntime({
-      ...payload,
-      apiKey: maskSecretValue(payload.apiKey) ?? "***",
-      headers: maskSecretHeaders(payload.headers ?? null),
-    } satisfies GatewayLinkupCompatibleProviderPayload);
-  }
-  if (payload.adapter === "producer_compatible") {
-    return maskSessionBackedProviderRuntime({
-      ...payload,
-      apiKey: maskSecretValue(payload.apiKey) ?? "***",
-      headers: maskSecretHeaders(payload.headers ?? null),
-    } satisfies GatewayProducerCompatibleProviderPayload);
-  }
-  if (payload.adapter === "udio_compatible") {
-    return maskSessionBackedProviderRuntime({
-      ...payload,
-      apiKey: maskSecretValue(payload.apiKey) ?? "***",
-      headers: maskSecretHeaders(payload.headers ?? null),
-    } satisfies GatewayUdioCompatibleProviderPayload);
-  }
-  if (payload.adapter === "codex_cli") {
-    return {
-      ...payload,
-      codexHomeBundleObjectKey: maskSecretValue(payload.codexHomeBundleObjectKey) ?? "***",
-    };
-  }
-  if (payload.adapter === "claude_code") {
-    return {
-      ...payload,
-      claudeHomeBundleObjectKey: maskSecretValue(payload.claudeHomeBundleObjectKey) ?? "***",
-    };
-  }
-  if (payload.adapter === "custom_http") {
-    return maskSessionBackedProviderRuntime({
-      ...payload,
-      authToken: maskSecretValue(payload.authToken),
-      headers: maskSecretHeaders(payload.headers ?? null),
-    } satisfies GatewayCustomHttpProviderPayload);
-  }
-  if ("authToken" in payload || "headers" in payload) {
-    return {
-      ...payload,
-      authToken: "authToken" in payload ? maskSecretValue(payload.authToken) : undefined,
-      headers: "headers" in payload ? maskSecretHeaders(payload.headers ?? null) : undefined,
-    } as GatewayProviderAccountPayload;
-  }
-  return payload;
-}
-
-/**
- * Chooses storage mode based on payload size and structure.
- *
- * Optimized strategy:
- * - Threshold increased from 600 bytes to 4KB (PostgreSQL JSONB performance inflection point)
- * - Allows small nested objects to use inline storage
- * - Only large arrays (50+ elements) trigger R2 storage
- */
-function chooseStorageMode(payload: GatewayProviderAccountPayload): "inline" | "r2" {
-  const serialized = JSON.stringify(payload);
-  const sizeBytes = Buffer.byteLength(serialized, "utf8");
-
-  // Threshold: 4KB (PostgreSQL JSONB performance inflection point)
-  if (sizeBytes > 4096) {
-    return "r2";
-  }
-
-  // Check for large arrays (50+ elements)
-  const hasLargeArray = Object.values(payload).some(
-    (value) => Array.isArray(value) && value.length > 50,
-  );
-  if (hasLargeArray) {
-    return "r2";
-  }
-
-  // Default: inline (includes small nested objects)
-  return "inline";
-}
-
 function toGatewayTenantView(row: GatewayTenantRow): GatewayTenantView {
   return {
     id: row.id,
@@ -2338,7 +2174,7 @@ async function toGatewayProviderAccountView(
     }),
     executionMode,
     endpointExecutionModes,
-    payload: options?.maskSecrets ? maskProviderPayload(payload) : payload,
+    payload: options?.maskSecrets ? maskGatewayProviderPayload(payload) : payload,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
     cooldownUntil: row.cooldownUntil ? row.cooldownUntil.toISOString() : null,
@@ -10601,7 +10437,7 @@ export async function createGatewayProviderAccountForOperator(
     input.serviceProviderKey,
     input.serviceProviderLabel,
   );
-  const storageMode = chooseStorageMode(payload);
+  const storageMode = chooseProviderPayloadStorageMode(payload);
   const accountId = randomUUID();
   let payloadInline: GatewayProviderAccountPayload | null = null;
   let payloadObjectKey: string | null = null;
@@ -10691,7 +10527,7 @@ export async function updateGatewayProviderAccountForOperator(
     input.serviceProviderKey ?? existing.serviceProviderKey,
     input.serviceProviderLabel ?? existing.serviceProviderLabel,
   );
-  const storageMode = chooseStorageMode(payload);
+  const storageMode = chooseProviderPayloadStorageMode(payload);
   let payloadInline: GatewayProviderAccountPayload | null = null;
   let payloadObjectKey: string | null = existing.payloadObjectKey;
   await invalidateCachedProviderModels(providerAccountId);

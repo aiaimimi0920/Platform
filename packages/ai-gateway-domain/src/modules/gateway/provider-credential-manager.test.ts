@@ -4,32 +4,7 @@ import type {
   GatewayOpenAiCompatibleProviderPayload,
   GatewayProviderAccountPayload,
 } from "@neuro/contracts";
-
-// ---------------------------------------------------------------------------
-// Inline implementation of chooseStorageMode for testing
-// This avoids importing the full module which has database dependencies
-// ---------------------------------------------------------------------------
-
-function chooseStorageMode(payload: GatewayProviderAccountPayload): "inline" | "r2" {
-  const serialized = JSON.stringify(payload);
-  const sizeBytes = Buffer.byteLength(serialized, "utf8");
-
-  // Threshold: 4KB (PostgreSQL JSONB performance inflection point)
-  if (sizeBytes > 4096) {
-    return "r2";
-  }
-
-  // Check for large arrays (50+ elements)
-  const hasLargeArray = Object.values(payload).some(
-    (value) => Array.isArray(value) && value.length > 50,
-  );
-  if (hasLargeArray) {
-    return "r2";
-  }
-
-  // Default: inline (includes small nested objects)
-  return "inline";
-}
+import { chooseProviderPayloadStorageMode } from "./provider-payload-storage";
 
 function buildOpenAiPayload(
   overrides: Partial<GatewayOpenAiCompatibleProviderPayload> = {},
@@ -50,7 +25,7 @@ function buildOpenAiPayload(
 describe("chooseStorageMode", () => {
   it("returns inline for small payloads under 4KB", () => {
     const payload = buildOpenAiPayload();
-    const mode = chooseStorageMode(payload);
+    const mode = chooseProviderPayloadStorageMode(payload);
     assert.equal(mode, "inline");
   });
 
@@ -61,7 +36,7 @@ describe("chooseStorageMode", () => {
         "X-Custom-Header": "value",
       },
     });
-    const mode = chooseStorageMode(payload);
+    const mode = chooseProviderPayloadStorageMode(payload);
     assert.equal(mode, "inline");
   });
 
@@ -72,7 +47,7 @@ describe("chooseStorageMode", () => {
         largeData: "x".repeat(5000),
       },
     });
-    const mode = chooseStorageMode(largePayload);
+    const mode = chooseProviderPayloadStorageMode(largePayload);
     assert.equal(mode, "r2");
   });
 
@@ -80,7 +55,7 @@ describe("chooseStorageMode", () => {
     const payload = buildOpenAiPayload({
       apiKeys: Array.from({ length: 60 }, (_, i) => `sk-key${i}`),
     });
-    const mode = chooseStorageMode(payload);
+    const mode = chooseProviderPayloadStorageMode(payload);
     assert.equal(mode, "r2");
   });
 
@@ -88,7 +63,7 @@ describe("chooseStorageMode", () => {
     const payload = buildOpenAiPayload({
       apiKeys: Array.from({ length: 40 }, (_, i) => `sk-key${i}`),
     });
-    const mode = chooseStorageMode(payload);
+    const mode = chooseProviderPayloadStorageMode(payload);
     assert.equal(mode, "inline");
   });
 
@@ -96,7 +71,7 @@ describe("chooseStorageMode", () => {
     const payload = buildOpenAiPayload({
       apiKey: "sk-minimal",
     });
-    const mode = chooseStorageMode(payload);
+    const mode = chooseProviderPayloadStorageMode(payload);
     assert.equal(mode, "inline");
   });
 
@@ -113,7 +88,7 @@ describe("chooseStorageMode", () => {
         },
       },
     });
-    const mode = chooseStorageMode(payload);
+    const mode = chooseProviderPayloadStorageMode(payload);
     assert.equal(mode, "inline");
   });
 });

@@ -16,6 +16,9 @@ import {
   deleteCachedProviderPayload,
   providerPayloadKey,
 } from "./provider-credential-sync";
+import { buildGatewayProviderAccountObjectKey } from "./object-keys";
+import { maskGatewayProviderPayload } from "./provider-payload-mask";
+import { chooseProviderPayloadStorageMode } from "./provider-payload-storage";
 
 // ---------------------------------------------------------------------------
 // Storage Mode Selection (Optimized)
@@ -30,24 +33,7 @@ import {
  * - Only large arrays (50+ elements) trigger R2 storage
  */
 export function chooseStorageMode(payload: GatewayProviderAccountPayload): "inline" | "r2" {
-  const serialized = JSON.stringify(payload);
-  const sizeBytes = Buffer.byteLength(serialized, "utf8");
-
-  // Threshold: 4KB (PostgreSQL JSONB performance inflection point)
-  if (sizeBytes > 4096) {
-    return "r2";
-  }
-
-  // Check for large arrays (50+ elements)
-  const hasLargeArray = Object.values(payload).some(
-    (value) => Array.isArray(value) && value.length > 50,
-  );
-  if (hasLargeArray) {
-    return "r2";
-  }
-
-  // Default: inline (includes small nested objects)
-  return "inline";
+  return chooseProviderPayloadStorageMode(payload);
 }
 
 // ---------------------------------------------------------------------------
@@ -107,7 +93,7 @@ export async function createProviderCredential(
       payloadInline = credential;
     } else {
       // Store in R2
-      payloadObjectKey = `provider-credentials/${providerAccountId}/${Date.now()}.json`;
+      payloadObjectKey = buildGatewayProviderAccountObjectKey(providerAccountId);
       await putGatewayObject(payloadObjectKey, Buffer.from(JSON.stringify(credential), "utf8"), "application/json");
     }
 
@@ -203,7 +189,7 @@ export async function updateProviderCredential(
     }
   } else {
     // Store in R2
-    payloadObjectKey = `provider-credentials/${providerAccountId}/${Date.now()}.json`;
+    payloadObjectKey = existing.payloadObjectKey ?? buildGatewayProviderAccountObjectKey(providerAccountId);
     await putGatewayObject(payloadObjectKey, Buffer.from(JSON.stringify(credential), "utf8"), "application/json");
     // Delete old R2 object if exists
     if (existing.payloadObjectKey && existing.payloadObjectKey !== payloadObjectKey) {
@@ -354,7 +340,7 @@ export async function getProviderCredential(
 
   // Mask secrets if requested
   if (maskSecrets) {
-    credential = maskProviderCredentialSecrets(credential);
+    credential = maskGatewayProviderPayload(credential);
   }
 
   // Get cache TTL if cached
@@ -651,73 +637,4 @@ export async function batchProviderCredentialOperations(
       preWarmed,
     },
   };
-}
-
-// ---------------------------------------------------------------------------
-// Helper Functions
-// ---------------------------------------------------------------------------
-
-/**
- * Masks sensitive fields in provider credentials for safe display.
- */
-function maskProviderCredentialSecrets(
-  credential: GatewayProviderAccountPayload,
-): GatewayProviderAccountPayload {
-  const masked = { ...credential };
-
-  // Mask common secret fields
-  if ("apiKey" in masked && typeof masked.apiKey === "string") {
-    masked.apiKey = maskSecretValue(masked.apiKey);
-  }
-  if ("authToken" in masked && typeof masked.authToken === "string") {
-    masked.authToken = maskSecretValue(masked.authToken);
-  }
-  if ("accessToken" in masked && typeof masked.accessToken === "string") {
-    masked.accessToken = maskSecretValue(masked.accessToken);
-  }
-  if ("refreshToken" in masked && typeof masked.refreshToken === "string") {
-    masked.refreshToken = maskSecretValue(masked.refreshToken);
-  }
-  if ("sessionToken" in masked && typeof masked.sessionToken === "string") {
-    masked.sessionToken = maskSecretValue(masked.sessionToken);
-  }
-
-  // Mask keys array
-  if ("keys" in masked && Array.isArray(masked.keys)) {
-    masked.keys = masked.keys.map((key) =>
-      typeof key === "string" ? maskSecretValue(key) : key,
-    );
-  }
-
-  // Mask headers
-  if ("headers" in masked && typeof masked.headers === "object" && masked.headers !== null) {
-    const headers = masked.headers as Record<string, string>;
-    const maskedHeaders: Record<string, string> = {};
-    for (const [key, value] of Object.entries(headers)) {
-      const lowerKey = key.toLowerCase();
-      if (
-        lowerKey.includes("auth") ||
-        lowerKey.includes("token") ||
-        lowerKey.includes("key") ||
-        lowerKey.includes("secret")
-      ) {
-        maskedHeaders[key] = maskSecretValue(value);
-      } else {
-        maskedHeaders[key] = value;
-      }
-    }
-    masked.headers = maskedHeaders;
-  }
-
-  return masked;
-}
-
-/**
- * Masks a secret value, showing only first 3 and last 3 characters.
- */
-function maskSecretValue(value: string): string {
-  if (value.length <= 8) {
-    return "***";
-  }
-  return `${value.slice(0, 3)}***${value.slice(-3)}`;
 }

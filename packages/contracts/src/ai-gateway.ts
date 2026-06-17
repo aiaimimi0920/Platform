@@ -129,18 +129,24 @@ export const gatewayProviderAdapters = [
   "cohere_compatible",
   "grok_compatible",
   "accio_compatible",
+  "qwen_web_compatible",
+  "aistudio_web_reverse_compatible",
   "kiro_compatible",
   "freebuff_compatible",
   "xfyun_websocket_compatible",
   "search_api_compatible",
   "linkup_compatible",
   "producer_compatible",
+  "gemini_api_modular_compatible",
   "gemini_business_compatible",
   "gemini_web_compatible",
+  "gemini_web_reverse_modular_compatible",
   "chatgpt_web_reverse_compatible",
   "chataibot_compatible",
   "lumalabs_compatible",
   "gemini_canvas_compatible",
+  "gemini_canvas_web_reverse_compatible",
+  "gemini_canvas_program_web_reverse_compatible",
   "suno_compatible",
   "udio_compatible",
   "codex_cli",
@@ -171,6 +177,7 @@ export const gatewayProtocolFamilies = [
   "gemini_live",
   "chatgpt_web_chat",
   "gemini_web_chat",
+  "qwen_web_chat",
   "bedrock",
   "bedrock_converse",
   "cohere",
@@ -194,6 +201,8 @@ export const gatewayProtocolFamilies = [
   "chataibot_images",
   "lumalabs",
   "lumalabs_images",
+  "lumalabs_videos",
+  "lumalabs_audio",
   "producer",
   "producer_images",
   "producer_music",
@@ -203,9 +212,13 @@ export const gatewayProtocolFamilies = [
   "gemini_canvas_music",
   "gemini_canvas_videos",
   "suno",
+  "suno_images",
   "suno_music",
+  "suno_videos",
   "udio",
+  "udio_images",
   "udio_music",
+  "udio_videos",
   "xfyun_websocket",
   "codex",
   "claude",
@@ -218,13 +231,16 @@ export const gatewayProtocolProfiles = [
   "openai",
   "chatgpt_official_api",
   "chatgpt_codex_backend",
+  "chatgpt_web_reverse",
   "openai_compatible_generic",
   "azure_openai",
   "anthropic",
   "grok_web",
   "google_gemini_api",
+  "google_gemini_api_modular",
   "google_vertex_gemini",
   "gemini_web",
+  "gemini_web_reverse_modular",
   "aws_bedrock",
   "cohere",
   "groq",
@@ -249,12 +265,19 @@ export const gatewayProtocolProfiles = [
   "freebuff",
   "producer",
   "gemini_canvas",
+  "gemini_canvas_web_reverse_modular",
+  "gemini_canvas_program_web_reverse_modular",
   "suno",
   "udio",
   "gemini_business",
   "chataibot",
   "lumalabs",
   "qwen",
+  "qwen_dashscope_openai",
+  "qwen_coding_plan_openai",
+  "qwen_coding_plan_anthropic",
+  "qwen_web_chat",
+  "aistudio_web_reverse",
   "accio",
   "codex",
   "search_generic",
@@ -391,6 +414,22 @@ export type GatewayGeminiApiCompatibleProviderPayload = GatewaySessionBackedProv
   extraBody?: Record<string, unknown> | null;
 };
 
+export type GatewayGeminiApiModularCompatibleProviderPayload = GatewaySessionBackedProviderRuntime &
+  GatewayProtocolBridgeConfig & {
+  adapter: "gemini_api_modular_compatible";
+  baseUrl: string;
+  accountLabel: string;
+  apiKey: string;
+  authHeaderName?: string | null;
+  authToken?: string | null;
+  defaultModel?: string | null;
+  responsesPath?: string | null;
+  chatCompletionsPath?: string | null;
+  messagesPath?: string | null;
+  headers?: Record<string, string> | null;
+  extraBody?: Record<string, unknown> | null;
+};
+
 export type GatewayBedrockConverseCompatibleProviderPayload = GatewaySessionBackedProviderRuntime &
   GatewayProtocolBridgeConfig & {
   adapter: "bedrock_converse_compatible";
@@ -468,6 +507,31 @@ export type GatewayFreebuffCompatibleProviderPayload = GatewaySessionBackedProvi
   extraBody?: Record<string, unknown> | null;
 };
 
+export type GatewayQwenWebCompatibleProviderPayload = GatewaySessionBackedProviderRuntime &
+  GatewayProtocolBridgeConfig & {
+  adapter: "qwen_web_compatible";
+  baseUrl: string;
+  accountLabel: string;
+  apiKey: string;
+  defaultModel?: string | null;
+  responsesPath?: string | null;
+  chatCompletionsPath?: string | null;
+  headers?: Record<string, string> | null;
+  extraBody?: Record<string, unknown> | null;
+};
+
+export type GatewayAiStudioWebReverseCompatibleProviderPayload = GatewaySessionBackedProviderRuntime &
+  GatewayProtocolBridgeConfig & {
+  adapter: "aistudio_web_reverse_compatible";
+  baseUrl: string;
+  accountLabel: string;
+  apiKey: string;
+  authToken?: string | null;
+  defaultModel?: string | null;
+  headers?: Record<string, string> | null;
+  extraBody?: Record<string, unknown> | null;
+};
+
 export type GatewayXfyunWebsocketCompatibleProviderPayload = GatewaySessionBackedProviderRuntime &
   GatewayProtocolBridgeConfig & {
   adapter: "xfyun_websocket_compatible";
@@ -541,6 +605,20 @@ export type GatewayGeminiWebCompatibleProviderPayload = GatewaySessionBackedProv
     extraBody?: Record<string, unknown> | null;
   };
 
+export type GatewayGeminiWebReverseModularCompatibleProviderPayload =
+  GatewaySessionBackedProviderRuntime &
+    GatewayProtocolBridgeConfig & {
+      adapter: "gemini_web_reverse_modular_compatible";
+      baseUrl: string;
+      accountLabel: string;
+      apiKey: string;
+      authToken?: string | null;
+      defaultModel?: string | null;
+      chatCompletionsPath?: string | null;
+      headers?: Record<string, string> | null;
+      extraBody?: Record<string, unknown> | null;
+    };
+
 export type GatewayChatGptWebReverseCompatibleProviderPayload =
   GatewaySessionBackedProviderRuntime &
     GatewayProtocolBridgeConfig & {
@@ -589,6 +667,32 @@ export type GatewayGeminiCanvasCompatibleProviderPayload = GatewaySessionBackedP
   headers?: Record<string, string> | null;
   extraBody?: Record<string, unknown> | null;
 };
+
+export type GatewayGeminiCanvasWebReverseCompatibleProviderPayload =
+  GatewaySessionBackedProviderRuntime &
+    GatewayProtocolBridgeConfig & {
+      adapter: "gemini_canvas_web_reverse_compatible";
+      baseUrl: string;
+      accountLabel: string;
+      apiKey: string;
+      authToken?: string | null;
+      defaultModel?: string | null;
+      headers?: Record<string, string> | null;
+      extraBody?: Record<string, unknown> | null;
+    };
+
+export type GatewayGeminiCanvasProgramWebReverseCompatibleProviderPayload =
+  GatewaySessionBackedProviderRuntime &
+    GatewayProtocolBridgeConfig & {
+      adapter: "gemini_canvas_program_web_reverse_compatible";
+      baseUrl: string;
+      accountLabel: string;
+      apiKey: string;
+      authToken?: string | null;
+      defaultModel?: string | null;
+      headers?: Record<string, string> | null;
+      extraBody?: Record<string, unknown> | null;
+    };
 
 export type GatewaySunoCompatibleProviderPayload = GatewaySessionBackedProviderRuntime & {
   adapter: "suno_compatible";
@@ -658,10 +762,13 @@ export type GatewayProviderAccountPayload =
   | GatewayOpenAiCompatibleProviderPayload
   | GatewayAnthropicCompatibleProviderPayload
   | GatewayGeminiApiCompatibleProviderPayload
+  | GatewayGeminiApiModularCompatibleProviderPayload
   | GatewayBedrockConverseCompatibleProviderPayload
   | GatewayCohereCompatibleProviderPayload
   | GatewayGrokCompatibleProviderPayload
   | GatewayAccioCompatibleProviderPayload
+  | GatewayQwenWebCompatibleProviderPayload
+  | GatewayAiStudioWebReverseCompatibleProviderPayload
   | GatewayKiroCompatibleProviderPayload
   | GatewayFreebuffCompatibleProviderPayload
   | GatewayXfyunWebsocketCompatibleProviderPayload
@@ -669,10 +776,13 @@ export type GatewayProviderAccountPayload =
   | GatewayProducerCompatibleProviderPayload
   | GatewayGeminiBusinessCompatibleProviderPayload
   | GatewayGeminiWebCompatibleProviderPayload
+  | GatewayGeminiWebReverseModularCompatibleProviderPayload
   | GatewayChatGptWebReverseCompatibleProviderPayload
   | GatewayChataibotCompatibleProviderPayload
   | GatewayLumalabsCompatibleProviderPayload
   | GatewayGeminiCanvasCompatibleProviderPayload
+  | GatewayGeminiCanvasWebReverseCompatibleProviderPayload
+  | GatewayGeminiCanvasProgramWebReverseCompatibleProviderPayload
   | GatewaySunoCompatibleProviderPayload
   | GatewayUdioCompatibleProviderPayload
   | GatewayCodexCliProviderPayload
