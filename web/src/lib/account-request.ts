@@ -66,6 +66,7 @@ async function parseApiErrorResponse(response: Response): Promise<ApiErrorRespon
 export async function accountRequest<T>(pathname: string, options: AccountRequestOptions = {}): Promise<T> {
   const hasJsonBody = options.body !== undefined;
   const response = await fetchInternal(`${accountInternalUrl}${pathname}`, {
+    targetService: "account",
     method: options.method || "GET",
     headers: buildHeaders(options.userContext, hasJsonBody),
     body: hasJsonBody ? JSON.stringify(options.body) : undefined,

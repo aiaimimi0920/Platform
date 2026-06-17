@@ -72,6 +72,7 @@ async function parseApiErrorResponse(response: Response): Promise<ApiErrorRespon
 export async function gatewayRequest<T>(pathname: string, options: GatewayRequestOptions = {}): Promise<T> {
   const hasJsonBody = options.body !== undefined;
   const response = await fetchInternal(`${gatewayInternalUrl}${pathname}`, {
+    targetService: "gateway",
     method: options.method || "GET",
     headers: buildGatewayHeaders(options.userContext, hasJsonBody),
     body: hasJsonBody ? JSON.stringify(options.body) : undefined,

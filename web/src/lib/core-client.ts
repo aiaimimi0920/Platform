@@ -462,6 +462,7 @@ function buildAgentExecutionRunQueryString(args?: AgentExecutionRunQueryArgs) {
 async function coreRequest<T>(pathname: string, options: CoreRequestOptions = {}): Promise<T> {
   const hasJsonBody = options.body !== undefined;
   const response = await fetchInternal(`${coreInternalUrl}${pathname}`, {
+    targetService: "core",
     method: options.method || "GET",
     headers: buildHeaders(options.userContext, hasJsonBody),
     body: hasJsonBody ? JSON.stringify(options.body) : undefined,
