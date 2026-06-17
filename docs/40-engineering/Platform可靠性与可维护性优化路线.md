@@ -205,12 +205,14 @@
   - 承载 owner relief handoff default、handoff 打开和 handoff 结案相关 server actions。
 - `web/src/lib/platform-agent-callback-ops-action-utils.ts`
   - 承载 `/ops/agent-callbacks` follow-up 参数读取、redirect 构造和 owner relief 表单解析 helper，供剩余 callback/runtime actions 与拆出模块共享。
+- `web/src/lib/platform-agent-execution-support-actions.ts`
+  - 承载 arbitration review 推进、execution subtask/status/requeue 和 execution artifact 提交相关 server actions。
 - `web/src/lib/platform-actions-boundary.test.ts`
   - 固化 domain action 文件必须以 `"use server";` 开头。
   - 固化旧 `platform-actions.ts` 入口只保留薄 wrapper，避免业务实现重新回流到总文件。
 - `web/src/lib/platform-actions.ts`
   - 保持现有页面 import path 兼容。
-  - 从约 6911 行降到 4812 行。
+  - 从约 6911 行降到 4667 行。
 
 实现约束：
 
