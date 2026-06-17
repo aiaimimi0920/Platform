@@ -3947,6 +3947,14 @@ export type AccountWorkerHealthView = {
   lastSuccessAt: string | null;
   lastErrorAt: string | null;
   lastErrorMessage: string | null;
+  lastOutboxRecoveryAt: string | null;
+  lastOutboxRecoveryStatus: "success" | "error" | null;
+  lastOutboxRecoveryRequeuedCount: number | null;
+  lastOutboxRecoveryDeadLetterCount: number | null;
+  totalOutboxRecoveryRequeuedCount: number;
+  totalOutboxRecoveryDeadLetterCount: number;
+  lastOutboxRecoveryErrorAt: string | null;
+  lastOutboxRecoveryErrorMessage: string | null;
   lastProductShadowSyncAt: string | null;
   lastProductShadowSyncStatus: "success" | "error" | null;
   lastProductShadowSyncError: string | null;

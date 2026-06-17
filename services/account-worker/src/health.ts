@@ -14,6 +14,14 @@ export function createWorkerHealthState(): WorkerHealthState {
     lastSuccessAt: null,
     lastErrorAt: null,
     lastErrorMessage: null,
+    lastOutboxRecoveryAt: null,
+    lastOutboxRecoveryStatus: null,
+    lastOutboxRecoveryRequeuedCount: null,
+    lastOutboxRecoveryDeadLetterCount: null,
+    totalOutboxRecoveryRequeuedCount: 0,
+    totalOutboxRecoveryDeadLetterCount: 0,
+    lastOutboxRecoveryErrorAt: null,
+    lastOutboxRecoveryErrorMessage: null,
     lastProductShadowSyncAt: null,
     lastProductShadowSyncStatus: null,
     lastProductShadowSyncError: null,
@@ -106,6 +114,39 @@ export function markWorkerCycle(state: WorkerHealthState, status: "success" | "e
 
   state.lastErrorAt = timestamp;
   state.lastErrorMessage = error ?? "unknown worker error";
+}
+
+export function markOutboxRecovery(
+  state: WorkerHealthState,
+  args:
+    | {
+        status: "success";
+        requeuedCount: number;
+        deadLetterCount: number;
+      }
+    | {
+        status: "error";
+        error?: string;
+      },
+) {
+  const timestamp = new Date().toISOString();
+  state.lastOutboxRecoveryAt = timestamp;
+  state.lastOutboxRecoveryStatus = args.status;
+
+  if (args.status === "success") {
+    state.lastOutboxRecoveryRequeuedCount = args.requeuedCount;
+    state.lastOutboxRecoveryDeadLetterCount = args.deadLetterCount;
+    state.totalOutboxRecoveryRequeuedCount += args.requeuedCount;
+    state.totalOutboxRecoveryDeadLetterCount += args.deadLetterCount;
+    state.lastOutboxRecoveryErrorAt = null;
+    state.lastOutboxRecoveryErrorMessage = null;
+    return;
+  }
+
+  state.lastOutboxRecoveryRequeuedCount = null;
+  state.lastOutboxRecoveryDeadLetterCount = null;
+  state.lastOutboxRecoveryErrorAt = timestamp;
+  state.lastOutboxRecoveryErrorMessage = args.error ?? "unknown outbox recovery error";
 }
 
 export function markProductShadowSync(state: WorkerHealthState, status: "success" | "error", error?: string) {

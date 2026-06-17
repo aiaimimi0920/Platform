@@ -55,6 +55,7 @@ import {
   markGatewayRateLimitHotspotAnomalySnapshotLockSkipped,
   markGatewayRateLimitHotspotSnapshot,
   markGatewayRateLimitHotspotSnapshotLockSkipped,
+  markOutboxRecovery,
   markProductShadowSync,
   markWorkerCycle,
   startWorkerHealthServer,
@@ -79,11 +80,25 @@ let nextGatewayAnomalyRemediationEffectivenessAnomalySnapshotAt = 0;
 let nextGatewayRateLimitHotspotSnapshotAt = 0;
 let nextGatewayRateLimitHotspotAnomalySnapshotAt = 0;
 
-async function cycle() {
-  const recovered = await requeueStaleProcessingEvents(
-    env.processingLeaseTimeoutMs,
-    env.processingRecoveryLimit,
-  );
+async function cycle(healthState: ReturnType<typeof createWorkerHealthState>) {
+  let recovered: Awaited<ReturnType<typeof requeueStaleProcessingEvents>>;
+  try {
+    recovered = await requeueStaleProcessingEvents(
+      env.processingLeaseTimeoutMs,
+      env.processingRecoveryLimit,
+    );
+    markOutboxRecovery(healthState, {
+      status: "success",
+      requeuedCount: recovered.requeuedCount,
+      deadLetterCount: recovered.deadLetterCount,
+    });
+  } catch (error) {
+    markOutboxRecovery(healthState, {
+      status: "error",
+      error: extractErrorMessage(error),
+    });
+    throw error;
+  }
   if (recovered.requeuedCount > 0 || recovered.deadLetterCount > 0) {
     console.warn(
       `[account-worker] recovered stale processing events: requeued=${recovered.requeuedCount}, deadLetter=${recovered.deadLetterCount}`,
@@ -980,7 +995,7 @@ async function main() {
 
   while (true) {
     try {
-      await cycle();
+      await cycle(healthState);
       const mailboxOpsDispatchResult = await dispatchMailboxOpsCampaigns();
       if (mailboxOpsDispatchResult.dueCount > 0) {
         console.log(

@@ -22,10 +22,84 @@ type StaleProcessingRecoveryResult = {
   deadLetterCount: number;
 };
 
+export type StaleProcessingRecoverySnapshot = {
+  lastRecoveryAt: string | null;
+  lastRequeuedCount: number;
+  lastDeadLetterCount: number;
+  totalRequeuedCount: number;
+  totalDeadLetterCount: number;
+  lastErrorAt: string | null;
+  lastErrorMessage: string | null;
+};
+
 const BACKOFF_BASE_SECONDS = 5;
 const BACKOFF_CAP_SECONDS = 300;
 const MAX_ERROR_MESSAGE_LENGTH = 1024;
 const DEFAULT_STALE_PROCESSING_SCAN_LIMIT = 100;
+
+function createStaleProcessingRecoverySnapshot(): StaleProcessingRecoverySnapshot {
+  return {
+    lastRecoveryAt: null,
+    lastRequeuedCount: 0,
+    lastDeadLetterCount: 0,
+    totalRequeuedCount: 0,
+    totalDeadLetterCount: 0,
+    lastErrorAt: null,
+    lastErrorMessage: null,
+  };
+}
+
+let staleProcessingRecoverySnapshot = createStaleProcessingRecoverySnapshot();
+
+function cloneStaleProcessingRecoverySnapshot(): StaleProcessingRecoverySnapshot {
+  return {
+    lastRecoveryAt: staleProcessingRecoverySnapshot.lastRecoveryAt,
+    lastRequeuedCount: staleProcessingRecoverySnapshot.lastRequeuedCount,
+    lastDeadLetterCount: staleProcessingRecoverySnapshot.lastDeadLetterCount,
+    totalRequeuedCount: staleProcessingRecoverySnapshot.totalRequeuedCount,
+    totalDeadLetterCount: staleProcessingRecoverySnapshot.totalDeadLetterCount,
+    lastErrorAt: staleProcessingRecoverySnapshot.lastErrorAt,
+    lastErrorMessage: staleProcessingRecoverySnapshot.lastErrorMessage,
+  };
+}
+
+function extractErrorMessage(reason: unknown): string | null {
+  if (!reason) return null;
+  if (typeof reason === "string") return reason;
+  if (reason instanceof Error && reason.message) return reason.message;
+  if (typeof reason === "object" && reason !== null && "message" in reason) {
+    const message = (reason as { message?: unknown }).message;
+    if (typeof message === "string") return message;
+  }
+  try {
+    return JSON.stringify(reason);
+  } catch {
+    return null;
+  }
+}
+
+function recordStaleProcessingRecoverySuccess(requeuedCount: number, deadLetterCount: number) {
+  staleProcessingRecoverySnapshot.lastRecoveryAt = new Date().toISOString();
+  staleProcessingRecoverySnapshot.lastRequeuedCount = requeuedCount;
+  staleProcessingRecoverySnapshot.lastDeadLetterCount = deadLetterCount;
+  staleProcessingRecoverySnapshot.totalRequeuedCount += requeuedCount;
+  staleProcessingRecoverySnapshot.totalDeadLetterCount += deadLetterCount;
+  staleProcessingRecoverySnapshot.lastErrorAt = null;
+  staleProcessingRecoverySnapshot.lastErrorMessage = null;
+}
+
+function recordStaleProcessingRecoveryError(error: unknown) {
+  staleProcessingRecoverySnapshot.lastErrorAt = new Date().toISOString();
+  staleProcessingRecoverySnapshot.lastErrorMessage = extractErrorMessage(error) ?? "unknown stale processing recovery error";
+}
+
+export function getStaleProcessingRecoverySnapshot(): StaleProcessingRecoverySnapshot {
+  return cloneStaleProcessingRecoverySnapshot();
+}
+
+export function resetStaleProcessingRecoverySnapshotForTests() {
+  staleProcessingRecoverySnapshot = createStaleProcessingRecoverySnapshot();
+}
 
 function computeBackoffSeconds(attempts: number): number {
   const exponent = Math.max(0, attempts - 1);
@@ -115,12 +189,14 @@ export async function requeueStaleProcessingEvents(
     }
 
     await client.query("commit");
+    recordStaleProcessingRecoverySuccess(requeuedCount, deadLetterCount);
     return {
       requeuedCount,
       deadLetterCount,
     };
   } catch (error) {
     await client.query("rollback");
+    recordStaleProcessingRecoveryError(error);
     throw error;
   } finally {
     client.release();
