@@ -213,8 +213,10 @@
   - 承载 arbitration review 推进、execution subtask/status/requeue 和 execution artifact 提交相关 server actions。
 - `web/src/lib/platform-agent-execution-preset-actions.ts`
   - 承载 Agent execution launch preset 保存、默认 preset 切换、建议 runtime profile 应用和 preset 删除相关 server actions。
+- `web/src/lib/platform-agent-execution-create-actions.ts`
+  - 承载 Agent execution 创建和 execution callback remediation policy override 更新相关 server actions。
 - `web/src/lib/platform-agent-execution-action-utils.ts`
-  - 承载 `/agent-executions` redirect target 与 focus fragment 构造 helper，供保留在总文件的创建 execution action 与拆出的 preset actions 共享。
+  - 承载 `/agent-executions` redirect target 与 focus fragment 构造 helper，供拆出的 execution create 与 preset actions 共享。
 - `web/src/lib/platform-agent-execution-runtime-actions.ts`
   - 承载 stale platform execution recovery、executor 手动推进、execution settlement retry、runtime session sweep 和 recover-then-run 组合 playbook 相关 server actions。
 - `web/src/lib/platform-agent-execution-runtime-action-utils.ts`
@@ -226,7 +228,7 @@
   - 固化旧 `platform-actions.ts` 入口只保留薄 wrapper，避免业务实现重新回流到总文件。
 - `web/src/lib/platform-actions.ts`
   - 保持现有页面 import path 兼容。
-  - 从约 6911 行降到 1124 行。
+  - 从约 6911 行降到 572 行。
 
 实现约束：
 
