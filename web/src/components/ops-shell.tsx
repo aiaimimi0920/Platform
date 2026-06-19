@@ -21,7 +21,7 @@ const OPS_NAV_ITEMS: OpsNavItem[] = [
   { href: "/ops/gateway/access", label: "Access 控制", group: "AI Gateway" },
   // Account
   { href: "/ops/account/surface-visibility", label: "界面外放", group: "账户" },
-  { href: "/ops/account-worker", label: "Account Worker", group: "账户" },
+  { href: "/ops/account-worker", label: "账户后台任务", group: "账户" },
   { href: "/ops/account/announcements", label: "公告管理", group: "账户" },
   { href: "/ops/account/mailbox", label: "邮箱运营", group: "账户" },
   { href: "/ops/account/email-ingress", label: "真实邮件网关", group: "账户" },
@@ -34,7 +34,7 @@ const OPS_NAV_ITEMS: OpsNavItem[] = [
   { href: "/ops/account/projects", label: "项目管理", group: "内容" },
   { href: "/ops/account/honor-projects", label: "荣誉项目", group: "内容" },
   { href: "/ops/account/issues", label: "议题管理", group: "内容" },
-  { href: "/ops/account/agents", label: "Agent 管理", group: "内容" },
+  { href: "/ops/account/agents", label: "智能体管理", group: "内容" },
   // Commerce
   { href: "/ops/products", label: "商品管理", group: "商品" },
   { href: "/ops/discount-codes", label: "优惠码管理", group: "商品" },
@@ -67,7 +67,7 @@ export function OpsShell({ authActionSlot, children }: OpsShellProps) {
             <span className="ops-header__mark">N</span>
             <span className="ops-header__brand-copy">
               <span className="ops-header__brand-title">NeuroLoom</span>
-              <span className="ops-header__brand-subtitle">Operator Console</span>
+              <span className="ops-header__brand-subtitle">运维控制台</span>
             </span>
           </Link>
           <div className="ops-header__actions">

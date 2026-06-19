@@ -71,7 +71,7 @@ export default async function ReputationPage() {
         <div className="mg-shell">
           <Card className="app-stack">
             <h1 className="mg-title">模块状态暂不可用</h1>
-            <p className="mg-copy">当前无法从 core 读取模块快照，请稍后再试。</p>
+            <p className="mg-copy">当前无法读取模块状态，请稍后再试。</p>
           </Card>
         </div>
       </main>
@@ -152,11 +152,11 @@ export default async function ReputationPage() {
             { label: "违约率", value: reputation ? formatAccountRate(reputation.defaultRate) : "--" },
           ]}
           hudItems={hudItems}
-          kicker="Reputation Terminal"
+          kicker="信誉终端"
           navItems={navItems}
           railFooter={
             <AccountHomeRailCard>
-              <AccountHomeSectionHead kicker="History" title="历史摘要" />
+          <AccountHomeSectionHead kicker="历史" title="历史摘要" />
               <AccountHomeList>
                 <AccountHomeListRow aside={<span className="app-note">{history.length}</span>} title="历史点数量" />
                 <AccountHomeListRow aside={<span className="app-note">{history[0] ? formatAccountDateTime(history[0].recordedAt) : "暂无"}</span>} title="最新记录" />
@@ -190,7 +190,7 @@ export default async function ReputationPage() {
           <div className="app-account-content-grid">
             <div className="app-account-content-main">
               <AccountHomeSection>
-                <AccountHomeSectionHead kicker="Snapshot" title="当前信誉摘要" />
+          <AccountHomeSectionHead kicker="快照" title="当前信誉摘要" />
                 {reputation ? (
                   <AccountHomeStatGrid>
                     <AccountHomeStat label="信誉分" value={reputation.reputationScore} />
@@ -208,11 +208,11 @@ export default async function ReputationPage() {
               </AccountHomeSection>
 
               <AccountHomeSection>
-                <AccountHomeSectionHead kicker="Explain" title="评分拆解" />
+          <AccountHomeSectionHead kicker="拆解" title="评分拆解" />
                 {breakdown ? (
                   <div className="app-account-subgrid">
                     <Card className="app-stack">
-                      <AccountHomeSectionHead kicker="Inputs" title="输入项" />
+              <AccountHomeSectionHead kicker="输入" title="输入项" />
                       <AccountHomeList>
                         <AccountHomeListRow aside={<span className="app-note">{breakdown.inputs.completedTaskCount}</span>} title="已完成任务" />
                         <AccountHomeListRow aside={<span className="app-note">{breakdown.inputs.defaultedTaskCount}</span>} title="违约任务" />
@@ -220,12 +220,12 @@ export default async function ReputationPage() {
                         <AccountHomeListRow aside={<span className="app-note">{breakdown.inputs.activeTaskCount}</span>} title="活跃任务" />
                         <AccountHomeListRow aside={<span className="app-note">{breakdown.inputs.favorableArbitrationCount}</span>} title="有利仲裁" />
                         <AccountHomeListRow aside={<span className="app-note">{breakdown.inputs.unfavorableArbitrationCount}</span>} title="不利仲裁" />
-                        <AccountHomeListRow aside={<span className="app-note">{breakdown.inputs.trustLevel ?? "未提供"}</span>} title="Trust Level" />
+                        <AccountHomeListRow aside={<span className="app-note">{breakdown.inputs.trustLevel ?? "未提供"}</span>} title="信任等级" />
                       </AccountHomeList>
                     </Card>
 
                     <Card className="app-stack">
-                      <AccountHomeSectionHead kicker="Factors" title="计分因子" />
+              <AccountHomeSectionHead kicker="因素" title="计分因子" />
                       <AccountHomeList>
                         <AccountHomeListRow aside={<strong className="app-account-factor-value app-account-factor-value--positive">{formatSignedValue(breakdown.factors.baseScore)}</strong>} title="基础分" />
                         <AccountHomeListRow aside={<strong className="app-account-factor-value app-account-factor-value--positive">{formatSignedValue(breakdown.factors.trustBonus)}</strong>} title="信任加成" />
@@ -246,7 +246,7 @@ export default async function ReputationPage() {
               <AccountHomeSection>
                 <AccountHomeSectionHead
                   actions={<span className="app-note">{history.length} 条历史记录</span>}
-                  kicker="History"
+          kicker="历史"
                   title="信誉历史"
                 />
                 {history.length === 0 ? (
@@ -278,22 +278,22 @@ export default async function ReputationPage() {
 
             <div className="app-account-content-side">
               <AccountHomeSection>
-                <AccountHomeSectionHead kicker="Module" title="实现边界" />
+          <AccountHomeSectionHead kicker="范围" title="信誉口径" />
                 <AccountHomeList>
-                  <AccountHomeListRow aside={<span className="app-note">/v1/me/reputation</span>} title="摘要接口" />
-                  <AccountHomeListRow aside={<span className="app-note">/v1/me/reputation/breakdown</span>} title="Explain 接口" />
-                  <AccountHomeListRow aside={<span className="app-note">/v1/me/reputation/history</span>} title="History 接口" />
-                  <AccountHomeListRow aside={<span className="app-note">task-hub + arbitration</span>} title="统计来源" />
+                  <AccountHomeListRow aside={<span className="app-note">当前账户信誉分</span>} title="信誉摘要" />
+                  <AccountHomeListRow aside={<span className="app-note">完成率 / 违约率 / 仲裁记录</span>} title="口径拆解" />
+                  <AccountHomeListRow aside={<span className="app-note">近期信誉变动流水</span>} title="历史记录" />
+                  <AccountHomeListRow aside={<span className="app-note">任务履约 + 仲裁结果</span>} title="统计来源" />
                 </AccountHomeList>
               </AccountHomeSection>
 
               <AccountHomeSection>
-                <AccountHomeSectionHead kicker="Snapshot" title="当前口径" />
+          <AccountHomeSectionHead kicker="快照" title="当前口径" />
                 <AccountHomeStatGrid>
                   <AccountHomeStat label="更新时间" value={breakdown ? formatAccountDateTime(breakdown.updatedAt) : "--"} />
                   <AccountHomeStat label="完成率" value={breakdown ? formatAccountRate(breakdown.completionRate) : "--"} />
                   <AccountHomeStat label="违约率" value={breakdown ? formatAccountRate(breakdown.defaultRate) : "--"} />
-                  <AccountHomeStat label="Trust Level" value={breakdown?.inputs.trustLevel ?? "未提供"} />
+                  <AccountHomeStat label="信任等级" value={breakdown?.inputs.trustLevel ?? "未提供"} />
                 </AccountHomeStatGrid>
               </AccountHomeSection>
             </div>

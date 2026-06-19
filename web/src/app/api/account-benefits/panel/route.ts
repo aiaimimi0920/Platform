@@ -15,7 +15,7 @@ export async function GET() {
       },
     );
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Benefit panel unavailable";
+    const message = error instanceof Error ? error.message : "权益面板暂不可用";
     return Response.json(
       { error: message },
       {

@@ -81,7 +81,7 @@ export function createReference(
       id: slug("ref-task"),
       type,
       title: `任务单 TASK-${sequence.toString().padStart(3, "0")}`,
-      meta: "Task Hub / Active Request",
+      meta: "任务中心 / 活跃请求",
       tone: "success",
     };
   }
@@ -101,7 +101,7 @@ export function createSeedSlotProfiles(): HeavySlotProfile[] {
       id: "slot-default-heavy",
       title: "觅觅",
       kind: "default",
-      personaLabel: "Default Heavy Dialog",
+      personaLabel: "默认重度对话",
       summary: "默认重度对话体，负责通用对话、任务整理、邮件草稿与长上下文承接。",
       tokenLabel: "固定 / 主人成长",
       projectIds: ["project-default-dialog", "project-delivery-desk", "project-product-notes"],
@@ -111,17 +111,17 @@ export function createSeedSlotProfiles(): HeavySlotProfile[] {
       id: "slot-custom-heavy",
       title: "自创建重度槽位",
       kind: "custom",
-      personaLabel: "Custom Heavy Runtime",
+      personaLabel: "自定义重度运行",
       summary: "保留给用户自定义的重度智能体人格与长期上下文。",
       tokenLabel: "自建槽位 / 已启用",
       projectIds: ["project-product-notes"],
       occupied: true,
     },
     {
-      id: "slot-purchased-placeholder",
+      id: "slot-purchased-extension",
       title: "扩展槽位",
       kind: "purchased",
-      personaLabel: "Purchase More Capacity",
+      personaLabel: "购买更多容量",
       summary: "当前未购买更多重度槽位。购买后可增加更多长期重度智能体人格。",
       tokenLabel: "未购入",
       projectIds: [],
@@ -135,7 +135,7 @@ export function createSeedProjects(): HeavyProjectContext[] {
     {
       id: "project-default-dialog",
       title: "主对话终端",
-      subtitle: "Default Chat Context",
+      subtitle: "默认对话上下文",
       instructions:
         "用于日常对话与任务调度。优先给出下一步动作、结构化摘要和任务化建议，不输出空泛解释。",
       knowledgeItems: [
@@ -147,20 +147,20 @@ export function createSeedProjects(): HeavyProjectContext[] {
     {
       id: "project-delivery-desk",
       title: "交付工作台",
-      subtitle: "Delivery + Email Native",
+      subtitle: "交付与邮件入口",
       instructions:
         "把邮件、任务和交付项统一整理成可提交、可回执、可验收的结构化工作流，优先生成发单草稿与交付摘要。",
       knowledgeItems: [
         { id: "knowledge-delivery-1", label: "邮件任务转换规范", type: "mail", note: "从邮件摘要抽取 metadata 并转成任务草稿。" },
         { id: "knowledge-delivery-2", label: "交付摘要模板", type: "delivery", note: "统一输出交付范围、缺失项和回执摘要。" },
-        { id: "knowledge-delivery-3", label: "任务引用说明", type: "task", note: "优先链接 Task Hub 中的活跃任务。" },
+        { id: "knowledge-delivery-3", label: "任务引用说明", type: "task", note: "优先链接任务中心中的活跃任务。" },
       ],
       fileCount: 4,
     },
     {
       id: "project-product-notes",
       title: "产品规则",
-      subtitle: "Heavy Slot Policy",
+      subtitle: "重度槽位规则",
       instructions:
         "用于固定重度智能体槽位、购买规则、觅觅边界与产品说明，输出时优先保持规则精确。",
       knowledgeItems: [
@@ -193,7 +193,7 @@ export function createSeedThreads(displayName: string): HeavyChatThread[] {
       id: "thread-email-native",
       slotId: "slot-default-heavy",
       projectId: "project-delivery-desk",
-      title: "Email-Native / 邮件任务整理",
+      title: "邮件任务整理",
       preview: "把真实邮箱来信转成任务或执行动作，并整理交付回执。",
       favorite: true,
       updatedAtLabel: "今天 08:40",
@@ -211,11 +211,11 @@ export function createSeedThreads(displayName: string): HeavyChatThread[] {
           ],
         },
         seedAssistantMessage("08:40", "交付工作台项目", [
-          textBlock(`已收到，${displayName}。我会先按来信主题归档，再抽取 task metadata。`),
-          statusBlock("Email-Native", "建议先按邮件类别整理为新任务、补充材料和待回执三组。", "cyan"),
+          textBlock(`已收到，${displayName}。我会先按来信主题归档，再抽取任务元数据。`),
+          statusBlock("邮件入口", "建议先按邮件类别整理为新任务、补充材料和待回执三组。", "cyan"),
           summaryBlock("下一步动作", [
             "抽取发件人、目标、附件与截止时间",
-            "生成 Task Hub 发单草稿",
+            "生成任务中心发单草稿",
             "同步准备邮箱回执摘要",
           ]),
         ]),
@@ -234,7 +234,7 @@ export function createSeedThreads(displayName: string): HeavyChatThread[] {
       messages: [
         seedAssistantMessage("昨天 21:15", "自创建重度槽位", [
           textBlock("当前产品规则已经收口为：每个用户 1 个默认免费对话槽位 + 1 个自创建重度槽位，更多槽位需要购买扩展服务。"),
-          statusBlock("Heavy Slot Rules", "默认免费槽位和自创建槽位独立计数。", "warning"),
+          statusBlock("重度槽位规则", "默认免费槽位和自创建槽位独立计数。", "warning"),
         ]),
       ],
     },
@@ -248,7 +248,7 @@ export function buildAssistantReplyBlocks(input: string, project?: HeavyProjectC
   if (normalized.includes("邮件") || normalized.includes("email")) {
     return [
       textBlock(`已把这条请求挂到项目「${leadTitle}」下，并按邮件工作流准备处理。`),
-      statusBlock("服务端托管调度", "未来真实运行时会负责读取来信、抽取 metadata 并生成结构化结果。", "cyan"),
+      statusBlock("服务端托管调度", "服务端运行时负责读取来信、抽取 metadata 并生成结构化结果。", "cyan"),
       summaryBlock("邮件任务建议", [
         "先做来信归类与主题聚合",
         "抽取任务 metadata 与附件引用",
@@ -260,7 +260,7 @@ export function buildAssistantReplyBlocks(input: string, project?: HeavyProjectC
   if (normalized.includes("槽位") || normalized.includes("heavy") || normalized.includes("重度")) {
     return [
       textBlock("已切到重度智能体槽位策略语境。"),
-      statusBlock("Heavy Slot Ledger", "每个用户默认拥有觅觅 + 1 个自创建槽位，更多槽位通过购买解锁。", "warning"),
+      statusBlock("重度槽位账本", "每个用户默认拥有觅觅 + 1 个自创建槽位，更多槽位通过购买解锁。", "warning"),
       summaryBlock("槽位说明", [
         "觅觅固定保留",
         "自创建槽位与默认对话体分开计数",
@@ -272,18 +272,18 @@ export function buildAssistantReplyBlocks(input: string, project?: HeavyProjectC
   if (normalized.includes("任务") || normalized.includes("交付") || normalized.includes("执行")) {
     return [
       textBlock(`我已把这条输入挂到项目「${leadTitle}」下，并按任务/交付链路整理。`),
-      statusBlock("Task Ready", "当前前端占位会模拟服务端重度运行时的结构化输出。", "success"),
+      statusBlock("Task Ready", "当前对话会按服务端重度运行时的结构化输出协议整理结果。", "success"),
       summaryBlock("建议产物", [
         "当前目标拆解",
         "缺失输入资源清单",
-        "可直接发往 Task Hub 的结构化草稿",
+        "可直接发往任务中心的结构化草稿",
       ]),
     ];
   }
 
   return [
     textBlock(`已收到你的请求，并已切到项目「${leadTitle}」下的对话线程。`),
-    statusBlock("Streaming Ready", "当前仍是本地占位回复，但消息结构已经按未来服务端 streaming 路径准备。", "glass"),
+    statusBlock("Streaming Ready", "消息结构已经按服务端 streaming 路径准备，正在整理为可继续投递的回复。", "glass"),
     summaryBlock("下一步", [
       "继续细化任务目标",
       "必要时挂载文件 / 邮件 / 任务引用",

@@ -19,7 +19,8 @@ test("safeLocalLoomUrl rejects loopback non-settings URLs", () => {
 });
 
 test("displayConfigurationSource labels Loom managed values clearly", () => {
-  assert.equal(displayConfigurationSource("loom-managed"), "Loom-managed");
-  assert.equal(displayConfigurationSource("fallback"), "Fallback snapshot");
-  assert.equal(displayConfigurationSource("local"), "Local");
+  assert.equal(displayConfigurationSource("loom-managed"), "Loom 托管");
+  assert.equal(displayConfigurationSource("fallback"), "保底快照");
+  assert.equal(displayConfigurationSource("local"), "本地配置");
+  assert.equal(displayConfigurationSource("missing"), "未声明");
 });

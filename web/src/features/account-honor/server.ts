@@ -253,8 +253,8 @@ function buildHonorAbilityMetrics(args: {
     },
     {
       key: "agents",
-      label: "Agent 建设",
-      shortLabel: "Agent",
+      label: "智能体建设",
+      shortLabel: "智能体",
       score: agentScore,
       value: `${args.enabledAgentCount} 启用`,
       note: `${args.agentCapabilityCount} 项能力登记`,
@@ -593,9 +593,9 @@ function buildProjectCatalog(): AccountHonorProjectShowcase[] {
       ownerHandle: "sora",
       ownerLabel: "空川",
       categoryLabel: "网络搜索",
-      stageLabel: "协作封测",
+      stageLabel: "协作验证",
       progressPercent: 73,
-      progressLabel: "多终端协作与权限同步已经进入封测，当前在压缩冷启动与同步延迟。",
+      progressLabel: "多终端协作与权限同步正在小范围验证，当前在压缩冷启动与同步延迟。",
       rewardShareLabel: "正式商用后 12% 收益分成",
       sponsorOpen: true,
       sponsorStatusLabel: "开放赞助",
@@ -613,7 +613,7 @@ function buildProjectCatalog(): AccountHonorProjectShowcase[] {
     },
     {
       id: "project-demo-3",
-      name: "Agent 训练仪表盘",
+      name: "智能体训练仪表盘",
       summary: "可视化训练与回放路径管理。",
       publicHref: "/projects/agent-training",
       ownerHandle: "dax",
@@ -632,7 +632,7 @@ function buildProjectCatalog(): AccountHonorProjectShowcase[] {
       workspaceHref: "https://github.com/neuroloom-labs/agent-training-dashboard",
       workspaceLabel: "GitHub 工作目录",
       detailBody:
-        "Agent 训练仪表盘用于把训练批次、失败重放、指标波动和人工接管记录收成一套可以持续迭代的训练视图。当前阶段重点是把实验数据串起来，而不是先做广义平台化发布。",
+        "智能体训练仪表盘用于把训练批次、失败重放、指标波动和人工接管记录收成一套可以持续迭代的训练视图。当前阶段重点是把实验数据串起来，而不是先做广义平台化发布。",
       sponsorCount: 11,
       sponsoredAmount: 4200,
       sponsoredCurrencyLabel: "MIRA",
@@ -650,7 +650,7 @@ function buildProjectCatalog(): AccountHonorProjectShowcase[] {
       progressLabel: "当前完成最小规则扫描与告警编排，后续继续接入更完整的策略集。",
       rewardShareLabel: "项目结项后按 6% 回报支持者",
       sponsorOpen: false,
-      sponsorStatusLabel: "暂未开放",
+      sponsorStatusLabel: "暂不接收赞助",
       joinOpen: true,
       joinStatusLabel: "接收规则维护者",
       collaborationLabel: "策略模板 / 风险标签 / 审计规则",
@@ -676,9 +676,9 @@ function buildInvestmentProjectCatalog(): AccountHonorProjectShowcase[] {
       ownerHandle: "sora",
       ownerLabel: "空川",
       categoryLabel: "网络搜索",
-      stageLabel: "协作封测",
+      stageLabel: "协作验证",
       progressPercent: 73,
-      progressLabel: "多终端协作与权限同步已经进入封测，当前在压缩冷启动与同步延迟。",
+      progressLabel: "多终端协作与权限同步正在小范围验证，当前在压缩冷启动与同步延迟。",
       rewardShareLabel: "正式商用后 12% 收益分成",
       sponsorOpen: true,
       sponsorStatusLabel: "开放赞助",
@@ -812,8 +812,8 @@ function buildDemoIssueCatalog(): AccountHonorIssueShowcase[] {
     },
     {
       id: "issue-demo-4",
-      name: "Agent 协作时间线",
-      summary: "社区提案：为多 Agent 任务提供共享时间线视图，达到票数门槛后进入实现排期。",
+      name: "智能体协作时间线",
+      summary: "社区提案：为多智能体任务提供共享时间线视图，达到票数门槛后进入实现排期。",
       publicHref: "/opinions/agent-timeline",
       supporterCount: 58,
       supportedAmount: 840,
@@ -861,8 +861,8 @@ function buildDemoInvestmentIssueCatalog(): AccountHonorIssueShowcase[] {
     },
     {
       id: "issue-demo-4",
-      name: "Agent 协作时间线",
-      summary: "你已支持 Agent 协作时间线提案，若票数继续上涨将进入实现候选。",
+      name: "智能体协作时间线",
+      summary: "你已支持智能体协作时间线提案，若票数继续上涨将进入实现候选。",
       publicHref: "/opinions/agent-timeline",
       supporterCount: 58,
       supportedAmount: 180,
@@ -1008,9 +1008,9 @@ function buildHonorActivityHeatmap(args: {
   }
 
   for (const agent of args.agents) {
-    pushActivitySignal(buckets, agent.createdAt, 3, "登记 Agent");
+    pushActivitySignal(buckets, agent.createdAt, 3, "登记智能体");
     if (toDateKey(agent.updatedAt) !== toDateKey(agent.createdAt)) {
-      pushActivitySignal(buckets, agent.updatedAt, 1, "Agent 更新");
+      pushActivitySignal(buckets, agent.updatedAt, 1, "智能体更新");
     }
   }
 
@@ -1291,7 +1291,7 @@ export async function handleAccountHonorPanelRequest(request: Request) {
       panel,
     });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Honor panel unavailable";
+    const message = error instanceof Error ? error.message : "荣誉面板暂不可用";
     return withNoCacheJson(
       { error: message },
       {

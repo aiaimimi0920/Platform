@@ -96,14 +96,14 @@ export default async function ProductOpsPage({ searchParams }: ProductOpsPagePro
         ) : null}
 
         <div className="ops-card">
-          <h2 className="ops-card__title">Inventory</h2>
+          <h2 className="ops-card__title">商品库存</h2>
           <div className="ops-table-wrap">
             <table className="ops-table">
               <thead>
                 <tr>
-                  <th>Total Products</th>
-                  <th>Active</th>
-                  <th>Inactive</th>
+                  <th>商品总数</th>
+                  <th>已上架</th>
+                  <th>未上架</th>
                 </tr>
               </thead>
               <tbody>

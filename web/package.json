@@ -1,5 +1,5 @@
 {
-  "name": "neuroplatform-web",
+  "name": "@neuro/web",
   "version": "0.1.0",
   "private": true,
   "scripts": {

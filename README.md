@@ -1,6 +1,6 @@
-﻿# Neuro Platform
+# NeuroLoom Platform
 
-Neuro Platform is the website and public service layer for the Neuro system.
+NeuroLoom Platform is the website and public service layer for the Neuro system.
 
 It owns the official web surface, account flows, product/benefit surfaces,
 operator pages, account-domain services, quota and entitlement policy, and the

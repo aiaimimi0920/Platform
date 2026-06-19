@@ -36,7 +36,102 @@ function formatDateTime(value: unknown): string {
 }
 
 function formatStatus(status: unknown): string {
-  return typeof status === "string" && status ? status : "unknown";
+  return typeof status === "string" && status ? status : "unavailable";
+}
+
+function formatTicketStatusLabel(status: string): string {
+  switch (status) {
+    case "open":
+      return "待处理";
+    case "awaiting_approval":
+      return "等待审批";
+    case "approved":
+      return "已审批";
+    case "plan_ready":
+      return "方案就绪";
+    case "needs_review":
+      return "等待审阅";
+    case "running":
+      return "执行中";
+    case "accepted":
+      return "已验收";
+    case "completed":
+      return "已完成";
+    case "closed":
+      return "已关闭";
+    case "cancelled":
+      return "已取消";
+    case "failed":
+      return "执行失败";
+    case "blocked":
+      return "受阻";
+    case "rejected":
+      return "已退回";
+    case "unavailable":
+      return "未提供";
+    default:
+      return "自定义状态";
+  }
+}
+
+function formatTicketSource(source: unknown): string {
+  switch (source) {
+    case "hook":
+      return "Hook 提交";
+    case "api":
+      return "接口提交";
+    case "loom":
+      return "Loom 提交";
+    case "schedule":
+      return "定时提交";
+    case "human":
+    case undefined:
+    case null:
+    case "":
+      return "手动提交";
+    default:
+      return "其他来源";
+  }
+}
+
+function formatApprovalPolicy(value: unknown): string {
+  switch (value) {
+    case "human_before_execute":
+      return "执行前人工确认";
+    case "human_before_completion":
+      return "完成前人工验收";
+    case "manual_only":
+      return "仅人工推进";
+    case "plan_only":
+      return "只生成方案";
+    case "auto_execute":
+      return "自动执行";
+    case undefined:
+    case null:
+    case "":
+      return "未提供";
+    default:
+      return "自定义审批策略";
+  }
+}
+
+function formatRiskLevel(value: unknown): string {
+  switch (value) {
+    case "low":
+      return "低风险";
+    case "medium":
+      return "中风险";
+    case "high":
+      return "高风险";
+    case "critical":
+      return "高危";
+    case undefined:
+    case null:
+    case "":
+      return "未提供";
+    default:
+      return "自定义风险等级";
+  }
 }
 
 function statusBadgeVariant(status: string): "cyan" | "danger" | "success" | "warning" | "violet" {
@@ -70,11 +165,45 @@ function lifecycleButton(ticket: TeaTicketView, action: string, label: string, v
 }
 
 function configSource(status: TeaStatusView | null): string {
-  return typeof status?.configuration_source === "string" ? status.configuration_source : "unknown";
+  const source = status?.configuration_source;
+  if (source === "loom-managed" || source === "fallback" || source === "local") {
+    return source;
+  }
+  return typeof source === "string" && source.trim() ? "custom" : "unavailable";
 }
 
-function configOwner(status: TeaStatusView | null): string {
-  return typeof status?.configuration?.owner === "string" ? status.configuration.owner : "unknown";
+function configSourceLabel(status: TeaStatusView | null): string {
+  switch (configSource(status)) {
+    case "loom-managed":
+      return "Loom 集中管理";
+    case "fallback":
+      return "本地兜底";
+    case "local":
+      return "Tea 本地配置";
+    case "unavailable":
+      return "未声明";
+    default:
+      return "自定义配置";
+  }
+}
+
+function configOwner(status: TeaStatusView | null): string | null {
+  return typeof status?.configuration?.owner === "string" && status.configuration.owner.trim()
+    ? status.configuration.owner
+    : null;
+}
+
+function configOwnerLabel(status: TeaStatusView | null): string {
+  switch (configOwner(status)) {
+    case "loom":
+      return "归属：Loom";
+    case "tea":
+      return "归属：Tea";
+    case null:
+      return "归属：未声明";
+    default:
+      return `归属：${configOwner(status)}`;
+  }
 }
 
 function configPanelHref(status: TeaStatusView | null): string {
@@ -90,13 +219,38 @@ function configActionLabel(status: TeaStatusView | null): string {
 }
 
 function brainProviderMode(status: TeaStatusView | null): string {
-  return typeof status?.brain_provider?.mode === "string" ? status.brain_provider.mode : "unknown";
+  const mode = status?.brain_provider?.mode;
+  if (mode === "loom" || mode === "template" || mode === "manual") {
+    return mode;
+  }
+  return typeof mode === "string" && mode.trim() ? "custom" : "unavailable";
+}
+
+function brainProviderModeLabel(status: TeaStatusView | null): string {
+  switch (brainProviderMode(status)) {
+    case "loom":
+      return "Loom 强推理";
+    case "template":
+      return "模板拆解";
+    case "manual":
+      return "人工拆解";
+    case "unavailable":
+      return "未声明";
+    default:
+      return "自定义拆解模式";
+  }
 }
 
 function brainProviderCapability(status: TeaStatusView | null): string {
-  return typeof status?.brain_provider?.capability === "string"
-    ? status.brain_provider.capability
-    : "tea.ticket.decompose.v1";
+  switch (status?.brain_provider?.capability) {
+    case "tea.ticket.decompose.v1":
+    case undefined:
+    case null:
+    case "":
+      return "工单拆解能力";
+    default:
+      return "自定义拆解能力";
+  }
 }
 
 export default async function TeaPage({ searchParams }: TeaPageProps) {
@@ -140,11 +294,11 @@ export default async function TeaPage({ searchParams }: TeaPageProps) {
         <Card className="app-stack">
           <div className="app-task-card__header">
             <div>
-              <p className="mg-subtitle">Tea Work Order Desk</p>
+              <p className="mg-subtitle">Tea 工单台</p>
               <h1 className="mg-title">AI 工单控制台</h1>
               <p className="mg-copy">
-                这里是 Platform Web 的 Tea 入口。浏览器只访问 Platform Web；Platform Web 通过 Platform Core
-                的 <code>/internal/tea/*</code> 代理调用 Tea daemon，浏览器不会持有 Tea daemon token。
+                这里是 Platform Web 的 Tea 入口。浏览器只访问 Platform Web；工单详情、执行证据和流转动作由平台统一读取与转发，
+                后台凭证不会暴露给浏览器。
               </p>
             </div>
             <div className="app-action-row">
@@ -169,13 +323,13 @@ export default async function TeaPage({ searchParams }: TeaPageProps) {
             <AccountHomeSection>
               <AccountHomeSectionHead
                 actions={<span className="app-note">{tickets.length} 条</span>}
-                kicker="Queue"
+                kicker="队列"
                 title="Tea 工单队列"
               />
 
               {loadError ? (
                 <Card className="app-stack">
-                  <Badge variant="danger">Core/Tea unavailable</Badge>
+                  <Badge variant="danger">工单服务暂不可用</Badge>
                   <p className="mg-copy">{loadError}</p>
                 </Card>
               ) : tickets.length === 0 ? (
@@ -189,19 +343,19 @@ export default async function TeaPage({ searchParams }: TeaPageProps) {
                       <Card className="app-stack" key={ticket.id}>
                         <div className="app-task-card__header">
                           <div>
-                            <p className="mg-subtitle">{ticket.source || "human"} · {ticket.id}</p>
-                            <h2 className="app-card-title">{ticket.title || "Untitled Tea ticket"}</h2>
+                            <p className="mg-subtitle">{formatTicketSource(ticket.source)} · {ticket.id}</p>
+                            <h2 className="app-card-title">{ticket.title || "未命名 Tea 工单"}</h2>
                           </div>
-                          <Badge variant={statusBadgeVariant(ticketStatus)}>{ticketStatus}</Badge>
+                          <Badge variant={statusBadgeVariant(ticketStatus)}>{formatTicketStatusLabel(ticketStatus)}</Badge>
                         </div>
                         <p className="mg-copy">{ticket.description || "无描述。"}</p>
                         <AccountHomeList>
                           <AccountHomeListRow
-                            aside={<span className="app-note">{ticket.approval_policy || "unknown"}</span>}
+                            aside={<span className="app-note">{formatApprovalPolicy(ticket.approval_policy)}</span>}
                             title="审批策略"
                           />
                           <AccountHomeListRow
-                            aside={<span className="app-note">{ticket.risk_level || "unknown"}</span>}
+                            aside={<span className="app-note">{formatRiskLevel(ticket.risk_level)}</span>}
                             title="风险等级"
                           />
                           <AccountHomeListRow
@@ -250,19 +404,19 @@ export default async function TeaPage({ searchParams }: TeaPageProps) {
 
           <div className="app-account-content-side">
             <AccountHomeSection>
-              <AccountHomeSectionHead kicker="Configuration" title="配置归属" />
+              <AccountHomeSectionHead kicker="配置" title="配置归属" />
               <Card className="app-stack">
                 <div className="app-action-row">
                   <Badge variant={configSource(teaStatus) === "loom-managed" ? "cyan" : "glass"}>
-                    {configSource(teaStatus)}
+                    {configSourceLabel(teaStatus)}
                   </Badge>
-                  <span className="app-note">owner: {configOwner(teaStatus)}</span>
+                  <span className="app-note">{configOwnerLabel(teaStatus)}</span>
                 </div>
                 <p className="mg-copy">
                   {configSource(teaStatus) === "loom-managed"
                     ? "当前 Tea 设置由 Loom 集中管理。此处只展示状态，配置按钮会跳转到 Loom 的 Tea 配置入口。"
                     : configSource(teaStatus) === "fallback"
-                      ? `Loom 配置接管探测失败，Tea 临时使用本地 fallback 配置：${
+                      ? `未读取到 Loom 集中配置声明，Tea 会继续使用本地配置保持可用：${
                           teaStatus?.configuration?.reason || "未提供原因"
                         }`
                       : "当前 Tea 使用本地配置。没有可用 Loom 接管声明时，Tea 保持独立可配置。"}
@@ -274,23 +428,23 @@ export default async function TeaPage({ searchParams }: TeaPageProps) {
             </AccountHomeSection>
 
             <AccountHomeSection>
-              <AccountHomeSectionHead kicker="BrainProvider" title="拆解能力" />
+              <AccountHomeSectionHead kicker="智能拆解" title="拆解能力" />
               <Card className="app-stack">
                 <div className="app-action-row">
                   <Badge variant={brainProviderMode(teaStatus) === "loom" ? "cyan" : "glass"}>
-                    {brainProviderMode(teaStatus)}
+                    {brainProviderModeLabel(teaStatus)}
                   </Badge>
                   <span className="app-note">{brainProviderCapability(teaStatus)}</span>
                 </div>
                 <p className="mg-copy">
                   Tea 负责工单生命周期和拆解记录；Loom 负责强推理拆解提案。没有 Loom 时，Tea 会使用本地
-                  template/manual provider 保持独立可用。
+                  模板或人工流程保持独立可用。
                 </p>
               </Card>
             </AccountHomeSection>
 
             <AccountHomeSection>
-              <AccountHomeSectionHead kicker="Create" title="提交 AI 工单" />
+              <AccountHomeSectionHead kicker="创建" title="提交 AI 工单" />
               <form action={createTeaTicketAction} className="app-form-grid">
                 <input name="redirectTo" type="hidden" value="/tea" />
                 <Input name="title" placeholder="工单标题，例如：修复 Hook 截图上传失败" required />
@@ -307,7 +461,7 @@ export default async function TeaPage({ searchParams }: TeaPageProps) {
             </AccountHomeSection>
 
             <AccountHomeSection>
-              <AccountHomeSectionHead kicker="Status" title="状态分布" />
+              <AccountHomeSectionHead kicker="状态" title="状态分布" />
               {statusCounts.length === 0 ? (
                 <p className="mg-copy">暂无可统计状态。</p>
               ) : (
@@ -316,7 +470,7 @@ export default async function TeaPage({ searchParams }: TeaPageProps) {
                     <AccountHomeListRow
                       aside={<Badge variant={statusBadgeVariant(ticketStatus)}>{String(count)}</Badge>}
                       key={ticketStatus}
-                      title={ticketStatus}
+                      title={formatTicketStatusLabel(ticketStatus)}
                     />
                   ))}
                 </AccountHomeList>
@@ -324,12 +478,11 @@ export default async function TeaPage({ searchParams }: TeaPageProps) {
             </AccountHomeSection>
 
             <AccountHomeSection>
-              <AccountHomeSectionHead kicker="Boundary" title="接口边界" />
+              <AccountHomeSectionHead kicker="访问" title="访问说明" />
               <AccountHomeList>
-                <AccountHomeListRow aside={<span className="app-note">Browser</span>} title="只访问 Platform Web" />
-                <AccountHomeListRow aside={<span className="app-note">Web API</span>} title="/api/tea/tickets" />
-                <AccountHomeListRow aside={<span className="app-note">Core</span>} title="/internal/tea/*" />
-                <AccountHomeListRow aside={<span className="app-note">Tea</span>} title="Bearer token 仅后端持有" />
+                <AccountHomeListRow aside={<span className="app-note">浏览器只访问 Platform Web</span>} title="前端入口" />
+                <AccountHomeListRow aside={<span className="app-note">工单创建、审批与流转由平台统一转发</span>} title="操作方式" />
+                <AccountHomeListRow aside={<span className="app-note">后台凭证由服务端托管，不暴露给浏览器</span>} title="安全边界" />
               </AccountHomeList>
             </AccountHomeSection>
           </div>

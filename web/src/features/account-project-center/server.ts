@@ -46,7 +46,7 @@ function resolveProjectProfile(project: HonorProjectShowcaseView): ProjectPresen
     progressLabel: "当前仍处于前期方案整理阶段，细项能力会随着更多真实字段接入而细化。",
     rewardShareLabel: "收益分成方案待后续明确",
     sponsorOpen: false,
-    sponsorStatusLabel: "暂未开放",
+    sponsorStatusLabel: "暂不接收赞助",
     joinOpen: false,
     joinStatusLabel: "后续开放",
     collaborationLabel: "外部协作待开放",

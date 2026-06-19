@@ -135,12 +135,12 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
       accent: "ink" as const,
       description: "管理个人智能体、能力与回调健康状态。",
       href: "/my-agents",
-      title: "我的 Agents",
+      title: "我的智能体",
       visible: isPublicSurfaceVisibleForViewer(publicSurfaces, "agents", session.user.id, session.user.providerUserId),
     },
     {
       accent: "cyan" as const,
-      description: "配置真实邮箱身份与 Email-Native 入口。",
+      description: "配置真实邮箱身份与邮件入口。",
       href: "/email-access",
       title: "邮箱身份",
       visible: true,
@@ -182,17 +182,17 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
             { label: "成长等级", value: progression ? `Lv.${progression.level}` : "未读取" },
             { label: "未读消息", value: formatAccountNumber(mailboxUnreadCount) },
             { label: "活跃资产", value: formatAccountNumber(assetsSnapshot?.activeItems ?? 0) },
-            { label: "启用 Agent", value: formatAccountNumber(agentsSnapshot?.enabledAgents ?? 0) },
+            { label: "启用智能体", value: formatAccountNumber(agentsSnapshot?.enabledAgents ?? 0) },
           ]}
           hudItems={hudItems}
-          kicker="Account Terminal"
+          kicker="账户终端"
           navItems={navItems}
           railFooter={
             <AccountHomeRailCard>
-              <AccountHomeSectionHead kicker="Session" title="当前身份" />
+          <AccountHomeSectionHead kicker="身份" title="当前身份" />
               <AccountHomeList>
                 <AccountHomeListRow aside={<span className="app-note">{loginSourceLabel}</span>} title="登录来源" />
-                <AccountHomeListRow aside={<span className="app-note">{user.trustLevel ?? "未同步"}</span>} title="Trust Level" />
+                <AccountHomeListRow aside={<span className="app-note">{user.trustLevel ?? "未同步"}</span>} title="信任等级" />
                 <AccountHomeListRow aside={<span className="app-note">{formatAccountDateTime(user.lastLoginAt)}</span>} title="最近登录" />
                 <AccountHomeListRow
                   aside={<span className="app-note">{featureSnapshotUnavailable ? "降级" : "正常"}</span>}
@@ -205,14 +205,14 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
             { label: "开放入口", value: formatAccountNumber(visibleSurfaceCount) },
             { label: "账本流水", value: formatAccountNumber(walletSnapshot?.recentEntryCount ?? 0) },
             { label: "待领附件", value: formatAccountNumber(pendingAttachmentCount) },
-            { label: "总 Agent", value: formatAccountNumber(agentsSnapshot?.totalAgents ?? 0) },
+            { label: "总智能体", value: formatAccountNumber(agentsSnapshot?.totalAgents ?? 0) },
           ]}
           stage={
             <div className="app-dashboard-stage">
               <div className="app-dashboard-stage__grid" />
               <div className="app-dashboard-stage__signal" />
               <div className="app-dashboard-stage__identity">
-                <span className="app-dashboard-stage__kicker">Local-first account</span>
+                <span className="app-dashboard-stage__kicker">本地优先账户</span>
                 <strong className="app-dashboard-stage__name">{accountDisplayName}</strong>
                 <span className="app-dashboard-stage__meta">{session.user.providerUserId}</span>
               </div>
@@ -222,9 +222,9 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                 fallback={userInitial}
               />
               <div className="app-dashboard-stage__readout" aria-label="账户终端状态">
-                <span>{featureSnapshotUnavailable ? "CORE DEGRADED" : "CORE ONLINE"}</span>
-                <span>{showOpsCenterFab ? "OPS READY" : "USER MODE"}</span>
-                <span>{pendingAttachmentCount > 0 ? "CLAIM WAITING" : "CLEAR"}</span>
+                <span>{featureSnapshotUnavailable ? "服务降级" : "服务在线"}</span>
+                <span>{showOpsCenterFab ? "运维就绪" : "用户模式"}</span>
+                <span>{pendingAttachmentCount > 0 ? "待领取" : "无待办"}</span>
               </div>
             </div>
           }
@@ -233,14 +233,14 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
             <>
               <Badge variant="warning">Layer 1</Badge>
               <Badge variant={featureSnapshotUnavailable ? "danger" : "success"}>
-                {featureSnapshotUnavailable ? "Core degraded" : "Core online"}
+                {featureSnapshotUnavailable ? "服务降级" : "服务在线"}
               </Badge>
               {showOpsCenterFab ? <Badge variant="cyan">{opsCenterBadge}</Badge> : null}
             </>
           }
         >
           <AccountHomeSection>
-            <AccountHomeSectionHead kicker="Launch Board" title="常用入口" />
+          <AccountHomeSectionHead kicker="快捷入口" title="常用入口" />
             <AccountHomeActionGrid>
               {quickActions.map((action) => (
                 <AccountHomeActionTile
@@ -255,11 +255,11 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
           </AccountHomeSection>
 
           <AccountHomeSection>
-            <AccountHomeSectionHead kicker="Account Snapshot" title="账户域摘要" />
+          <AccountHomeSectionHead kicker="账户摘要" title="账户域摘要" />
             <AccountHomeStatGrid>
               <AccountHomeStat label="资产总数" value={formatAccountNumber(assetsSnapshot?.totalItems ?? 0)} />
               <AccountHomeStat label="挂牌资产" value={formatAccountNumber(assetsSnapshot?.listedItems ?? 0)} />
-              <AccountHomeStat label="Agent 能力" value={formatAccountNumber(agentsSnapshot?.capabilityCount ?? 0)} />
+              <AccountHomeStat label="智能体能力" value={formatAccountNumber(agentsSnapshot?.capabilityCount ?? 0)} />
               <AccountHomeStat label="活跃执行" value={formatAccountNumber(agentsSnapshot?.activeExecutions ?? 0)} />
               <AccountHomeStat label="总消息" value={formatAccountNumber(mailboxSnapshot?.totalMessages ?? 0)} />
               <AccountHomeStat label="成长 XP" value={formatAccountNumber(progression?.experience ?? 0)} />

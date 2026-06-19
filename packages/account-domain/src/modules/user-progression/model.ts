@@ -111,7 +111,7 @@ const progressionSourceDefinitions: ProgressionSourceDefinition[] = [
   },
   {
     key: "agentCreated",
-    label: "登记 Agent",
+    label: "登记智能体",
     experiencePerUnit: 28,
     metricValue: ({ metrics }) => metrics.agentCreatedCount,
   },
@@ -176,7 +176,7 @@ const progressionLevels: ProgressionLevelDefinition[] = [
         key: "advanced-access",
         kind: "access",
         title: "高级入口预留",
-        description: "后续可将 4 级作为更高阶 Agent 能力、供给池与灰度能力的优先开放门槛。",
+        description: "后续可将 4 级作为更高阶智能体能力、供给池与灰度能力的优先开放门槛。",
       },
     ],
   },
@@ -220,17 +220,17 @@ const progressionAccessDefinitions: ProgressionAccessDefinition[] = [
   },
   {
     key: "createPlatformAgent",
-    title: "创建平台 Agent",
+    title: "创建平台智能体",
     minLevel: 2,
     note: ({ minLevel, minLevelTitle }) =>
-      `创建平台 Agent 至少需要 Lv.${minLevel} ${minLevelTitle}，确保基础参与度已经建立。`,
+      `创建平台智能体至少需要 Lv.${minLevel} ${minLevelTitle}，确保基础参与度已经建立。`,
   },
   {
     key: "createExternalAgent",
-    title: "创建外部 Agent",
+    title: "创建外部智能体",
     minLevel: 3,
     note: ({ minLevel, minLevelTitle }) =>
-      `创建外部 Agent 至少需要 Lv.${minLevel} ${minLevelTitle}，因为它涉及更高的运行与回调管理复杂度。`,
+      `创建外部智能体至少需要 Lv.${minLevel} ${minLevelTitle}，因为它涉及更高的运行与回调管理复杂度。`,
   },
 ];
 

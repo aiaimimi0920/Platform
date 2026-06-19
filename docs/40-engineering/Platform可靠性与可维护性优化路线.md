@@ -126,7 +126,7 @@
   - `@neuro/account-worker`
   - `@neuro/core`
   - `@neuro/worker`
-  - `neuroplatform-web`
+  - `@neuro/web`
 
 注意：
 
@@ -258,7 +258,7 @@
 
 - 单个 actions 文件不再成为多域修改热点。
 - 页面调用路径能从文件名直接看出所属 domain。
-- `npm run test --workspace neuroplatform-web` 通过。
+- `npm run test --workspace @neuro/web` 通过。
 
 ### Phase C：Account API server 路由拆分
 

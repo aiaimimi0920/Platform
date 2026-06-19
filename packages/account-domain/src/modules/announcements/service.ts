@@ -9,6 +9,7 @@ import type {
 import { bootstrapAccountAnnouncements } from "@neuro/contracts";
 
 import {
+  archiveAccountAnnouncementRowsByIds,
   deleteAccountAnnouncementRow,
   getAccountAnnouncementRowById,
   insertAccountAnnouncementRow,
@@ -23,6 +24,16 @@ import { BadRequestError, NotFoundError, UnauthorizedError } from "@/platform/er
 function now() {
   return new Date();
 }
+
+const LEGACY_UI_TEST_ANNOUNCEMENT_IDS = [
+  "2026-03-21-scroll-test-a",
+  "2026-03-20-scroll-test-b",
+  "2026-03-19-scroll-test-c",
+  "2026-03-18-scroll-test-d",
+  "2026-03-17-scroll-test-e",
+  "2026-03-16-scroll-test-f",
+  "2026-03-15-twenty-character-title-test",
+] as const;
 
 function getPlatformOperatorUserIdSet() {
   return new Set(
@@ -187,6 +198,8 @@ function buildSeedInsert(seed: BootstrapAccountAnnouncement) {
 }
 
 export async function ensureAnnouncementCatalogSeeded() {
+  await archiveAccountAnnouncementRowsByIds([...LEGACY_UI_TEST_ANNOUNCEMENT_IDS], now());
+
   const existingRows = await listAccountAnnouncementRowsByIds(bootstrapAccountAnnouncements.map((seed) => seed.id));
   const existingIdSet = new Set(existingRows.map((row) => row.id));
 

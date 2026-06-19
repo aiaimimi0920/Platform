@@ -49,7 +49,7 @@ const walletAssetCatalog: Array<
     category: "premium",
     summary: "平台核心高价值消费货币，承接充值后的高级消费与结算行为。",
     acquisition: "通过充值、专项补偿或高价值活动奖励获得。",
-    usage: "用于高价值商品、服务包、Agent 消费与单向兑换米拉。",
+    usage: "用于高价值商品、服务包、智能体消费与单向兑换米拉。",
     rule: "内部 canonical key 继续保持 obsidian，展示层正式名称统一为耀晶。",
   },
   {

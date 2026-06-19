@@ -1127,15 +1127,15 @@ export default async function MailboxOpsPage({ searchParams }: MailboxOpsPagePro
 
         {/* ── Inventory ── */}
         <div className="ops-card">
-          <h2 className="ops-card__title">Inventory</h2>
+          <h2 className="ops-card__title">邮件活动库存</h2>
           <div className="ops-table-wrap">
             <table className="ops-table">
               <thead>
                 <tr>
-                  <th>Total</th>
-                  <th>Scheduled</th>
-                  <th>Sent</th>
-                  <th>Failed</th>
+                  <th>总数</th>
+                  <th>待投递</th>
+                  <th>已发送</th>
+                  <th>失败</th>
                 </tr>
               </thead>
               <tbody>

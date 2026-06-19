@@ -33,6 +33,10 @@ function resolveReturnTo(value: string | undefined) {
   return raw;
 }
 
+function formatExecutionModeLabel(value: string) {
+  return value === "browser_backed" ? "浏览器托管" : "直连 HTTP";
+}
+
 export default async function GatewayProviderCreatePage({ searchParams }: ProviderCreatePageProps) {
   const session = await auth();
   if (!session?.user?.id || !isPlatformOperatorUserId(session.user.id, session.user.providerUserId)) {
@@ -126,7 +130,7 @@ export default async function GatewayProviderCreatePage({ searchParams }: Provid
                       `&protocolFamily=${encodeURIComponent(entry.protocolFamily)}` +
                       `&protocolProfile=${encodeURIComponent(entry.protocolProfile)}` +
                       `&returnTo=${encodeURIComponent(returnTo)}`;
-                    const modeLabel = entry.defaultExecutionMode === "browser_backed" ? "Browser Backed" : "Direct HTTP";
+                    const modeLabel = formatExecutionModeLabel(entry.defaultExecutionMode);
                     return (
                       <Link
                         key={entry.key}
@@ -254,7 +258,7 @@ export default async function GatewayProviderCreatePage({ searchParams }: Provid
               <input
                 className="nt-input"
                 readOnly
-                value={defaults.defaultExecutionMode === "browser_backed" ? "Browser Backed" : "Direct HTTP"}
+                value={formatExecutionModeLabel(defaults.defaultExecutionMode)}
               />
             </label>
             <label style={{ display: "grid", gap: 6 }}>

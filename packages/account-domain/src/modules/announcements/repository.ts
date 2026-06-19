@@ -55,6 +55,23 @@ export async function updateAccountAnnouncementRow(
   return row ?? null;
 }
 
+export async function archiveAccountAnnouncementRowsByIds(ids: string[], timestamp: Date) {
+  const normalizedIds = Array.from(new Set(ids.map((id) => id.trim()).filter((id) => id.length > 0)));
+  if (normalizedIds.length === 0) {
+    return [];
+  }
+
+  return db
+    .update(accountAnnouncements)
+    .set({
+      status: "archived",
+      archivedAt: timestamp,
+      updatedAt: timestamp,
+    })
+    .where(inArray(accountAnnouncements.id, normalizedIds))
+    .returning({ id: accountAnnouncements.id });
+}
+
 export async function deleteAccountAnnouncementRow(id: string) {
   const [row] = await db
     .delete(accountAnnouncements)

@@ -113,12 +113,32 @@ function formatBillingModeLabel(listing: AgentMarketplaceListingView | null | un
     return "未定价";
   }
   if (listing.billingMode === "token_metered") {
-    return `按 token / ${listing.billingUnit || "1k_tokens"}`;
+    return `按 Token / ${formatBillingUnitLabel(listing.billingUnit, "token")}`;
   }
   if (listing.billingMode === "property_metered") {
-    return `按属性 / ${listing.meterKey || listing.billingUnit || "task_units"}`;
+    return `按属性 / ${
+      listing.meterKey ? formatMeterKeyLabel(listing.meterKey) : formatBillingUnitLabel(listing.billingUnit, "property")
+    }`;
   }
-  return `按任务 / ${listing.billingUnit || "task"}`;
+  return `按任务 / ${formatBillingUnitLabel(listing.billingUnit, "task")}`;
+}
+
+function formatBillingUnitLabel(value: string | null | undefined, fallback: "task" | "token" | "property") {
+  const normalized = value?.trim() || fallback;
+  if (normalized === "task") return "单个任务";
+  if (normalized === "1k_tokens") return "千 Token";
+  if (normalized === "task_units") return "任务属性";
+  if (normalized === "task_property") return "单项属性";
+  if (normalized === "durationSeconds") return "时长秒数";
+  return normalized;
+}
+
+function formatMeterKeyLabel(value: string | null | undefined) {
+  const normalized = value?.trim();
+  if (!normalized) return "任务属性";
+  if (normalized === "task_units") return "任务属性";
+  if (normalized === "durationSeconds") return "时长秒数";
+  return normalized;
 }
 
 function formatListingStatusLabel(status: AgentMarketplaceListingView["status"] | null | undefined) {
@@ -511,7 +531,7 @@ export function ManagedLightRoleSection({
                         name="listingBillingMode"
                         options={[
                           { value: "flat_task", label: "按任务一口价（单个任务）" },
-                          { value: "token_metered", label: "按 token 计费（1千 token）" },
+                          { value: "token_metered", label: "按 Token 计费（千 Token）" },
                         ]}
                         placeholder="计费方式"
                         required
@@ -524,7 +544,7 @@ export function ManagedLightRoleSection({
                       disabled={serviceOptions.length === 0}
                       type="submit"
                     >
-                      {editingAgent ? "保存修改" : "创建羽量 Agent"}
+                      {editingAgent ? "保存修改" : "创建羽量智能体"}
                     </button>
                   </div>
                 </aside>

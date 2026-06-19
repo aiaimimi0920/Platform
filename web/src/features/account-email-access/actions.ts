@@ -76,7 +76,7 @@ export async function confirmEmailIdentityVerificationAction(formData: FormData)
       email,
       code,
     });
-    redirectWithStatus("success", "邮箱验证完成，Email-Native 调用入口已启用");
+    redirectWithStatus("success", "邮箱验证完成，邮件调用入口已启用");
   } catch (error) {
     redirectWithStatus("error", error instanceof Error ? error.message : "邮箱验证失败");
   }

@@ -375,15 +375,15 @@ export default async function AnnouncementOpsPage({ searchParams }: Announcement
 
         {/* -- Inventory -- */}
         <div className="ops-card">
-          <h2 className="ops-card__title">Inventory</h2>
+          <h2 className="ops-card__title">公告库存</h2>
           <div className="ops-table-wrap">
             <table className="ops-table">
               <thead>
                 <tr>
-                  <th>Total</th>
-                  <th>Published</th>
-                  <th>Draft</th>
-                  <th>Archived</th>
+                  <th>总数</th>
+                  <th>已发布</th>
+                  <th>草稿</th>
+                  <th>已归档</th>
                 </tr>
               </thead>
               <tbody>

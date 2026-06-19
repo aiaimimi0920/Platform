@@ -159,7 +159,22 @@ function StatusBadge({ status }: { status: GatewayRequestStatus }) {
         : status === "running"
           ? "cyan"
           : "secondary";
-  return <NtBadge tone={tone}>{status}</NtBadge>;
+  return <NtBadge tone={tone}>{getRequestStatusLabel(status)}</NtBadge>;
+}
+
+function getRequestStatusLabel(status: GatewayRequestStatus) {
+  switch (status) {
+    case "running":
+      return "运行中";
+    case "completed":
+      return "已完成";
+    case "failed":
+      return "失败";
+    case "cancelled":
+      return "已取消";
+    default:
+      return status;
+  }
 }
 
 function DetailLine(props: { label: string; value: string }) {
@@ -286,7 +301,7 @@ function RequestEventRow(props: {
           <span style={{ color: "rgba(214,219,233,0.9)" }}>{formatDurationMs(request.durationMs)}</span>
         </div>
         <div style={{ display: "grid", gap: 4 }}>
-          <span className="nt-kicker">Token</span>
+          <span className="nt-kicker">Token 用量</span>
           <span style={{ color: "rgba(214,219,233,0.9)" }}>{formatCount(request.totalTokens)}</span>
         </div>
       </div>
@@ -333,7 +348,7 @@ export default async function GatewayTracesPage({
     return (
       <div className="nt-shell" style={{ display: "grid", gap: 24, padding: "24px 0 40px" }}>
         <section style={{ display: "grid", gap: 12 }}>
-          <span className="nt-kicker">Operator / AI 网关</span>
+          <span className="nt-kicker">运维 / AI 网关</span>
           <h1 style={{ margin: 0, color: "rgba(243,245,247,0.98)", fontSize: "2rem", lineHeight: 1.1 }}>
             请求追踪
           </h1>
@@ -341,9 +356,9 @@ export default async function GatewayTracesPage({
         <GatewayDependencyUnavailableCard notice={notice} />
         <NtCard style={{ display: "grid", gap: 8 }}>
           <span className="nt-kicker">请求事件明细</span>
-          <strong style={{ color: "rgba(243,245,247,0.96)" }}>当前无法连接 AI Gateway</strong>
+          <strong style={{ color: "rgba(243,245,247,0.96)" }}>当前无法连接 AI 网关</strong>
           <span style={{ color: "rgba(190,199,217,0.76)" }}>
-            Gateway 服务恢复后，刷新页面即可重新加载最近 {REQUEST_LIMIT} 条请求。
+            网关服务恢复后，刷新页面即可重新加载最近 {REQUEST_LIMIT} 条请求。
           </span>
         </NtCard>
       </div>
@@ -395,7 +410,7 @@ export default async function GatewayTracesPage({
   return (
     <div className="nt-shell" style={{ display: "grid", gap: 24, padding: "24px 0 40px" }}>
       <section style={{ display: "grid", gap: 12 }}>
-        <span className="nt-kicker">Operator / AI 网关</span>
+        <span className="nt-kicker">运维 / AI 网关</span>
         <h1 style={{ margin: 0, color: "rgba(243,245,247,0.98)", fontSize: "2rem", lineHeight: 1.1 }}>
           请求追踪
         </h1>
@@ -527,9 +542,9 @@ export default async function GatewayTracesPage({
                   <DetailLine label="请求模型" value={selectedRequest.requestedModel ?? "—"} />
                   <DetailLine label="解析模型" value={selectedRequest.resolvedModel ?? "—"} />
                   <DetailLine label="服务商" value={getRequestProviderLabel(selectedRequest)} />
-                  <DetailLine label="Provider ID" value={selectedRequest.providerAccountId ?? "—"} />
-                  <DetailLine label="Pipeline" value={getPipelineLabel(selectedRequest.routeTrace?.selectedPipelineMode)} />
-                  <DetailLine label="Token" value={formatCount(selectedRequest.totalTokens)} />
+                  <DetailLine label="服务商 ID" value={selectedRequest.providerAccountId ?? "—"} />
+                  <DetailLine label="执行管线" value={getPipelineLabel(selectedRequest.routeTrace?.selectedPipelineMode)} />
+                  <DetailLine label="Token 用量" value={formatCount(selectedRequest.totalTokens)} />
                 </div>
                 {selectedRequest.errorSummary ? (
                   <NtPanel style={{ display: "grid", gap: 4 }}>
@@ -572,11 +587,11 @@ export default async function GatewayTracesPage({
               <NtCard style={{ display: "grid", gap: 10 }}>
                 <span className="nt-kicker">已选候选</span>
                 <DetailLine
-                  label="Provider"
+                  label="服务商"
                   value={selectedRequest.routeTrace?.selectedCandidate.providerLabel ?? "—"}
                 />
                 <DetailLine
-                  label="Platform Access"
+                  label="平台访问"
                   value={
                     selectedRequest.routeTrace?.selectedCandidate.platformAccessId ??
                     selectedRequest.routeTrace?.platformAccessId ??
@@ -584,7 +599,7 @@ export default async function GatewayTracesPage({
                   }
                 />
                 <DetailLine
-                  label="Source Access Key"
+                  label="来源访问密钥"
                   value={
                     selectedRequest.routeTrace?.selectedCandidate.sourceAccessKeyId ??
                     selectedRequest.routeTrace?.sourceAccessKeyId ??
@@ -592,7 +607,7 @@ export default async function GatewayTracesPage({
                   }
                 />
                 <DetailLine
-                  label="Real Credential"
+                  label="真实凭证"
                   value={
                     selectedRequest.routeTrace?.selectedCandidate.realCredentialRef ??
                     selectedRequest.routeTrace?.realCredentialRef ??
@@ -609,18 +624,18 @@ export default async function GatewayTracesPage({
 
               <NtCard style={{ display: "grid", gap: 10 }}>
                 <span className="nt-kicker">访问凭证</span>
-                <DetailLine label="Access Key" value={selectedRequest.accessKeyId ?? "—"} />
-                <DetailLine label="Source Access Key" value={selectedRequest.sourceAccessKeyId ?? "—"} />
-                <DetailLine label="Legacy API Key" value={selectedRequest.apiKeyId ?? "—"} />
-                <DetailLine label="User Credential" value={selectedRequest.userCredentialId ?? "—"} />
-                <DetailLine label="Previous Response" value={selectedRequest.previousResponseId ?? "—"} />
-                <DetailLine label="Session" value={selectedRequest.sessionId ?? "—"} />
+                <DetailLine label="访问密钥" value={selectedRequest.accessKeyId ?? "—"} />
+                <DetailLine label="来源访问密钥" value={selectedRequest.sourceAccessKeyId ?? "—"} />
+                <DetailLine label="旧版 API 密钥" value={selectedRequest.apiKeyId ?? "—"} />
+                <DetailLine label="用户凭证" value={selectedRequest.userCredentialId ?? "—"} />
+                <DetailLine label="上一轮响应" value={selectedRequest.previousResponseId ?? "—"} />
+                <DetailLine label="会话" value={selectedRequest.sessionId ?? "—"} />
               </NtCard>
 
               <NtCard style={{ display: "grid", gap: 10 }}>
                 <span className="nt-kicker">保活与执行链</span>
                 <DetailLine
-                  label="显式 Session Key"
+                  label="显式会话密钥"
                   value={selectedRequest.analysisProfile?.hasExplicitSessionKey ? "已记录" : "未记录"}
                 />
                 <DetailLine

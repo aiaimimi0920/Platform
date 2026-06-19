@@ -22,7 +22,7 @@ export async function POST(_request: Request, context: RouteContext) {
       },
     );
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Credential rotate unavailable";
+    const message = error instanceof Error ? error.message : "凭证轮换暂不可用";
     return Response.json(
       { error: message },
       {

@@ -51,6 +51,38 @@ function getRequestStatusBadge(status: string) {
   return "danger";
 }
 
+function formatEmailDeliveryMode(mode: string) {
+  if (mode === "smtp") return "邮件投递";
+  if (mode === "console") return "控制台记录";
+  return "当前模式";
+}
+
+function formatEmailRouteKind(routeKind: string | null) {
+  if (routeKind === "agent_execution") return "智能体调用";
+  if (routeKind === "task_create") return "任务创建";
+  return "未识别入口";
+}
+
+function formatEmailInboundStatus(status: string) {
+  if (status === "accepted") return "已接收";
+  if (status === "duplicate") return "重复忽略";
+  if (status === "rejected") return "已拒绝";
+  return "待确认";
+}
+
+function formatEmailPricingMode(mode: string) {
+  if (mode === "flat_task") return "固定奖励";
+  if (mode === "token_metered") return "按 Token 计量";
+  if (mode === "property_metered") return "按属性计量";
+  return "当前计价";
+}
+
+function formatEmailOperationMode(mode: string) {
+  if (mode === "automatic") return "自动流转";
+  if (mode === "manual") return "人工确认";
+  return "当前流转";
+}
+
 export async function AccountEmailAccessPage({ searchParams }: EmailAccessPageProps) {
   const session = await auth();
   if (!session?.user?.id) {
@@ -95,8 +127,8 @@ export async function AccountEmailAccessPage({ searchParams }: EmailAccessPagePr
       <main className="app-page">
         <div className="mg-shell">
           <Card className="app-stack">
-            <h1 className="mg-title">Identity 模块已关闭</h1>
-            <p className="mg-copy">当前无法管理 Email-Native 入口，因为账户身份模块尚未启用。</p>
+            <h1 className="mg-title">身份模块已关闭</h1>
+            <p className="mg-copy">当前无法管理邮件调用入口，因为账户身份模块尚未启用。</p>
           </Card>
         </div>
       </main>
@@ -111,6 +143,8 @@ export async function AccountEmailAccessPage({ searchParams }: EmailAccessPagePr
   const userInitial = accountDisplayName.slice(0, 1).toUpperCase();
   const unreadMailboxCount = mailboxSnapshot?.unreadMessages ?? 0;
   const pendingAttachmentCount = mailboxSnapshot?.pendingAttachments ?? 0;
+  const deliveryModeLabel = formatEmailDeliveryMode(panel.deliveryMode);
+  const taskDefaults = panel.routeCatalog.taskDefaults;
 
   const hudItems = buildAccountHudItems({
     wallet: null,
@@ -156,24 +190,24 @@ export async function AccountEmailAccessPage({ searchParams }: EmailAccessPagePr
               ) : null}
             </>
           }
-          description="Email-Native 入口把真实世界邮箱变成平台外部调用面。这里负责绑定、验证、默认地址管理，以及查看最近的邮件触发记录。"
+          description="邮件调用入口把真实世界邮箱变成平台外部调用面。这里负责绑定、验证、默认地址管理，以及查看最近的邮件触发记录。"
           focusItems={[
             { label: "已验证地址", value: formatAccountNumber(panel.identities.length) },
             { label: "待验证", value: formatAccountNumber(panel.pendingVerifications.length) },
             { label: "最近请求", value: formatAccountNumber(panel.recentInboundMessages.length) },
-            { label: "投递模式", value: panel.deliveryMode.toUpperCase() },
+            { label: "投递模式", value: deliveryModeLabel },
           ]}
           hudItems={hudItems}
-          kicker="Email-Native"
+          kicker="邮件入口"
           navItems={navItems}
           railFooter={
             <AccountHomeRailCard>
-              <AccountHomeSectionHead kicker="Routes" title="入口模式" />
+          <AccountHomeSectionHead kicker="入口模式" title="入口模式" />
               <AccountHomeList>
                 {panel.routeCatalog.instructions.map((instruction) => (
                   <AccountHomeListRow
-                    key={instruction.routeKind}
-                    aside={<span className="app-note">{instruction.routeKind}</span>}
+                    key={instruction.addressPattern}
+                    aside={<span className="app-note">{formatEmailRouteKind(instruction.routeKind)}</span>}
                     title={instruction.addressPattern}
                     subtitle={instruction.title}
                   />
@@ -185,7 +219,7 @@ export async function AccountEmailAccessPage({ searchParams }: EmailAccessPagePr
             { label: "已验证", value: formatAccountNumber(panel.identities.length) },
             { label: "待验证", value: formatAccountNumber(panel.pendingVerifications.length) },
             { label: "邮件请求", value: formatAccountNumber(panel.recentInboundMessages.length) },
-            { label: "模式", value: panel.deliveryMode.toUpperCase() },
+            { label: "模式", value: deliveryModeLabel },
           ]}
           stage={
             <AccountCenterAvatarStage
@@ -194,21 +228,21 @@ export async function AccountEmailAccessPage({ searchParams }: EmailAccessPagePr
               fallback={userInitial}
             />
           }
-          title="邮箱身份与 Email-Native 接入"
+          title="邮箱身份与邮件调用入口"
           titleBadges={
             <>
-              <Badge variant="cyan">Email-Native</Badge>
-              <Badge variant="violet">{panel.deliveryMode.toUpperCase()}</Badge>
+              <Badge variant="cyan">邮件调用入口</Badge>
+              <Badge variant="violet">{deliveryModeLabel}</Badge>
             </>
           }
         >
           <div className="app-account-content-grid">
             <div className="app-account-content-main">
               <AccountHomeSection id="email-bind">
-                <AccountHomeSectionHead kicker="Bind" title="绑定真实邮箱" />
+          <AccountHomeSectionHead kicker="邮箱绑定" title="绑定真实邮箱" />
                 <div className="app-account-subgrid">
                   <Card className="app-account-support-card">
-                    <AccountHomeSectionHead kicker="Step 1" title="发送验证码" />
+          <AccountHomeSectionHead kicker="步骤一" title="发送验证码" />
                     <form action={startEmailIdentityVerificationAction} className="app-account-inline-form">
                       <Input
                         className="app-account-inline-form__input"
@@ -226,7 +260,7 @@ export async function AccountEmailAccessPage({ searchParams }: EmailAccessPagePr
                   </Card>
 
                   <Card className="app-account-support-card">
-                    <AccountHomeSectionHead kicker="Step 2" title="确认验证码" />
+          <AccountHomeSectionHead kicker="步骤二" title="确认验证码" />
                     <form action={confirmEmailIdentityVerificationAction} className="app-account-inline-form">
                       <Input
                         className="app-account-inline-form__input"
@@ -249,7 +283,7 @@ export async function AccountEmailAccessPage({ searchParams }: EmailAccessPagePr
               </AccountHomeSection>
 
               <AccountHomeSection>
-                <AccountHomeSectionHead kicker="Identities" title="已验证邮箱身份" />
+          <AccountHomeSectionHead kicker="邮箱身份" title="已验证邮箱身份" />
                 {panel.identities.length === 0 ? (
                   <p className="mg-copy">当前还没有已验证的真实邮箱地址。</p>
                 ) : (
@@ -261,7 +295,7 @@ export async function AccountEmailAccessPage({ searchParams }: EmailAccessPagePr
                           <div className="app-account-ledger-aside">
                             {identity.isPrimary ? <Badge variant="warning">默认</Badge> : null}
                             <Badge variant={identity.invocationEnabled ? "cyan" : "danger"}>
-                              {identity.invocationEnabled ? "CALL" : "LOCK"}
+                              {identity.invocationEnabled ? "可调用" : "已锁定"}
                             </Badge>
                             {!identity.isPrimary ? (
                               <form action={setPrimaryEmailIdentityAction}>
@@ -284,19 +318,19 @@ export async function AccountEmailAccessPage({ searchParams }: EmailAccessPagePr
               </AccountHomeSection>
 
               <AccountHomeSection>
-                <AccountHomeSectionHead kicker="Recent Ingress" title="最近邮件入口记录" />
+          <AccountHomeSectionHead kicker="最近入口" title="最近邮件入口记录" />
                 {panel.recentInboundMessages.length === 0 ? (
-                  <p className="mg-copy">当前还没有 Email-Native 调用记录。</p>
+                  <p className="mg-copy">当前还没有邮件调用记录。</p>
                 ) : (
                   <AccountHomeList>
                     {panel.recentInboundMessages.map((message) => (
                       <AccountHomeListRow
                         key={message.id}
-                        aside={<Badge variant={getRequestStatusBadge(message.status)}>{message.status}</Badge>}
+                        aside={<Badge variant={getRequestStatusBadge(message.status)}>{formatEmailInboundStatus(message.status)}</Badge>}
                         title={message.subject || message.toEmail}
                         subtitle={[
                           `${message.fromEmail} -> ${message.toEmail}`,
-                          message.routeKind ? `路由 ${message.routeKind}` : null,
+                          message.routeKind ? `入口 ${formatEmailRouteKind(message.routeKind)}` : null,
                           message.createdExecutionId ? `执行 ${message.createdExecutionId}` : null,
                           message.createdTaskId ? `任务 ${message.createdTaskId}` : null,
                           message.rejectionReason || null,
@@ -310,7 +344,7 @@ export async function AccountEmailAccessPage({ searchParams }: EmailAccessPagePr
 
             <div className="app-account-content-side">
               <AccountHomeSection>
-                <AccountHomeSectionHead kicker="Pending" title="待验证邮箱" />
+          <AccountHomeSectionHead kicker="待验证" title="待验证邮箱" />
                 {panel.pendingVerifications.length === 0 ? (
                   <p className="mg-copy">当前没有待确认的验证码。</p>
                 ) : (
@@ -328,33 +362,33 @@ export async function AccountEmailAccessPage({ searchParams }: EmailAccessPagePr
               </AccountHomeSection>
 
               <AccountHomeSection>
-                <AccountHomeSectionHead kicker="Route Catalog" title="邮件入口规则" />
+          <AccountHomeSectionHead kicker="入口规则" title="邮件入口规则" />
                 <AccountHomeList>
                   {panel.routeCatalog.instructions.map((instruction) => (
                     <AccountHomeListRow
-                      key={instruction.routeKind}
-                      aside={<Badge variant="violet">{instruction.routeKind}</Badge>}
+                      key={instruction.addressPattern}
+                      aside={<Badge variant="violet">{formatEmailRouteKind(instruction.routeKind)}</Badge>}
                       title={instruction.addressPattern}
                       subtitle={instruction.description}
                     />
                   ))}
                 </AccountHomeList>
                 <p className="app-note">
-                  任务默认值：{panel.routeCatalog.taskDefaults.rewardAmount} {panel.routeCatalog.taskDefaults.rewardCurrency}
+                  任务默认值：{taskDefaults.rewardAmount} {taskDefaults.rewardCurrency}
                   {" · "}
-                  {panel.routeCatalog.taskDefaults.pricingMode}
+                  {formatEmailPricingMode(taskDefaults["pricingMode"])}
                   {" · "}
-                  {panel.routeCatalog.taskDefaults.operationMode}
+                  {formatEmailOperationMode(taskDefaults["operationMode"])}
                 </p>
               </AccountHomeSection>
 
               <AccountHomeSection>
-                <AccountHomeSectionHead kicker="Metadata" title="支持的头字段" />
+          <AccountHomeSectionHead kicker="头字段" title="支持的头字段" />
                 <AccountHomeStatGrid>
-                  <AccountHomeStat label="Agent" value="title / capabilityId / runtimeProfileKey" />
-                  <AccountHomeStat label="Task" value="reward / pricing / capabilities" />
-                  <AccountHomeStat label="Ingress" value={`@${panel.routeCatalog.ingressDomain}`} />
-                  <AccountHomeStat label="Delivery" value={panel.deliveryMode.toUpperCase()} />
+                  <AccountHomeStat label="智能体字段" value="标题 / 能力 / 运行档案" />
+                  <AccountHomeStat label="任务字段" value="奖励 / 计价 / 能力" />
+                  <AccountHomeStat label="入口域名" value={`@${panel.routeCatalog.ingressDomain}`} />
+                  <AccountHomeStat label="投递模式" value={deliveryModeLabel} />
                 </AccountHomeStatGrid>
               </AccountHomeSection>
             </div>

@@ -56,7 +56,7 @@ export function HeavyChatInspector({
     <div className="nt-heavy-chat-inspector">
       {showSlot ? (
         <>
-          <InspectorSection kicker="Slot" title={showSlot.title} tone="warning">
+      <InspectorSection kicker="槽位" title={showSlot.title} tone="warning">
             <p className="nt-heavy-chat-inspector__summary">{showSlot.summary}</p>
             <div className="nt-heavy-chat-inspector__stats">
               <div>
@@ -70,11 +70,11 @@ export function HeavyChatInspector({
             </div>
           </InspectorSection>
 
-          <InspectorSection kicker="Runtime" title="槽位边界" tone="cyan">
+        <InspectorSection kicker="运行" title="槽位边界" tone="cyan">
             <ul className="nt-heavy-chat-inspector__list">
               <li>默认对话体固定保留，不与新 thread 数量绑定。</li>
               <li>自创建重度槽位与默认对话体独立计数。</li>
-              <li>更多槽位通过购买解锁，当前仍是占位 CTA。</li>
+              <li>更多槽位通过购买解锁，购买后可加入长期重度智能体池。</li>
             </ul>
             <div className="nt-heavy-chat-inspector__actions">
               <Link className="nt-btn nt-btn--secondary" href="/agents?role=heavy">
@@ -90,12 +90,12 @@ export function HeavyChatInspector({
 
       {showProject ? (
         <>
-          <InspectorSection kicker="Project" title={showProject.title} tone="success">
+      <InspectorSection kicker="项目" title={showProject.title} tone="success">
             <p className="nt-heavy-chat-inspector__summary">{showProject.subtitle}</p>
             <div className="nt-heavy-chat-inspector__copy">{showProject.instructions}</div>
           </InspectorSection>
 
-          <InspectorSection kicker="Knowledge" title="知识上下文" tone="glass">
+        <InspectorSection kicker="知识" title="知识上下文" tone="glass">
             <div className="nt-heavy-chat-inspector__knowledge-list">
               {showProject.knowledgeItems.map((item) => (
                 <div className="nt-heavy-chat-inspector__knowledge-card" key={item.id}>
@@ -113,7 +113,7 @@ export function HeavyChatInspector({
 
       {showThread ? (
         <>
-          <InspectorSection kicker="Thread" title={showThread.title} tone={showThread.favorite ? "success" : "glass"}>
+      <InspectorSection kicker="会话" title={showThread.title} tone={showThread.favorite ? "success" : "glass"}>
             <p className="nt-heavy-chat-inspector__summary">{showThread.preview}</p>
             <div className="nt-heavy-chat-inspector__stats">
               <div>
@@ -127,11 +127,11 @@ export function HeavyChatInspector({
             </div>
           </InspectorSection>
 
-          <InspectorSection kicker="Linked Context" title="关联上下文" tone="warning">
+        <InspectorSection kicker="关联上下文" title="关联上下文" tone="warning">
             <ul className="nt-heavy-chat-inspector__list">
               <li>当前 thread 只绑定当前选中的 slot，不会创建新的 slot 消耗。</li>
               <li>切换 project 只影响这个 thread 的长期上下文，不改变 slot。</li>
-              <li>后续接 API 时，这里会继续展示真实 token 用量和引用数量。</li>
+              <li>用量与引用信息会随会话持续更新，方便回看上下文消耗。</li>
             </ul>
           </InspectorSection>
         </>

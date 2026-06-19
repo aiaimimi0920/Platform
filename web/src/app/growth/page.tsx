@@ -61,7 +61,7 @@ export default async function GrowthPage() {
         <div className="mg-shell">
           <Card className="app-stack">
             <h1 className="mg-title">模块状态暂不可用</h1>
-            <p className="mg-copy">当前无法从 core 读取模块快照，请稍后再试。</p>
+            <p className="mg-copy">当前无法读取模块状态，请稍后再试。</p>
           </Card>
         </div>
       </main>
@@ -150,11 +150,11 @@ export default async function GrowthPage() {
             { label: "解锁权限", value: formatAccountNumber(progression.access.filter((rule) => rule.satisfied).length) },
           ]}
           hudItems={hudItems}
-          kicker="Growth Terminal"
+          kicker="成长终端"
           navItems={navItems}
           railFooter={
             <AccountHomeRailCard>
-              <AccountHomeSectionHead kicker="Next Level" title="下一等级" />
+          <AccountHomeSectionHead kicker="下一等级" title="下一等级" />
               <AccountHomeList>
                 <AccountHomeListRow aside={<span className="app-note">{progression.nextLevelPreview ? `Lv.${progression.nextLevelPreview.level}` : "已满级"}</span>} title="目标等级" />
                 <AccountHomeListRow aside={<span className="app-note">{progression.nextLevelPreview?.title ?? "无"}</span>} title="等级称号" />
@@ -181,18 +181,18 @@ export default async function GrowthPage() {
             <>
               <Badge variant="warning">{`Lv.${progression.level} ${progression.title}`}</Badge>
               <Badge variant="cyan">{formatAccountRate(progression.rewardDiscountRate)}</Badge>
-              <Badge variant="violet">{`${progression.sources.length} sources`}</Badge>
+              <Badge variant="violet">{`${progression.sources.length} 来源`}</Badge>
             </>
           }
         >
           <div className="app-account-content-grid">
             <div className="app-account-content-main">
               <AccountHomeSection>
-                <AccountHomeSectionHead kicker="Level" title="等级状态" />
+              <AccountHomeSectionHead kicker="等级" title="等级状态" />
                 <Card className="app-stack">
                   <div className="app-account-level-hero">
                     <div>
-                      <p className="mg-subtitle">Current Level</p>
+                      <p className="mg-subtitle">当前等级</p>
                       <h2 className="app-card-title">{`Lv.${progression.level} ${progression.title}`}</h2>
                     </div>
                     <div className="app-account-level-hero__value">{formatAccountNumber(progression.experience)} XP</div>
@@ -215,10 +215,10 @@ export default async function GrowthPage() {
               </AccountHomeSection>
 
               <AccountHomeSection>
-                <AccountHomeSectionHead kicker="Benefits" title="当前权益与下一等级预览" />
+          <AccountHomeSectionHead kicker="权益" title="当前权益与下一等级预览" />
                 <div className="app-account-subgrid">
                   <Card className="app-stack">
-                    <AccountHomeSectionHead kicker="Current" title="当前权益" />
+              <AccountHomeSectionHead kicker="当前" title="当前权益" />
                     {progression.benefits.length === 0 ? (
                       <p className="mg-copy">当前等级还没有额外权益说明。</p>
                     ) : (
@@ -236,7 +236,7 @@ export default async function GrowthPage() {
                   </Card>
 
                   <Card className="app-stack">
-                    <AccountHomeSectionHead kicker="Next" title="下一等级" />
+              <AccountHomeSectionHead kicker="后续" title="下一等级" />
                     {progression.nextLevelPreview ? (
                       <>
                         <AccountHomeStatGrid>
@@ -264,7 +264,7 @@ export default async function GrowthPage() {
               </AccountHomeSection>
 
               <AccountHomeSection>
-                <AccountHomeSectionHead kicker="Access" title="资格与门槛" />
+          <AccountHomeSectionHead kicker="准入" title="资格与门槛" />
                 <AccountHomeList>
                   {progression.access.map((rule) => (
                     <AccountHomeListRow
@@ -278,13 +278,13 @@ export default async function GrowthPage() {
               </AccountHomeSection>
 
               <AccountHomeSection>
-                <AccountHomeSectionHead kicker="Sources" title="经验来源拆解" />
+          <AccountHomeSectionHead kicker="来源" title="经验来源拆解" />
                 <AccountHomeList>
                   {progression.sources.map((source) => (
                     <AccountHomeListRow
                       aside={<strong>{formatAccountNumber(source.experience)} XP</strong>}
                       key={source.key}
-                      subtitle={`计数 ${formatAccountNumber(source.metricValue)} · source=${source.key}`}
+                      subtitle={`计数 ${formatAccountNumber(source.metricValue)} · 已计入成长经验`}
                       title={source.label}
                     />
                   ))}
@@ -294,17 +294,17 @@ export default async function GrowthPage() {
 
             <div className="app-account-content-side">
               <AccountHomeSection>
-                <AccountHomeSectionHead kicker="Rules" title="当前落地范围" />
+          <AccountHomeSectionHead kicker="规则" title="当前落地范围" />
                 <AccountHomeList>
-                  <AccountHomeListRow aside={<span className="app-note">/v1/me.snapshot.progression</span>} title="暴露位置" />
+                  <AccountHomeListRow aside={<span className="app-note">账户成长快照</span>} title="展示位置" />
                   <AccountHomeListRow aside={<span className="app-note">曜石商品折扣</span>} title="已生效权益" />
-                  <AccountHomeListRow aside={<span className="app-note">发起议题 / 创建 Agent</span>} title="已接入门槛" />
-                  <AccountHomeListRow aside={<span className="app-note">派生型模块</span>} title="数据模型" />
+                  <AccountHomeListRow aside={<span className="app-note">发起议题 / 创建智能体</span>} title="已接入门槛" />
+                  <AccountHomeListRow aside={<span className="app-note">任务履约、议题参与与账户资产共同计算</span>} title="口径说明" />
                 </AccountHomeList>
               </AccountHomeSection>
 
               <AccountHomeSection>
-                <AccountHomeSectionHead kicker="Summary" title="成长摘要" />
+          <AccountHomeSectionHead kicker="摘要" title="成长摘要" />
                 <AccountHomeStatGrid>
                   <AccountHomeStat label="当前等级" value={`Lv.${progression.level}`} />
                   <AccountHomeStat label="当前称号" value={progression.title} />

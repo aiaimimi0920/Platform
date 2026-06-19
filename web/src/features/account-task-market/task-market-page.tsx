@@ -196,6 +196,12 @@ function proposalTone(status: TaskAgentProposalView["status"]): Tone {
   return status === "accepted" ? "success" : status === "rejected" ? "danger" : "warning";
 }
 
+function formatProposalStatusLabel(status: TaskAgentProposalView["status"]) {
+  if (status === "accepted") return "已接受";
+  if (status === "rejected") return "已拒绝";
+  return "待处理";
+}
+
 function listingStatusLabel(status: AgentMarketplaceListingView["status"] | null | undefined) {
   if (status === "published") return "已上架";
   if (status === "paused") return "已暂停";
@@ -216,18 +222,36 @@ function hostingModeLabel(agent: AgentView) {
   return "轻度智能体";
 }
 
+function formatBillingUnitLabel(value: string | null | undefined, fallback: "task" | "token" | "property") {
+  const normalized = value?.trim() || fallback;
+  if (normalized === "task") return "单个任务";
+  if (normalized === "1k_tokens") return "千 Token";
+  if (normalized === "task_units") return "任务属性";
+  if (normalized === "task_property") return "单项属性";
+  if (normalized === "durationSeconds") return "时长秒数";
+  return normalized;
+}
+
+function formatMeterKeyLabel(value: string | null | undefined) {
+  const normalized = value?.trim();
+  if (!normalized) return "任务属性";
+  if (normalized === "task_units") return "任务属性";
+  if (normalized === "durationSeconds") return "时长秒数";
+  return normalized;
+}
+
 function pricingLabel(task: Pick<TaskView, "pricingMode" | "billingUnit" | "meterKey">) {
-  if (task.pricingMode === "token_metered") return `按 token / ${task.billingUnit || "1k_tokens"}`;
-  if (task.pricingMode === "property_metered") return `按属性 / ${task.meterKey || task.billingUnit || "task_units"}`;
+  if (task.pricingMode === "token_metered") return `按 Token / ${formatBillingUnitLabel(task.billingUnit, "token")}`;
+  if (task.pricingMode === "property_metered") return `按属性 / ${task.meterKey ? formatMeterKeyLabel(task.meterKey) : formatBillingUnitLabel(task.billingUnit, "property")}`;
   return "一口价";
 }
 
 function billingLabel(listing: AgentMarketplaceListingView) {
-  if (listing.billingMode === "token_metered") return `按 token / ${listing.billingUnit || "1k_tokens"}`;
+  if (listing.billingMode === "token_metered") return `按 Token / ${formatBillingUnitLabel(listing.billingUnit, "token")}`;
   if (listing.billingMode === "property_metered") {
-    return `按属性 / ${listing.meterKey || listing.billingUnit || "task_units"}`;
+    return `按属性 / ${listing.meterKey ? formatMeterKeyLabel(listing.meterKey) : formatBillingUnitLabel(listing.billingUnit, "property")}`;
   }
-  return `按任务 / ${listing.billingUnit || "task"}`;
+  return `按任务 / ${formatBillingUnitLabel(listing.billingUnit, "task")}`;
 }
 
 function routeSummary(tags: string[] | null | undefined) {
@@ -338,7 +362,8 @@ export default async function TaskMarketPage({ searchParams }: PageProps) {
       <main className="app-page">
         <div className="mg-shell app-stack">
           <section className="nt-panel nt-task-market-empty">
-            <h1 className="mg-title">集市暂未开放</h1>
+            <h1 className="mg-title">任务集市当前未开放</h1>
+            <p className="mg-copy">请返回控制台，或联系运营团队确认当前环境的开放范围。</p>
           </section>
         </div>
       </main>
@@ -1251,7 +1276,9 @@ export default async function TaskMarketPage({ searchParams }: PageProps) {
                                     <div className="nt-task-market-card-head">
                                       <div className="nt-task-market-card-copy">
                                         <div className="nt-task-market-card-chips">
-                                          <span className={toneClass(proposalTone(proposal.status))}>{proposal.status}</span>
+                                          <span className={toneClass(proposalTone(proposal.status))}>
+                                            {formatProposalStatusLabel(proposal.status)}
+                                          </span>
                                           <span className={toneClass("cyan")}>{proposal.proposedEtaHours}h</span>
                                         </div>
                                         <p className="mg-copy">{proposal.statement}</p>
@@ -1260,7 +1287,7 @@ export default async function TaskMarketPage({ searchParams }: PageProps) {
                                     </div>
                                     <div className="nt-task-market-inline-actions">
                                       <span className="mg-copy">
-                                        Agent {proposal.agentId}
+                                        智能体 {proposal.agentId}
                                         {proposal.matchedCapabilityCodes.length > 0
                                           ? ` · ${proposal.matchedCapabilityCodes.join(", ")}`
                                           : ` · ${proposal.matchedCapabilityCount} 项能力`}

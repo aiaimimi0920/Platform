@@ -152,7 +152,7 @@ function buildRouteCatalog(): EmailNativeRouteCatalogView {
     instructions: [
       {
         routeKind: "agent_execution",
-        title: "Agent 调用入口",
+        title: "智能体调用入口",
         addressPattern: `agent+<agentId>@${env.emailIngressDomain}`,
         description: "主题用作默认标题，正文将作为 objective；可在正文开头使用 key:value 头部覆盖 capabilityId 或 runtimeProfileKey。",
         metadataKeys: ["title", "capabilityId", "runtimeProfileKey"],
@@ -270,9 +270,9 @@ function buildVerificationEmail(args: {
 }) {
   const expiresAtLabel = args.expiresAt.toLocaleString("zh-CN");
   return {
-    subject: "NeuroPlatform 邮箱绑定验证码",
+    subject: "NeuroLoom 邮箱绑定验证码",
     textBody: [
-      "你正在为 NeuroPlatform 绑定一个真实邮箱身份。",
+      "你正在为 NeuroLoom 绑定一个真实邮箱身份。",
       "",
       `邮箱地址：${args.email}`,
       `验证码：${args.code}`,
@@ -294,9 +294,9 @@ function buildInboundReceiptEmail(args: {
   const routeLabel = getEmailNativeRouteKindLabel(args.routeKind ?? null);
   if (args.status === "accepted") {
     return {
-      subject: `NeuroPlatform 已接受你的${routeLabel}`,
+      subject: `NeuroLoom 已接受你的${routeLabel}`,
       textBody: [
-        `你的 ${routeLabel} 邮件已被 NeuroPlatform 接受。`,
+        `你的 ${routeLabel} 邮件已被 NeuroLoom 接受。`,
         `目标地址：${args.toEmail}`,
         args.createdExecutionId ? `执行单号：${args.createdExecutionId}` : null,
         args.createdTaskId ? `任务单号：${args.createdTaskId}` : null,
@@ -309,7 +309,7 @@ function buildInboundReceiptEmail(args: {
   }
 
   return {
-    subject: `NeuroPlatform 未接受你的${routeLabel}`,
+    subject: `NeuroLoom 未接受你的${routeLabel}`,
     textBody: [
       `你的 ${routeLabel} 邮件未被接受。`,
       `目标地址：${args.toEmail}`,
@@ -578,7 +578,7 @@ export async function confirmEmailIdentityVerification(
     await createMailboxMessage({
       userId,
       title: "真实邮箱已绑定",
-      body: `邮箱 ${verification.email} 已通过验证，现在可以作为 Email-Native 调用入口与结果投递地址。`,
+      body: `邮箱 ${verification.email} 已通过验证，现在可以作为邮件调用入口与结果投递地址。`,
       type: "system",
       sourceLabel: "Identity",
     });
@@ -690,7 +690,7 @@ async function createInboundMailboxProjection(args: {
         ? `来自 ${args.fromEmail} 的 ${routeLabel} 邮件已受理。${args.createdExecutionId ? ` 执行单号：${args.createdExecutionId}。` : ""}${args.createdTaskId ? ` 任务单号：${args.createdTaskId}。` : ""}`
         : `来自 ${args.fromEmail} 的 ${routeLabel} 邮件未受理。${args.rejectionReason ? ` 原因：${args.rejectionReason}` : ""}`,
     type: "system",
-    sourceLabel: "Email-Native",
+    sourceLabel: "邮件入口",
   });
 }
 
@@ -793,7 +793,7 @@ export async function ingestEmailNativeInboundMessage(input: {
 
     if (!emailIdentity) {
       status = "rejected";
-      rejectionReason = "发件邮箱未绑定或未启用 Email-Native 调用";
+      rejectionReason = "发件邮箱未绑定或未启用邮件入口调用";
     } else if (!route) {
       status = "rejected";
       rejectionReason = `收件地址不受支持，仅支持 @${env.emailIngressDomain} 的 agent+/task 入口`;
@@ -828,7 +828,7 @@ export async function ingestEmailNativeInboundMessage(input: {
         }
       } catch (error) {
         status = "rejected";
-        rejectionReason = error instanceof Error ? error.message : "Email-Native route execution failed";
+        rejectionReason = error instanceof Error ? error.message : "邮件入口执行失败";
       }
     }
 

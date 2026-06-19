@@ -52,7 +52,7 @@ function formatDateTime(value: unknown): string {
 }
 
 function formatStatus(status: unknown): string {
-  return typeof status === "string" && status ? status : "unknown";
+  return typeof status === "string" && status ? status : "未提供";
 }
 
 function statusBadgeVariant(status: string): "cyan" | "danger" | "success" | "warning" | "violet" {
@@ -180,11 +180,11 @@ export default async function TeaTicketPage({ params, searchParams }: TeaTicketP
         <Card className="app-stack">
           <div className="app-task-card__header">
             <div>
-              <p className="mg-subtitle">Tea Review Desk</p>
+              <p className="mg-subtitle">Tea 审阅台</p>
               <h1 className="mg-title">{ticket?.title || `工单 ${ticketId}`}</h1>
               <p className="mg-copy">
-                这是 Tea 工单的人工审阅页：浏览器仍只访问 Platform Web，详情、执行证据和导出内容都通过 Platform
-                Core 内部代理读取。
+                这是 Tea 工单的人工审阅页：浏览器只访问 Platform Web，详情、执行证据和导出内容由 Platform
+                统一读取与展示。
               </p>
             </div>
             <div className="app-action-row">
@@ -192,7 +192,7 @@ export default async function TeaTicketPage({ params, searchParams }: TeaTicketP
                 返回工单队列
               </Link>
               <Link className="mg-btn mg-btn--glass" href={`/api/tea/tickets/${encodeURIComponent(ticketId)}/runs`}>
-                Runs API
+                查看执行记录
               </Link>
               {detailControls.downloadLinks.map((link) => (
                 <Link className="mg-btn mg-btn--glass" href={link.href} key={link.href}>
@@ -216,8 +216,8 @@ export default async function TeaTicketPage({ params, searchParams }: TeaTicketP
 
         {!ticket ? (
           <Card className="app-stack">
-            <Badge variant="danger">Ticket unavailable</Badge>
-            <p className="mg-copy">Tea 没有返回该工单详情。请确认 Core/Tea daemon 是否运行，或返回队列重试。</p>
+            <Badge variant="danger">工单不可用</Badge>
+            <p className="mg-copy">工单详情暂不可用。请确认后台服务是否运行，或返回队列重试。</p>
           </Card>
         ) : (
           <div className="app-account-content-grid">
@@ -225,23 +225,23 @@ export default async function TeaTicketPage({ params, searchParams }: TeaTicketP
               <AccountHomeSection>
                 <AccountHomeSectionHead
                   actions={<Badge variant={statusBadgeVariant(ticketStatus)}>{ticketStatus}</Badge>}
-                  kicker="Ticket"
+          kicker="工单"
                   title="工单详情"
                 />
                 <p className="mg-copy">{ticket.description || "无描述。"}</p>
                 <AccountHomeList>
                   <AccountHomeListRow aside={<span className="app-note">{ticket.id}</span>} title="工单 ID" />
-                  <AccountHomeListRow aside={<span className="app-note">{ticket.source || "unknown"}</span>} title="来源" />
+                  <AccountHomeListRow aside={<span className="app-note">{ticket.source || "未提供"}</span>} title="来源" />
                   <AccountHomeListRow
-                    aside={<span className="app-note">{ticket.priority || "unknown"}</span>}
+                    aside={<span className="app-note">{ticket.priority || "未提供"}</span>}
                     title="优先级"
                   />
                   <AccountHomeListRow
-                    aside={<span className="app-note">{ticket.approval_policy || "unknown"}</span>}
+                    aside={<span className="app-note">{ticket.approval_policy || "未提供"}</span>}
                     title="审批策略"
                   />
                   <AccountHomeListRow
-                    aside={<span className="app-note">{ticket.risk_level || "unknown"}</span>}
+                    aside={<span className="app-note">{ticket.risk_level || "未提供"}</span>}
                     title="风险等级"
                   />
                   <AccountHomeListRow
@@ -283,7 +283,7 @@ export default async function TeaTicketPage({ params, searchParams }: TeaTicketP
               <AccountHomeSection>
                 <AccountHomeSectionHead
                   actions={<span className="app-note">{comments.length} 条</span>}
-                  kicker="Review"
+          kicker="审阅"
                   title="人工评论记录"
                 />
                 {comments.length === 0 ? (
@@ -310,7 +310,7 @@ export default async function TeaTicketPage({ params, searchParams }: TeaTicketP
               <AccountHomeSection>
                 <AccountHomeSectionHead
                   actions={<span className="app-note">{runs.length} 条</span>}
-                  kicker="Evidence"
+          kicker="证据"
                   title="Loom 执行证据"
                 />
                 {runs.length === 0 ? (
@@ -336,7 +336,7 @@ export default async function TeaTicketPage({ params, searchParams }: TeaTicketP
               <AccountHomeSection>
                 <AccountHomeSectionHead
                   actions={<span className="app-note">{events.length} 条</span>}
-                  kicker="Audit"
+          kicker="审计"
                   title="事件时间线"
                 />
                 {events.length === 0 ? (
@@ -358,7 +358,7 @@ export default async function TeaTicketPage({ params, searchParams }: TeaTicketP
             <div className="app-account-content-side">
               {detailControls.showCommentForm ? (
                 <AccountHomeSection>
-                  <AccountHomeSectionHead kicker="Review" title="人工评论" />
+          <AccountHomeSectionHead kicker="审阅" title="人工评论" />
                   <form action={addTeaTicketCommentAction} className="app-form-grid">
                     <input name="ticketId" type="hidden" value={ticket.id} />
                     <input name="redirectTo" type="hidden" value={redirectTo} />
@@ -377,7 +377,7 @@ export default async function TeaTicketPage({ params, searchParams }: TeaTicketP
 
               {detailControls.showRejectForm ? (
                 <AccountHomeSection>
-                  <AccountHomeSectionHead kicker="Reject" title="驳回 / 要求补充" />
+          <AccountHomeSectionHead kicker="驳回" title="驳回 / 要求补充" />
                   <form action={rejectTeaTicketAction} className="app-form-grid">
                     <input name="ticketId" type="hidden" value={ticket.id} />
                     <input name="redirectTo" type="hidden" value={redirectTo} />
@@ -404,7 +404,7 @@ export default async function TeaTicketPage({ params, searchParams }: TeaTicketP
                       下载
                     </Link>
                   }
-                  kicker="Export"
+          kicker="导出"
                   title="Markdown 导出"
                 />
                 <pre className="app-code-block">{markdownExport || "Tea 尚未返回 Markdown 导出内容。"}</pre>
@@ -420,19 +420,18 @@ export default async function TeaTicketPage({ params, searchParams }: TeaTicketP
                       下载
                     </Link>
                   }
-                  kicker="Export"
+          kicker="导出"
                   title="JSON 导出预览"
                 />
                 <pre className="app-code-block">{stringifyPreview(jsonExport)}</pre>
               </AccountHomeSection>
 
               <AccountHomeSection>
-                <AccountHomeSectionHead kicker="Boundary" title="接口边界" />
+          <AccountHomeSectionHead kicker="访问" title="访问说明" />
                 <AccountHomeList>
-                  <AccountHomeListRow aside={<span className="app-note">Page</span>} title="/tea/[ticketId]" />
-                  <AccountHomeListRow aside={<span className="app-note">Web API</span>} title="/api/tea/tickets/:id/*" />
-                  <AccountHomeListRow aside={<span className="app-note">Core</span>} title="/internal/tea/tickets/:id/*" />
-                  <AccountHomeListRow aside={<span className="app-note">Tea</span>} title="Bearer token 仅后端持有" />
+                  <AccountHomeListRow aside={<span className="app-note">详情、评论、事件与执行记录集中展示</span>} title="审阅内容" />
+                  <AccountHomeListRow aside={<span className="app-note">审批、执行、验收与关闭由平台统一转发</span>} title="操作方式" />
+                  <AccountHomeListRow aside={<span className="app-note">后台凭证由服务端托管，不暴露给浏览器</span>} title="安全边界" />
                 </AccountHomeList>
               </AccountHomeSection>
             </div>

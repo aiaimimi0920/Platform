@@ -53,7 +53,7 @@ export function AgentShowcaseDisplay({ agentShowcase, taskPerformance }: AgentSh
       {agentShowcase.length > 0 ? (
         <>
           <div className="app-account-honor-subsection-head">
-            <span>Agent 分项</span>
+            <span>智能体分项</span>
             <strong>{`${agentShowcase.length}/4`}</strong>
           </div>
           <div className="app-account-honor-agent-grid">
@@ -98,7 +98,7 @@ export function AgentShowcaseDisplay({ agentShowcase, taskPerformance }: AgentSh
           </div>
         </>
       ) : (
-        <p className="mg-copy">暂无可展示的 Agent。</p>
+        <p className="mg-copy">暂无可展示的智能体。</p>
       )}
     </>
   );

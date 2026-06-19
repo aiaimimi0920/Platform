@@ -744,7 +744,7 @@ const handlers: Record<EventName, EventHandler> = {
 
     await queueEmailNativeExecutionLifecycleDelivery({
       executionId,
-      subject: `NeuroPlatform 执行已提交：${summary.title}`,
+      subject: `NeuroLoom 执行已提交：${summary.title}`,
       textBody: `执行会话《${summary.title}》已进入 submitted 状态，执行单号：${executionId}。`,
       referenceType: "email_native_execution_submitted",
     });
@@ -769,7 +769,7 @@ const handlers: Record<EventName, EventHandler> = {
 
     await queueEmailNativeExecutionLifecycleDelivery({
       executionId,
-      subject: `NeuroPlatform 执行已完成：${summary.title}`,
+      subject: `NeuroLoom 执行已完成：${summary.title}`,
       textBody: `执行会话《${summary.title}》已完成，执行单号：${executionId}。请前往站内或结果附件继续查看。`,
       referenceType: "email_native_execution_completed",
     });
@@ -794,7 +794,7 @@ const handlers: Record<EventName, EventHandler> = {
 
     await queueEmailNativeExecutionLifecycleDelivery({
       executionId,
-      subject: `NeuroPlatform 执行失败：${summary.title}`,
+      subject: `NeuroLoom 执行失败：${summary.title}`,
       textBody: `执行会话《${summary.title}》已失败，执行单号：${executionId}。请回到平台查看失败原因与后续补救。`,
       referenceType: "email_native_execution_failed",
     });
@@ -819,7 +819,7 @@ const handlers: Record<EventName, EventHandler> = {
 
     await queueEmailNativeExecutionLifecycleDelivery({
       executionId,
-      subject: `NeuroPlatform 执行已取消：${summary.title}`,
+      subject: `NeuroLoom 执行已取消：${summary.title}`,
       textBody: `执行会话《${summary.title}》已取消，执行单号：${executionId}。`,
       referenceType: "email_native_execution_cancelled",
     });
@@ -1330,7 +1330,7 @@ const handlers: Record<EventName, EventHandler> = {
 
     await queueEmailNativeTaskLifecycleDelivery({
       taskId,
-      subject: `NeuroPlatform 任务已提交：${taskSummary.title}`,
+      subject: `NeuroLoom 任务已提交：${taskSummary.title}`,
       textBody: `任务《${taskSummary.title}》已提交验收，任务单号：${taskId}。`,
       referenceType: "email_native_task_submitted",
     });
@@ -1362,7 +1362,7 @@ const handlers: Record<EventName, EventHandler> = {
 
     await queueEmailNativeTaskLifecycleDelivery({
       taskId,
-      subject: `NeuroPlatform 任务已完成：${taskSummary.title}`,
+      subject: `NeuroLoom 任务已完成：${taskSummary.title}`,
       textBody: `任务《${taskSummary.title}》已完成并结算，任务单号：${taskId}。`,
       referenceType: "email_native_task_accepted",
     });
@@ -1394,7 +1394,7 @@ const handlers: Record<EventName, EventHandler> = {
 
     await queueEmailNativeTaskLifecycleDelivery({
       taskId,
-      subject: `NeuroPlatform 任务违约：${taskSummary.title}`,
+      subject: `NeuroLoom 任务违约：${taskSummary.title}`,
       textBody: `任务《${taskSummary.title}》已按违约流程处理，任务单号：${taskId}。`,
       referenceType: "email_native_task_defaulted",
     });
@@ -1428,7 +1428,7 @@ const handlers: Record<EventName, EventHandler> = {
 
     await queueEmailNativeTaskLifecycleDelivery({
       taskId,
-      subject: `NeuroPlatform 任务已取消：${taskSummary.title}`,
+      subject: `NeuroLoom 任务已取消：${taskSummary.title}`,
       textBody: `任务《${taskSummary.title}》已取消，任务单号：${taskId}。`,
       referenceType: "email_native_task_cancelled",
     });

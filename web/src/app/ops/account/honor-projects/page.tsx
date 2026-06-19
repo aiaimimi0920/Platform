@@ -127,7 +127,7 @@ export default async function HonorProjectsOpsPage({ searchParams }: HonorProjec
       <div className="ops-page-stack">
         {/* -- Header -- */}
         <div className="ops-page-header">
-          <h1 className="ops-page-title">Honor Projects</h1>
+          <h1 className="ops-page-title">荣誉项目</h1>
           <p className="ops-page-subtitle">
             这里负责维护用户档案中「项目 / 投资项目」的真实内容源。当前共 {catalog.projects.length} 个项目。
           </p>
@@ -139,15 +139,15 @@ export default async function HonorProjectsOpsPage({ searchParams }: HonorProjec
 
         {/* -- Inventory -- */}
         <div className="ops-card">
-          <h2 className="ops-card__title">Inventory</h2>
+          <h2 className="ops-card__title">项目库存</h2>
           <div className="ops-table-wrap">
             <table className="ops-table">
               <thead>
                 <tr>
-                  <th>Total</th>
-                  <th>Active</th>
-                  <th>Archived</th>
-                  <th>Investments</th>
+                  <th>总数</th>
+                  <th>展示中</th>
+                  <th>已归档</th>
+                  <th>投资记录</th>
                 </tr>
               </thead>
               <tbody>

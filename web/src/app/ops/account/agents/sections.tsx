@@ -150,7 +150,7 @@ export function SelectedAgentHeroCard(props: {
     <>
       <div className="app-announcement-ops__panel-head">
         <div>
-          <Badge variant="warning">Agent Detail</Badge>
+          <Badge variant="warning">智能体详情</Badge>
           <h2
             style={{
               margin: "8px 0 0",
@@ -207,10 +207,10 @@ export function SelectedAgentExternalGovernanceCard(props: {
     <Card className="app-stack">
       <div className="app-task-card__header">
         <div>
-          <p className="mg-subtitle">External Callback Governance</p>
-          <h3 className="app-card-title">协议 / 密钥 / Policy</h3>
+          <p className="mg-subtitle">外部回调治理</p>
+          <h3 className="app-card-title">协议 / 密钥 / 策略</h3>
         </div>
-        <Badge variant="warning">external</Badge>
+        <Badge variant="warning">外部</Badge>
       </div>
       <div className="app-detail-list">
         {props.detailRows.map((row) => (
@@ -247,7 +247,7 @@ export function SelectedAgentRuntimeBridgeCard(props: {
     <Card className="app-stack" id={props.id}>
       <div className="app-task-card__header">
         <div>
-          <p className="mg-subtitle">Runtime Bridge</p>
+          <p className="mg-subtitle">运行桥接</p>
           <h3 className="app-card-title">{props.pressureLabel}</h3>
         </div>
         <Badge variant={props.tone}>{props.schedulingLabel}</Badge>
@@ -283,11 +283,11 @@ export function SelectedAgentRuntimeBridgeCard(props: {
       </div>
       <div className="app-detail-list">
         <div className="app-detail-list__row">
-          <span className="app-detail-list__label">Oldest Open</span>
+          <span className="app-detail-list__label">最早打开</span>
           <span className="app-detail-list__value">{props.oldestOpenLabel}</span>
         </div>
         <div className="app-detail-list__row">
-          <span className="app-detail-list__label">Oldest Stale</span>
+          <span className="app-detail-list__label">最早过期</span>
           <span className="app-detail-list__value">{props.oldestStaleLabel}</span>
         </div>
       </div>
@@ -295,10 +295,10 @@ export function SelectedAgentRuntimeBridgeCard(props: {
         <div className="app-task-card">
           <div className="app-task-card__header">
             <div>
-              <p className="mg-subtitle">Recommendation</p>
+              <p className="mg-subtitle">处置建议</p>
               <h4 className="app-card-title">{props.recommendationTitle}</h4>
             </div>
-            <Badge variant="warning">next action</Badge>
+            <Badge variant="warning">下一步动作</Badge>
           </div>
           <p className="app-note">{props.recommendationDetail}</p>
           {props.recommendationMeta ? props.recommendationMeta : null}
@@ -309,10 +309,10 @@ export function SelectedAgentRuntimeBridgeCard(props: {
       ) : null}
       <div className="app-inline-actions">
         <Link className="nt-btn nt-btn--secondary" href={props.sessionsHref}>
-          Runtime Session Watch
+          运行会话观测
         </Link>
         <Link className="nt-btn nt-btn--ghost" href={props.pressureHref}>
-          Runtime Pressure
+          运行压力
         </Link>
       </div>
     </Card>
@@ -378,7 +378,7 @@ export function SelectedAgentRuntimePressurePlaybookCard(props: {
     <Card className="app-stack" id={props.id}>
       <div className="app-task-card__header">
         <div>
-          <p className="mg-subtitle">Runtime Pressure Playbook</p>
+          <p className="mg-subtitle">运行压力处置手册</p>
           <h3 className="app-card-title">{props.title}</h3>
         </div>
         <Badge variant={props.tone}>{props.postureLabel}</Badge>
@@ -527,7 +527,7 @@ export function SelectedAgentCallbackHealthCard(props: {
     <Card className="app-stack">
       <div className="app-task-card__header">
         <div>
-          <p className="mg-subtitle">Callback Health</p>
+          <p className="mg-subtitle">回调健康</p>
           <h3 className="app-card-title">健康摘要与排查建议</h3>
         </div>
         {props.windowBadge}
@@ -547,7 +547,7 @@ export function SelectedAgentCallbackHealthCard(props: {
               <div className="app-task-card" key={recommendation.key}>
                 <div className="app-task-card__header">
                   <div>
-                    <p className="mg-subtitle">Recommendation</p>
+                    <p className="mg-subtitle">处置建议</p>
                     <h4 className="app-card-title">{recommendation.title}</h4>
                   </div>
                   {recommendation.badge}
@@ -584,7 +584,7 @@ export function SelectedAgentCapabilitiesCard(props: {
     <Card className="app-stack">
       <div className="app-task-card__header">
         <div>
-          <p className="mg-subtitle">Capabilities</p>
+          <p className="mg-subtitle">能力</p>
           <h3 className="app-card-title">能力清单</h3>
         </div>
         {props.badge}
@@ -601,7 +601,7 @@ export function SelectedAgentCapabilitiesCard(props: {
                   <h4 className="app-card-title">{capability.title}</h4>
                 </div>
                 <Badge variant={capability.enabled ? "success" : "warning"}>
-                  {capability.enabled ? "enabled" : "disabled"}
+                  {capability.enabled ? "已启用" : "已停用"}
                 </Badge>
               </div>
               <p className="mg-copy">{capability.description}</p>
@@ -657,7 +657,7 @@ export function SelectedAgentRecentCallbacksCard(props: {
     <Card className="app-stack" id="recent-callback-audits">
       <div className="app-task-card__header">
         <div>
-          <p className="mg-subtitle">Recent Callback Audits</p>
+          <p className="mg-subtitle">最近回调审计</p>
           <h3 className="app-card-title">最近回调</h3>
         </div>
         {props.badge}
@@ -677,7 +677,7 @@ export function SelectedAgentExecutionsCard(props: {
     <Card className="app-stack">
       <div className="app-task-card__header">
         <div>
-          <p className="mg-subtitle">Executions</p>
+          <p className="mg-subtitle">执行</p>
           <h3 className="app-card-title">最近执行流转</h3>
         </div>
         {props.badge}

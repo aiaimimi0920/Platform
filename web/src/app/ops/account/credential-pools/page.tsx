@@ -201,22 +201,22 @@ export default async function CredentialPoolsOpsPage({ searchParams }: Credentia
                     <div>
                       <strong>{selectedProvider.displayName}</strong>
                       <p style={{ margin: 0, color: "rgba(226,232,240,0.7)" }}>
-                        当前在管 lifecycle {selectedProvider.activeEntryCount} 个 available / {selectedProvider.activeAssignmentCount} 项 assignment
+                        当前在管生命周期 {selectedProvider.activeEntryCount} 个可用凭证 / {selectedProvider.activeAssignmentCount} 项分配
                       </p>
                     </div>
-                    <Badge variant="cyan">{selectedProvider.serviceCount} services</Badge>
+                    <Badge variant="cyan">{selectedProvider.serviceCount} 个服务</Badge>
                   </div>
                   <div className="app-announcement-ops__field-grid app-mission-ops__field-grid" style={{ marginTop: "12px" }}>
                     <div className="app-announcement-ops__field">
-                      <span>Active entries</span>
+                      <span>可用凭证</span>
                       <strong>{selectedProvider.activeEntryCount}</strong>
                     </div>
                     <div className="app-announcement-ops__field">
-                      <span>Active assignments</span>
+                      <span>有效分配</span>
                       <strong>{selectedProvider.activeAssignmentCount}</strong>
                     </div>
                     <div className="app-announcement-ops__field">
-                      <span>Terminals</span>
+                      <span>终端</span>
                       <strong>{selectedProvider.terminalCount}</strong>
                     </div>
                   </div>
@@ -228,7 +228,7 @@ export default async function CredentialPoolsOpsPage({ searchParams }: Credentia
                 </Panel>
               ) : (
                 <Panel className="app-announcement-ops__provider-summary" style={{ marginTop: "12px", padding: "14px 18px" }}>
-                  <strong>选择 Provider 聚焦</strong>
+                  <strong>选择服务商聚焦</strong>
                   <p style={{ margin: 0, color: "rgba(226,232,240,0.7)" }}>当前显示全部 provider，过滤后会有对应统计。</p>
                 </Panel>
               )}

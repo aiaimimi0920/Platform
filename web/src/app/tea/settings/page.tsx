@@ -26,19 +26,42 @@ type TeaSettingsPageProps = {
 function sourceOf(configuration: TeaConfigurationView | null): string {
   return typeof configuration?.configuration_source === "string"
     ? configuration.configuration_source
-    : "unknown";
+    : "unavailable";
 }
 
 function ownerOf(configuration: TeaConfigurationView | null): string {
   return typeof configuration?.configuration?.owner === "string"
     ? configuration.configuration.owner
-    : "unknown";
+    : "未声明";
 }
 
 function configRecord(configuration: TeaConfigurationView | null): Record<string, unknown> {
   return typeof configuration?.config === "object" && configuration.config !== null && !Array.isArray(configuration.config)
     ? (configuration.config as Record<string, unknown>)
     : {};
+}
+
+function formatConfigurationValue(value: unknown): string {
+  if (typeof value === "boolean") {
+    return value ? "启用" : "关闭";
+  }
+
+  if (typeof value !== "string" || value.trim().length === 0) {
+    return "未声明";
+  }
+
+  switch (value) {
+    case "human_before_execute":
+      return "执行前人工确认";
+    case "human_before_completion":
+      return "完成前人工验收";
+    case "manual_only":
+      return "仅人工推进";
+    case "plan_only":
+      return "只生成计划";
+    default:
+      return value;
+  }
 }
 
 export default async function TeaSettingsPage({ searchParams }: TeaSettingsPageProps) {
@@ -74,7 +97,7 @@ export default async function TeaSettingsPage({ searchParams }: TeaSettingsPageP
         <Card className="app-stack">
           <div className="app-task-card__header">
             <div>
-              <p className="mg-subtitle">Tea Settings</p>
+              <p className="mg-subtitle">Tea 配置中心</p>
               <h1 className="mg-title">Tea 配置</h1>
               <p className="mg-copy">
                 Tea 可以独立使用本地配置；当 Loom 声明接管 Tea 配置时，本页只读并跳转到 Loom。
@@ -88,7 +111,7 @@ export default async function TeaSettingsPage({ searchParams }: TeaSettingsPageP
 
         {loadError ? (
           <Card className="app-stack">
-            <Badge variant="danger">Configuration unavailable</Badge>
+            <Badge variant="danger">配置暂不可用</Badge>
             <p className="mg-copy">{loadError}</p>
           </Card>
         ) : (
@@ -101,13 +124,13 @@ export default async function TeaSettingsPage({ searchParams }: TeaSettingsPageP
               </Card>
             ) : null}
 
-            <AccountHomeSectionHead kicker="Ownership" title="配置来源" />
+            <AccountHomeSectionHead kicker="归属" title="配置来源" />
             <Card className="app-stack">
               <div className="app-action-row">
                 <Badge variant={source === "loom-managed" ? "cyan" : source === "fallback" ? "warning" : "glass"}>
                   {displayConfigurationSource(source)}
                 </Badge>
-                <span className="app-note">owner: {ownerOf(configuration)}</span>
+                <span className="app-note">负责人：{ownerOf(configuration)}</span>
               </div>
               {source === "loom-managed" && panelUrl ? (
                 <>
@@ -130,28 +153,28 @@ export default async function TeaSettingsPage({ searchParams }: TeaSettingsPageP
 
             <Card className="app-stack">
               <AccountHomeSectionHead
-                kicker="Current"
+                kicker="当前配置"
                 title={source === "loom-managed" ? "当前 Loom 配置" : "当前本地配置"}
               />
               <AccountHomeList>
                 <AccountHomeListRow
-                  aside={<span className="app-note">{String(config.notifications_enabled ?? "unknown")}</span>}
+                  aside={<span className="app-note">{formatConfigurationValue(config.notifications_enabled)}</span>}
                   title="通知/UI 提示"
                 />
                 <AccountHomeListRow
-                  aside={<span className="app-note">{String(config.human_ticket_default_approval_policy ?? "unknown")}</span>}
+                  aside={<span className="app-note">{formatConfigurationValue(config.human_ticket_default_approval_policy)}</span>}
                   title="人类工单默认审批策略"
                 />
                 <AccountHomeListRow
-                  aside={<span className="app-note">{String(config.hook_ticket_default_approval_policy ?? "unknown")}</span>}
-                  title="Hook intake 默认审批策略"
+                  aside={<span className="app-note">{formatConfigurationValue(config.hook_ticket_default_approval_policy)}</span>}
+                  title="Hook 工单默认审批策略"
                 />
               </AccountHomeList>
             </Card>
 
             {source === "loom-managed" ? null : (
               <Card className="app-stack">
-                <AccountHomeSectionHead kicker="Local" title="本地配置写入" />
+                <AccountHomeSectionHead kicker="本地写入" title="本地配置写入" />
                 <form action={updateTeaConfigurationAction} className="app-form-grid">
                   <input name="redirectTo" type="hidden" value="/tea/settings" />
                   <label className="app-note" htmlFor="notifications_enabled">
@@ -180,7 +203,7 @@ export default async function TeaSettingsPage({ searchParams }: TeaSettingsPageP
                     <option value="manual_only">仅人工推进</option>
                   </select>
                   <label className="app-note" htmlFor="hook_ticket_default_approval_policy">
-                    Hook intake 默认审批策略
+                    Hook 工单默认审批策略
                   </label>
                   <select
                     className="app-input"

@@ -73,7 +73,7 @@ export async function handleMailboxMessagesRequest() {
       const messages = await listMailbox(userContext);
       return { messages };
     },
-    { fallbackMessage: "Mailbox unavailable", fallbackStatus: 503 },
+    { fallbackMessage: "站内邮箱暂不可用", fallbackStatus: 503 },
   );
 }
 
@@ -100,7 +100,7 @@ export async function handleMailboxClaimRequest(request: Request) {
       return claimMailboxAttachment(userContext, { messageId, attachmentId });
     },
     {
-      fallbackMessage: "Mailbox claim failed",
+      fallbackMessage: "领取邮箱附件失败",
       fallbackStatus: 409,
     },
   );
@@ -113,7 +113,7 @@ export async function handleMailboxClaimAllRequest() {
       return { result: await claimAllMailboxAttachments(userContext) };
     },
     {
-      fallbackMessage: "Mailbox claim-all failed",
+      fallbackMessage: "批量领取邮箱附件失败",
       fallbackStatus: 409,
     },
   );
@@ -126,7 +126,7 @@ export async function handleMailboxArchiveReadRequest() {
       return { result: await archiveReadMailboxMessages(userContext) };
     },
     {
-      fallbackMessage: "Mailbox archive-read failed",
+      fallbackMessage: "归档已读邮箱消息失败",
       fallbackStatus: 409,
     },
   );
@@ -146,7 +146,7 @@ export async function handleMailboxMessageReadRequest(_: Request, context: Mailb
       return { message };
     },
     {
-      fallbackMessage: "Mailbox read failed",
+      fallbackMessage: "标记邮箱消息已读失败",
       fallbackStatus: 409,
     },
   );
@@ -162,7 +162,7 @@ export async function handleMailboxMessageFavoriteRequest(request: Request, cont
       return { result };
     },
     {
-      fallbackMessage: "Mailbox favorite update failed",
+      fallbackMessage: "更新邮箱收藏状态失败",
       fallbackStatus: 409,
     },
   );
@@ -177,7 +177,7 @@ export async function handleMailboxMessageDeleteRequest(_: Request, context: Mai
       return { result };
     },
     {
-      fallbackMessage: "Mailbox delete failed",
+      fallbackMessage: "删除邮箱消息失败",
       fallbackStatus: 409,
     },
   );
@@ -192,7 +192,7 @@ export async function handleMailboxMessageClaimAllRequest(_: Request, context: M
       return { result };
     },
     {
-      fallbackMessage: "Mailbox message claim failed",
+      fallbackMessage: "领取该邮箱消息附件失败",
       fallbackStatus: 409,
     },
   );

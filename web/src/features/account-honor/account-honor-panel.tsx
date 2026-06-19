@@ -331,7 +331,7 @@ export function AccountHonorExecutionPanel({
         {visibleAgentShowcase.length > 0 ? (
           <>
             <div className="app-account-honor-subsection-head">
-              <span>Agent 分项</span>
+              <span>智能体分项</span>
               <strong>{`${visibleAgentShowcase.length}/4`}</strong>
             </div>
             <div className="app-account-honor-agent-grid">
@@ -376,9 +376,9 @@ export function AccountHonorExecutionPanel({
             </div>
           </>
         ) : agentCatalog.length > 0 ? (
-          <p className="mg-copy">尚未选择展示 Agent。</p>
+          <p className="mg-copy">尚未选择展示智能体。</p>
         ) : (
-          <p className="mg-copy">暂无可展示的 Agent。</p>
+          <p className="mg-copy">暂无可展示的智能体。</p>
         )}
       </AccountHomeRailCard>
 
@@ -421,7 +421,7 @@ export function AccountHonorArchiveSection({
               {progression ? <span style={{ display: "inline-flex", alignItems: "center", minHeight: 26, padding: "0 10px", borderRadius: 999, background: "rgba(6,182,212,0.16)", color: "#67e8f9", border: "1px solid rgba(6,182,212,0.24)", fontSize: "0.78rem", fontWeight: 800, letterSpacing: "0.06em", textTransform: "uppercase" as const }}>{`Lv.${progression.level}`}</span> : null}
             </div>
           }
-          kicker="Honor Archive"
+          kicker="荣誉档案"
           title="荣誉档案"
         />
       ) : null}
@@ -650,7 +650,7 @@ export function AccountHonorSignalSection({
 
   return (
     <AccountHomeSection>
-      <AccountHomeSectionHead kicker="Profile Signal" title="身份荣誉信标" />
+        <AccountHomeSectionHead kicker="身份信标" title="身份荣誉信标" />
 
       <div className="app-account-honor-signal">
         {renderHonorAvatar(accountAvatarUrl, accountDisplayName.slice(0, 1).toUpperCase())}

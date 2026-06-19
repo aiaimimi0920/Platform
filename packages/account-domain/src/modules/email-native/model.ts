@@ -204,7 +204,7 @@ export function buildEmailNativeTaskInput(args: {
 
 export function getEmailNativeRouteKindLabel(routeKind: EmailNativeRouteKind | null) {
   if (routeKind === "agent_execution") {
-    return "Agent 调用";
+    return "智能体调用";
   }
   if (routeKind === "task_create") {
     return "任务创建";

@@ -21,12 +21,12 @@ export function safeLocalLoomUrl(value: unknown): string | null {
 export function displayConfigurationSource(value: unknown): string {
   switch (value) {
     case "loom-managed":
-      return "Loom-managed";
+      return "Loom 托管";
     case "fallback":
-      return "Fallback snapshot";
+      return "保底快照";
     case "local":
-      return "Local";
+      return "本地配置";
     default:
-      return "Unknown";
+      return "未声明";
   }
 }

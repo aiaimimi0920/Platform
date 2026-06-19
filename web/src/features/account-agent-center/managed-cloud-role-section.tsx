@@ -63,7 +63,7 @@ function buildCloudHref(
 
 function formatAuthModeLabel(agent: AgentView) {
   if (agent.authMode === "apiKey") {
-    return "API Key";
+    return "访问密钥";
   }
   if (agent.authMode === "bearer") {
     return "Bearer";
@@ -356,7 +356,7 @@ export function ManagedCloudRoleSection({
                     <div className="app-agent-center-form__cell">
                       <Select defaultValue={editingAgent?.authMode ?? "none"} name="authMode">
                         <option value="none">无鉴权</option>
-                        <option value="apiKey">API Key</option>
+                        <option value="apiKey">访问密钥</option>
                         <option value="bearer">Bearer</option>
                       </Select>
                     </div>

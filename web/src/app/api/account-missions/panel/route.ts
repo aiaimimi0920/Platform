@@ -14,7 +14,7 @@ export async function GET() {
       },
     );
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Mission panel unavailable";
+    const message = error instanceof Error ? error.message : "任务面板暂不可用";
     return Response.json(
       { error: message },
       {

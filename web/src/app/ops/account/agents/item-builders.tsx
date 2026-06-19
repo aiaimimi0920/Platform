@@ -117,47 +117,47 @@ function buildRecentCallbackPriority(
   if (entry.auditStatus === "rejected") {
     if (entry.retryability && entry.retryability !== "not_retryable") {
       return {
-        label: "needs remediation",
+        label: "需要补救",
         detail:
-          "当前回调已 rejected 且仍可重试，应保持在 operator 队列顶部优先处理。",
+          "当前回调已被拒绝且仍可重试，应保持在运维队列顶部优先处理。",
         variant: "danger",
       };
     }
     return {
-      label: "manual review",
+      label: "人工复核",
       detail:
-        "当前回调已 rejected，但不适合直接重试。应先核对 rejection category 与 callback envelope。",
+        "当前回调已被拒绝，但不适合直接重试。应先核对拒绝原因与回调包络。",
       variant: "warning",
     };
   }
   if (entry.usedPreviousProtocol || entry.usedPreviousSecret) {
     return {
-      label: "compat watch",
+      label: "兼容观测",
       detail:
-        "当前回调仍命中 previous protocol 或 previous secret 窗口，需要继续复核 rollout drift。",
+        "当前回调仍命中旧协议或旧密钥窗口，需要继续复核切换偏差。",
       variant: "warning",
     };
   }
   if (entry.auditStatus === "duplicate") {
     return {
-      label: "replay watch",
+      label: "重放观测",
       detail:
-        "当前 duplicate callback 需要回看 replay 与幂等行为，避免持续重复命中。",
+        "当前重复回调需要回看重放与幂等行为，避免持续重复命中。",
       variant: "warning",
     };
   }
   if (entry.lastRemediationStatus === "failed") {
     return {
-      label: "remediation drift",
+      label: "补救偏差",
       detail:
-        "最近一次 remediation attempt 失败，在恢复路径确认前不应从视野里移走。",
+        "最近一次补救尝试失败，在恢复路径确认前不应从视野里移走。",
       variant: "violet",
     };
   }
   return {
-    label: "accepted",
+    label: "已接收",
     detail:
-      "当前回调已 accepted，主要作为时间线语境保留，除非再次出现 compat 或 replay 信号。",
+      "当前回调已接收，主要作为时间线语境保留，除非再次出现兼容或重放信号。",
     variant: "cyan",
   };
 }
@@ -171,10 +171,10 @@ function buildRecentCallbackActionTemplate(
     entry.retryability !== "not_retryable"
   ) {
     return {
-      label: "replay first",
+      label: "优先重放",
       detail:
-        "当前回调仍可重放，优先尝试 payload replay，同时保留 rejected 审计语境，必要时再回退到 retry request。",
-      auditLabel: "打开 rejected 审计",
+        "当前回调仍可重放，优先尝试载荷重放，同时保留被拒绝审计语境，必要时再回退到重试请求。",
+      auditLabel: "打开被拒绝审计",
       primaryAction: "replay",
       includeAuditInPrimary: true,
       secondaryActions: ["retry"],
@@ -253,48 +253,48 @@ function buildExecutionOperatorCue(
 ): ExecutionOperatorCue {
   if (execution.status === "failed") {
     return {
-      label: "recover now",
+      label: "立即恢复",
       detail:
-        "这条 execution 已经 failed，优先看恢复路径、回调审计与是否需要重新入队。",
+        "这条执行已经失败，优先看恢复路径、回调审计与是否需要重新入队。",
       variant: "danger",
     };
   }
   if (execution.phaseOverdue || execution.recoveryExhaustedAt) {
     return {
-      label: "runtime risk",
+      label: "运行风险",
       detail:
-        "当前 execution 已出现 phase overdue 或 recovery exhausted 信号，应优先检查 runtime 推进与补救路径。",
+        "当前执行已出现阶段超时或恢复次数耗尽信号，应优先检查运行推进与补救路径。",
       variant: "warning",
     };
   }
   if (execution.status === "submitted") {
     return {
-      label: "settlement watch",
+      label: "结算观测",
       detail:
-        "这条 execution 已提交待验收，应优先确认结果摘要、回调状态与最终落账路径。",
+        "这条执行已提交待验收，应优先确认结果摘要、回调状态与最终落账路径。",
       variant: "violet",
     };
   }
   if (execution.status === "running") {
     return {
-      label: "running watch",
+      label: "运行观测",
       detail:
-        "这条 execution 仍在运行中，重点关注 phase age、heartbeat 与外部 callback 追踪。",
+        "这条执行仍在运行中，重点关注阶段耗时、心跳与外部回调追踪。",
       variant: "cyan",
     };
   }
   if (execution.status === "queued") {
     return {
-      label: "queue ready",
+      label: "队列就绪",
       detail:
-        "这条 execution 正在等待推进，适合从当前页判断是否需要 run executor 或手工流转。",
+        "这条执行正在等待推进，适合从当前页判断是否需要运行执行器或手工流转。",
       variant: "warning",
     };
   }
   return {
-    label: "timeline",
+    label: "时间线",
     detail:
-      "这条 execution 当前更多作为历史时间线补充，除非出现新的恢复或回调信号。",
+      "这条执行当前更多作为历史时间线补充，除非出现新的恢复或回调信号。",
     variant: "cyan",
   };
 }
@@ -325,9 +325,9 @@ function buildExecutionActionTemplate(
 
   if (promoteRequeueAction) {
     return {
-      nextStepLabel: "Recover / Requeue",
+      nextStepLabel: "恢复 / 重新入队",
       nextStepDetail:
-        "当前 execution 已进入 failed / overdue / recovery exhausted 路径，优先做恢复或重新入队，再决定是否补额外状态流转。",
+        "当前执行已进入失败 / 超时 / 恢复次数耗尽路径，优先做恢复或重新入队，再决定是否补额外状态流转。",
       promoteRequeueAction: true,
       primaryTransition: null,
       secondaryTransitions,
@@ -346,11 +346,11 @@ function buildExecutionActionTemplate(
   }
 
   return {
-    nextStepLabel: "Inspection only",
+    nextStepLabel: "仅检查",
     nextStepDetail:
       execution.canUpdateStatus || execution.canRequeue
-        ? "当前没有更明确的主流转，优先保留 watch / callback audit 路径。"
-        : "当前 execution 没有直接可写动作，保持观察并根据 callback / runtime 信号决定下一步。",
+        ? "当前没有更明确的主流转，优先保留观测 / 回调审计路径。"
+        : "当前执行没有直接可写动作，保持观察并根据回调 / 运行信号决定下一步。",
     promoteRequeueAction: false,
     primaryTransition: null,
     secondaryTransitions: [],
@@ -360,30 +360,30 @@ function buildExecutionActionTemplate(
 function executionWatchLabel(status: AgentExecutionView["status"]) {
   switch (status) {
     case "failed":
-      return "Failure Watch";
+      return "失败观测";
     case "submitted":
-      return "Settlement Watch";
+      return "结算观测";
     case "running":
-      return "Running Watch";
+      return "运行观测";
     case "queued":
-      return "Queue Watch";
+      return "排队观测";
     default:
-      return "Execution Watch";
+      return "执行观测";
   }
 }
 
 function executionCallbackAuditLabel(status: AgentExecutionView["status"]) {
   switch (status) {
     case "failed":
-      return "失败 callback 审计";
+      return "失败回调审计";
     case "submitted":
-      return "验收前 callback 审计";
+      return "验收前回调审计";
     case "running":
-      return "运行态 callback 审计";
+      return "运行态回调审计";
     case "queued":
-      return "排队态 callback 审计";
+      return "排队态回调审计";
     default:
-      return "查看 callback 审计";
+      return "查看回调审计";
   }
 }
 
@@ -728,7 +728,7 @@ export function buildSelectedExecutionItem(args: {
   const executionDetailRows: DetailListRow[] = [
     {
       label: "进度 / 阶段",
-      value: `${execution.progressPercent ?? 0}% / ${execution.executorPhase || "未进入 runtime"}`,
+      value: `${execution.progressPercent ?? 0}% / ${execution.executorPhase || "未进入运行阶段"}`,
     },
     {
       label: "回调策略来源",
@@ -739,15 +739,15 @@ export function buildSelectedExecutionItem(args: {
       value: formatShanghaiDateTime(execution.lastHeartbeatAt),
     },
     {
-      label: "最近 external callback",
+      label: "最近外部回调",
       value: formatShanghaiDateTime(execution.lastExternalCallbackAt),
     },
     {
-      label: "Phase Age / Timeout",
+      label: "阶段耗时 / 超时",
       value: `${formatDurationSeconds(execution.phaseAgeSeconds)} / ${formatDurationSeconds(execution.phaseTimeoutSeconds)}`,
     },
     {
-      label: "Auto Recovery",
+      label: "自动恢复",
       value: `${execution.autoRecoveryCount} / ${execution.maxAutoRecoveryCount}`,
     },
     {
@@ -762,9 +762,9 @@ export function buildSelectedExecutionItem(args: {
       key={execution.id}
       notes={
         <>
-          <p className="app-note">Operator Cue：{executionCue.detail}</p>
+          <p className="app-note">运维提示：{executionCue.detail}</p>
           <p className="app-note">
-            Next Step：{executionActionTemplate.nextStepLabel} ·{" "}
+            下一步：{executionActionTemplate.nextStepLabel} ·{" "}
             {executionActionTemplate.nextStepDetail}
           </p>
           {execution.statusNote ? (
@@ -788,23 +788,23 @@ export function buildSelectedExecutionItem(args: {
                 }
               >
                 {execution.callbackRemediationPolicySource === "execution"
-                  ? "override"
-                  : "inherit"}
+                  ? "执行级覆盖"
+                  : "继承"}
               </Badge>
             }
             detail={
               <p className="app-note">
-                仅 external execution 支持 execution 级 callback remediation
-                override。选择“继承 Agent 默认”会清空 override。
+                仅外部执行支持执行级回调补救覆盖。
+                选择“继承智能体默认”会清空覆盖配置。
               </p>
             }
             effectiveSummary={
               <p className="app-note">
-                当前 effective policy：
+                当前生效策略：
                 {execution.callbackRemediationPolicy.label}
                 {execution.callbackRemediationPolicyOverrideKey
-                  ? ` / override ${execution.callbackRemediationPolicyOverrideKey}`
-                  : " / inherit_agent"}
+                  ? ` / 覆盖 ${execution.callbackRemediationPolicyOverrideKey}`
+                  : " / 继承智能体默认"}
               </p>
             }
             form={
@@ -831,7 +831,7 @@ export function buildSelectedExecutionItem(args: {
                   ))}
                 </Select>
                 <button className="mg-btn mg-btn--secondary" type="submit">
-                  更新 Execution Policy
+                  更新执行策略
                 </button>
               </form>
             }
@@ -841,7 +841,7 @@ export function buildSelectedExecutionItem(args: {
                   <div className="app-task-card__header">
                     <div>
                       <p className="mg-subtitle">
-                        Execution Policy Recommendation
+                        执行策略建议
                       </p>
                       <h5 className="app-card-title">
                         {executionPolicyRecommendation.title}
@@ -885,8 +885,8 @@ export function buildSelectedExecutionItem(args: {
                 </div>
               ) : null
             }
-            subtitle="Execution Callback Policy"
-            title="Override 当前 execution"
+            subtitle="执行回调策略"
+            title="覆盖当前执行"
           />
         ) : null
       }
@@ -896,7 +896,7 @@ export function buildSelectedExecutionItem(args: {
             ? renderExecutionRequeueAction({
                 buttonClassName: "mg-btn mg-btn--primary",
                 executionId: execution.id,
-                label: "Recover / Requeue",
+                label: "恢复 / 重新入队",
                 redirectTo: currentOpsHref,
               })
             : null}
@@ -909,7 +909,7 @@ export function buildSelectedExecutionItem(args: {
               })
             : null}
           <Link className="mg-btn mg-btn--ghost" href="/agents?mode=tasks">
-            打开 Agent Center
+            打开智能体中心
           </Link>
           <Link
             className="mg-btn mg-btn--ghost"
@@ -977,16 +977,16 @@ export function buildSelectedExecutionItem(args: {
           <Badge variant={executionCue.variant}>{executionCue.label}</Badge>
           <Badge variant="violet">{execution.runtimeProfile.label}</Badge>
           <Badge variant="glass">
-            next {executionActionTemplate.nextStepLabel}
+            后续 {executionActionTemplate.nextStepLabel}
           </Badge>
           {execution.callbackRemediationPolicySource === "execution" ? (
-            <Badge variant="warning">execution override</Badge>
+            <Badge variant="warning">执行级覆盖</Badge>
           ) : null}
           {execution.phaseOverdue ? (
-            <Badge variant="danger">phase overdue</Badge>
+            <Badge variant="danger">阶段超时</Badge>
           ) : null}
           {execution.recoveryExhaustedAt ? (
-            <Badge variant="warning">recovery exhausted</Badge>
+            <Badge variant="warning">恢复次数耗尽</Badge>
           ) : null}
         </>
       }

@@ -101,11 +101,11 @@ function PricingEditorCard(props: { editor: PricingEditor }) {
                 <th className="nt-table__cell">Prompt US$/1M</th>
                 <th className="nt-table__cell">Completion US$/1M</th>
                 <th className="nt-table__cell">价格来源</th>
-                <th className="nt-table__cell">输入Tokens</th>
-                <th className="nt-table__cell">输出Tokens</th>
-                <th className="nt-table__cell">思考Tokens</th>
-                <th className="nt-table__cell">缓存Tokens</th>
-                <th className="nt-table__cell">总Token数</th>
+                <th className="nt-table__cell">输入 Token</th>
+                <th className="nt-table__cell">输出 Token</th>
+                <th className="nt-table__cell">思考 Token</th>
+                <th className="nt-table__cell">缓存 Token</th>
+                <th className="nt-table__cell">总 Token 数</th>
                 <th className="nt-table__cell">估算金额</th>
               </tr>
             </thead>
@@ -180,11 +180,11 @@ function ProviderMarketTable(props: { buckets: ProviderBucket[] }) {
           <tr>
             <th className="nt-table__cell">服务商 / 模型</th>
             <th className="nt-table__cell">请求数</th>
-            <th className="nt-table__cell">输入Tokens</th>
-            <th className="nt-table__cell">输出Tokens</th>
-            <th className="nt-table__cell">思考Tokens</th>
-            <th className="nt-table__cell">缓存Tokens</th>
-            <th className="nt-table__cell">总Token数</th>
+            <th className="nt-table__cell">输入 Token</th>
+            <th className="nt-table__cell">输出 Token</th>
+            <th className="nt-table__cell">思考 Token</th>
+            <th className="nt-table__cell">缓存 Token</th>
+            <th className="nt-table__cell">总 Token 数</th>
             <th className="nt-table__cell">市场价估算</th>
             <th className="nt-table__cell">最近请求</th>
           </tr>
@@ -262,11 +262,11 @@ function ModelMarketTable(props: { buckets: ModelBucket[] }) {
           <tr>
             <th className="nt-table__cell">模型 / 服务商</th>
             <th className="nt-table__cell">请求数</th>
-            <th className="nt-table__cell">输入Tokens</th>
-            <th className="nt-table__cell">输出Tokens</th>
-            <th className="nt-table__cell">思考Tokens</th>
-            <th className="nt-table__cell">缓存Tokens</th>
-            <th className="nt-table__cell">总Token数</th>
+            <th className="nt-table__cell">输入 Token</th>
+            <th className="nt-table__cell">输出 Token</th>
+            <th className="nt-table__cell">思考 Token</th>
+            <th className="nt-table__cell">缓存 Token</th>
+            <th className="nt-table__cell">总 Token 数</th>
             <th className="nt-table__cell">市场价估算</th>
             <th className="nt-table__cell">最近请求</th>
           </tr>
@@ -367,7 +367,7 @@ export default async function GatewayCostOpsPage() {
   return (
     <div className="nt-shell" style={{ display: "grid", gap: 24, padding: "24px 0 40px" }}>
       <section style={{ display: "grid", gap: 8 }}>
-        <span className="nt-kicker">Operator / AI 网关</span>
+        <span className="nt-kicker">运维 / AI 网关</span>
         <div style={{ display: "grid", gap: 6 }}>
           <h1 style={{ margin: 0, fontSize: "2rem", color: "rgba(243,245,247,0.98)" }}>使用统计</h1>
           <p style={{ margin: 0, color: "rgba(190,199,217,0.78)", maxWidth: "88ch", lineHeight: 1.6 }}>
@@ -394,11 +394,11 @@ export default async function GatewayCostOpsPage() {
         <SummaryCard title="服务商总数" value={summary.providerCount} hint={`已定价 ${summary.pricedProviderCount}`} />
         <SummaryCard title="模型总数" value={summary.modelCount} hint={`已定价 ${summary.pricedModelCount}`} />
         <SummaryCard title="历史请求数" value={summary.totalRequests} />
-        <SummaryCard title="总Token数" value={summary.totalTokens} />
-        <SummaryCard title="输入Tokens" value={summary.totalInputTokens} />
-        <SummaryCard title="输出Tokens" value={summary.totalOutputTokens} />
-        <SummaryCard title="思考Tokens" value={summary.totalThinkingTokens} />
-        <SummaryCard title="缓存Tokens" value={summary.totalCachedTokens} />
+        <SummaryCard title="总 Token 数" value={summary.totalTokens} />
+        <SummaryCard title="输入 Token" value={summary.totalInputTokens} />
+        <SummaryCard title="输出 Token" value={summary.totalOutputTokens} />
+        <SummaryCard title="思考 Token" value={summary.totalThinkingTokens} />
+        <SummaryCard title="缓存 Token" value={summary.totalCachedTokens} />
         <SummaryCard title="市场价估算" value={formatMicros(summary.estimatedMarketCostMicros)} />
         <SummaryCard title="未定价模型" value={summary.unpricedModelCount} hint={`未定价服务商 ${summary.unpricedProviderCount}`} />
       </section>
@@ -449,7 +449,7 @@ export default async function GatewayCostOpsPage() {
         <span className="nt-kicker">重要说明</span>
         <strong style={{ color: "rgba(254,215,170,0.96)" }}>这里是市场价估算，不是账单对账</strong>
         <span style={{ color: "rgba(253,186,116,0.86)", lineHeight: 1.6 }}>
-          页面金额由历史 token 使用量 × 管理员配置的模型市场价计算得到，目的是帮助平台做定价和运营判断。思考Tokens当前仅用于展示，不额外单独计价；缓存Tokens当前沿用输入价格口径估算。它不会替代上游账单，也不直接代表用户侧结算结果。
+          页面金额由历史 Token 使用量 × 管理员配置的模型市场价计算得到，目的是帮助平台做定价和运营判断。思考 Token 当前仅用于展示，不额外单独计价；缓存 Token 当前沿用输入价格口径估算。它不会替代上游账单，也不直接代表用户侧结算结果。
         </span>
       </NtCard>
     </div>

@@ -181,15 +181,15 @@ export default async function DiscountCodeOpsPage({ searchParams }: PageProps) {
 
         {/* ── Overview ── */}
         <div className="ops-card">
-          <h2 className="ops-card__title">Inventory</h2>
+          <h2 className="ops-card__title">优惠码库存</h2>
           <div className="ops-table-wrap">
             <table className="ops-table">
               <thead>
                 <tr>
-                  <th>Total</th>
-                  <th>Enabled</th>
-                  <th>Filtered</th>
-                  <th>Expiring ({discountWindowDays}d)</th>
+                  <th>总数</th>
+                  <th>已启用</th>
+                  <th>当前筛选</th>
+                  <th>即将到期 ({discountWindowDays} 天)</th>
                 </tr>
               </thead>
               <tbody>

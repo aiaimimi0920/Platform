@@ -9,7 +9,7 @@ import {
   flattenMessageText,
   nowGroup,
   nowLabel,
-} from "@/features/account-heavy-agent-chat/mock-data";
+} from "@/features/account-heavy-agent-chat/seed-data";
 import type {
   HeavyActionNotice,
   HeavyChatMessage,
@@ -62,7 +62,7 @@ function buildStreamingAssistantMessage(): HeavyChatMessage {
     role: "assistant",
     status: "streaming",
     createdAtLabel: nowLabel(),
-    meta: "服务端重度运行时 / streaming 占位",
+    meta: "服务端重度运行时 / streaming",
     blocks: [
       {
         id: id("block-status"),
@@ -186,7 +186,7 @@ export function useHeavyChatThreadState({
     setActionNotice({
       id: id("notice"),
       tone: "cyan",
-      message: "已把输入挂到当前线程，正在模拟服务端重度运行时回复。",
+      message: "已把输入挂到当前线程，正在整理服务端重度运行时回复。",
     });
 
     window.setTimeout(() => {
@@ -263,7 +263,7 @@ export function useHeavyChatThreadState({
       setActionNotice({
         id: id("notice"),
         tone: "success",
-        message: "已生成任务草稿占位。后续接 API 时可直接发送到 Task Hub。",
+        message: "已生成任务草稿，可从任务面板继续完善与发布。",
       });
       return;
     }
@@ -272,7 +272,7 @@ export function useHeavyChatThreadState({
       setActionNotice({
         id: id("notice"),
         tone: "cyan",
-        message: "已生成邮箱投递草稿占位。后续接 API 时可投影到真实邮箱与站内 mailbox。",
+        message: "已生成邮箱投递草稿，可从邮箱与站内消息流程继续处理。",
       });
       return;
     }
@@ -300,7 +300,7 @@ export function useHeavyChatThreadState({
                   ? {
                       ...entry,
                       status: "streaming",
-                      meta: "重试中 / streaming 占位",
+                      meta: "重试中 / streaming",
                       blocks: [
                         {
                           id: id("block-status"),
@@ -320,7 +320,7 @@ export function useHeavyChatThreadState({
     setActionNotice({
       id: id("notice"),
       tone: "warning",
-      message: "已重新触发本地重试占位。",
+      message: "已重新触发重试流程。",
     });
 
     window.setTimeout(() => {

@@ -241,7 +241,7 @@ export const env: WorkerEnv = {
   sharedRedisUrl,
   emailDeliveryMode: parseEmailDeliveryMode(process.env.ACCOUNT_EMAIL_DELIVERY_MODE),
   emailFromAddress: process.env.ACCOUNT_EMAIL_FROM_ADDRESS?.trim() || "noreply@neuro.local",
-  emailFromName: process.env.ACCOUNT_EMAIL_FROM_NAME?.trim() || "NeuroPlatform",
+  emailFromName: process.env.ACCOUNT_EMAIL_FROM_NAME?.trim() || "NeuroLoom",
   emailReplyTo: process.env.ACCOUNT_EMAIL_REPLY_TO?.trim() || null,
   emailSmtpHost: process.env.ACCOUNT_EMAIL_SMTP_HOST?.trim() || null,
   emailSmtpPort: parseNumber(process.env.ACCOUNT_EMAIL_SMTP_PORT, 587, 1),

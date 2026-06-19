@@ -120,7 +120,7 @@ export default async function InventoryPage({ searchParams }: InventoryPageProps
         <div className="mg-shell">
           <Card className="app-stack">
             <h1 className="mg-title">模块状态暂不可用</h1>
-            <p className="mg-copy">当前无法从 core 读取模块快照，请稍后再试。</p>
+            <p className="mg-copy">当前无法读取模块状态，请稍后再试。</p>
           </Card>
         </div>
       </main>
@@ -216,11 +216,11 @@ export default async function InventoryPage({ searchParams }: InventoryPageProps
             { label: "可挂牌", value: formatAccountNumber(listableItems.length) },
           ]}
           hudItems={hudItems}
-          kicker="Inventory Terminal"
+          kicker="资产终端"
           navItems={navItems}
           railFooter={
             <AccountHomeRailCard>
-              <AccountHomeSectionHead kicker="Asset Mix" title="资产结构" />
+          <AccountHomeSectionHead kicker="资产结构" title="资产结构" />
               <AccountHomeList>
                 <AccountHomeListRow aside={<span className="app-note">{maintainedPoolCount}</span>} title="维护池资产" />
                 <AccountHomeListRow aside={<span className="app-note">{warrantyCount}</span>} title="质保资产" />
@@ -254,7 +254,7 @@ export default async function InventoryPage({ searchParams }: InventoryPageProps
           <div className="app-account-content-grid">
             <div className="app-account-content-main">
               <AccountHomeSection>
-                <AccountHomeSectionHead kicker="Owned Items" title="持有资产" />
+              <AccountHomeSectionHead kicker="持有资产" title="持有资产" />
                 {items.length === 0 ? (
                   <p className="mg-copy">当前还没有持有资产。</p>
                 ) : (
@@ -302,7 +302,7 @@ export default async function InventoryPage({ searchParams }: InventoryPageProps
               </AccountHomeSection>
 
               <AccountHomeSection>
-                <AccountHomeSectionHead kicker="Order History" title="订单历史" />
+          <AccountHomeSectionHead kicker="订单历史" title="订单历史" />
                 {orders.length === 0 ? (
                   <p className="mg-copy">当前还没有订单历史。</p>
                 ) : (
@@ -341,7 +341,7 @@ export default async function InventoryPage({ searchParams }: InventoryPageProps
 
             <div className="app-account-content-side">
               <AccountHomeSection>
-                <AccountHomeSectionHead kicker="Summary" title="商品域摘要" />
+          <AccountHomeSectionHead kicker="摘要" title="商品域摘要" />
                 <AccountHomeStatGrid>
                   <AccountHomeStat label="活跃资产" value={activeItemCount} />
                   <AccountHomeStat label="挂牌资产" value={listedItemCount} />
@@ -351,7 +351,7 @@ export default async function InventoryPage({ searchParams }: InventoryPageProps
               </AccountHomeSection>
 
               <AccountHomeSection>
-                <AccountHomeSectionHead kicker="Quick Actions" title="账户页已接入动作" />
+          <AccountHomeSectionHead kicker="快捷动作" title="账户页已接入动作" />
                 <AccountHomeList>
                   {isPublicSurfaceVisibleForViewer(publicSurfaces, "benefits", session.user.id, session.user.providerUserId) ? (
                     <AccountHomeListRow aside={<span className="app-note">/benefits</span>} title="权益领取台" />
@@ -364,12 +364,12 @@ export default async function InventoryPage({ searchParams }: InventoryPageProps
               </AccountHomeSection>
 
               <AccountHomeSection>
-                <AccountHomeSectionHead kicker="Boundary" title="当前 owner 边界" />
+          <AccountHomeSectionHead kicker="范围" title="账户资产范围" />
                 <AccountHomeList>
                   <AccountHomeListRow aside={<span className="app-note">账户中心聚合 + 常用动作</span>} title="当前定位" />
                   <AccountHomeListRow aside={<span className="app-note">/products /marketplace</span>} title="详细交易入口" />
-                  <AccountHomeListRow aside={<span className="app-note">/v1/items + /v1/orders</span>} title="读取接口" />
-                  <AccountHomeListRow aside={<span className="app-note">platform owner</span>} title="业务 owner" />
+                  <AccountHomeListRow aside={<span className="app-note">账户资产与订单记录</span>} title="数据来源" />
+                  <AccountHomeListRow aside={<span className="app-note">平台业务链路</span>} title="归属口径" />
                 </AccountHomeList>
               </AccountHomeSection>
             </div>

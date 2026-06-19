@@ -19,7 +19,7 @@ export default async function RedeemPage() {
         <div className="mg-shell">
           <Card className="app-stack">
             <h1 className="mg-title">模块状态暂不可用</h1>
-            <p className="mg-copy">当前无法从 core 读取模块快照，请稍后再试。</p>
+            <p className="mg-copy">当前无法读取模块状态，请稍后再试。</p>
           </Card>
         </div>
       </main>

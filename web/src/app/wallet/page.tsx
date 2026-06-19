@@ -88,6 +88,19 @@ function formatExchangeDirection(direction: string): string {
   return direction;
 }
 
+function formatAssetCategoryLabel(category: string): string {
+  switch (category) {
+    case "earned":
+      return "获得型资产";
+    case "purchased":
+      return "购买型资产";
+    case "governance":
+      return "治理资产";
+    default:
+      return category;
+  }
+}
+
 export default async function WalletPage({ searchParams }: WalletPageProps) {
   const session = await auth();
   if (!session?.user?.id) {
@@ -124,7 +137,7 @@ export default async function WalletPage({ searchParams }: WalletPageProps) {
         <div className="mg-shell">
           <Card className="app-stack">
             <h1 className="mg-title">模块状态暂不可用</h1>
-            <p className="mg-copy">当前无法从 core 读取模块快照，请稍后再试。</p>
+            <p className="mg-copy">当前无法读取模块状态，请稍后再试。</p>
           </Card>
         </div>
       </main>
@@ -233,11 +246,11 @@ export default async function WalletPage({ searchParams }: WalletPageProps) {
             { label: "未读消息", value: formatAccountNumber(unreadMailboxCount) },
           ]}
           hudItems={hudItems}
-          kicker="Wallet Terminal"
+          kicker="钱包终端"
           navItems={navItems}
           railFooter={
             <AccountHomeRailCard>
-              <AccountHomeSectionHead kicker="Ledger" title="账本摘要" />
+          <AccountHomeSectionHead kicker="账本" title="账本摘要" />
               <AccountHomeList>
                 <AccountHomeListRow aside={<span className="app-note">{walletPanel.recentEntries.length}</span>} title="最近流水条数" />
                 <AccountHomeListRow aside={<span className="app-note">{latestEntry ? formatAccountDateTime(latestEntry.createdAt) : "暂无"}</span>} title="最近记账" />
@@ -274,7 +287,7 @@ export default async function WalletPage({ searchParams }: WalletPageProps) {
           <div className="app-account-content-grid">
             <div className="app-account-content-main">
               <AccountHomeSection>
-                <AccountHomeSectionHead kicker="Balances" title="三货币余额" />
+              <AccountHomeSectionHead kicker="余额" title="三货币余额" />
                 <div className="app-account-balance-grid">
                   {walletPanel.assets.map((asset) => (
                     <Card className="app-account-balance-card" key={asset.key}>
@@ -296,12 +309,12 @@ export default async function WalletPage({ searchParams }: WalletPageProps) {
               </AccountHomeSection>
 
               <AccountHomeSection>
-                <AccountHomeSectionHead kicker="Asset Roles" title="三货币角色与规则" />
+              <AccountHomeSectionHead kicker="资产角色" title="三货币角色与规则" />
                 <div className="app-account-subgrid">
                   {walletPanel.assets.map((asset) => (
                     <Card className="app-account-support-card" key={`${asset.key}-role`}>
                       <AccountHomeSectionHead
-                        kicker={asset.category.toUpperCase()}
+                        kicker={formatAssetCategoryLabel(asset.category)}
                         title={`${asset.displayName} · ${asset.shortLabel}`}
                       />
                       <AccountHomeList>
@@ -315,9 +328,11 @@ export default async function WalletPage({ searchParams }: WalletPageProps) {
               </AccountHomeSection>
 
               <AccountHomeSection id="wallet-exchange">
-                <AccountHomeSectionHead kicker="Exchange" title="耀晶兑换米拉" />
+          <AccountHomeSectionHead kicker="兑换" title="耀晶兑换米拉" />
                 <Card className="app-account-support-card">
-                  <p className="mg-copy">当前正式开放的只有单向耀晶兑米拉。内部 route code 继续保持 <code>obsidian_to_mira</code> 兼容，兑换结果会直接写入账户域账本，并回到本页显示状态。</p>
+                  <p className="mg-copy">
+                    当前支持单向耀晶兑换米拉。兑换完成后会直接写入账户域账本，并回到本页显示状态。
+                  </p>
                   <form action={exchangeObsidianToMiraAction} className="app-account-inline-form">
                     <input name="redirectTo" type="hidden" value="/wallet" />
                     <Input
@@ -336,7 +351,7 @@ export default async function WalletPage({ searchParams }: WalletPageProps) {
               <AccountHomeSection>
                 <AccountHomeSectionHead
                   actions={<span className="app-note">最近 {walletPanel.recentEntries.length} 条</span>}
-                  kicker="Recent Ledger"
+          kicker="近期账本"
                   title="最近流水"
                 />
                 {walletPanel.recentEntries.length === 0 ? (
@@ -367,7 +382,7 @@ export default async function WalletPage({ searchParams }: WalletPageProps) {
 
             <div className="app-account-content-side">
               <AccountHomeSection>
-                <AccountHomeSectionHead kicker="Value Ingress" title="价值入口" />
+          <AccountHomeSectionHead kicker="价值入口" title="价值入口" />
                 <AccountHomeList>
                   <AccountHomeListRow
                     aside={
@@ -380,8 +395,8 @@ export default async function WalletPage({ searchParams }: WalletPageProps) {
                   />
                   <AccountHomeListRow
                     aside={<Link className="mg-btn mg-btn--outline" href="/email-access">查看</Link>}
-                    title="Email-Native 回执"
-                    subtitle="真实邮箱触发的任务与 Agent 执行会同时回执到真实邮箱和站内邮箱。"
+                    title="邮件入口回执"
+                    subtitle="真实邮箱触发的任务与智能体执行会同时回执到真实邮箱和站内邮箱。"
                   />
                   <AccountHomeListRow
                     aside={
@@ -390,7 +405,7 @@ export default async function WalletPage({ searchParams }: WalletPageProps) {
                       ) : undefined
                     }
                     title="福利与资格"
-                    subtitle="购买型权益、人工 grant 与 credential assignment 都会在这里形成价值入口。"
+                    subtitle="购买型权益、人工发放与凭证分配都会在这里形成价值入口。"
                   />
                   <AccountHomeListRow
                     aside={
@@ -405,17 +420,17 @@ export default async function WalletPage({ searchParams }: WalletPageProps) {
               </AccountHomeSection>
 
               <AccountHomeSection>
-                <AccountHomeSectionHead kicker="Rules" title="当前规则" />
+          <AccountHomeSectionHead kicker="规则" title="当前规则" />
                 <AccountHomeStatGrid>
-                  <AccountHomeStat label="钱包 owner" value="account-api" />
-                  <AccountHomeStat label="写入路径" value="account-domain" />
+                  <AccountHomeStat label="钱包归属" value="账户钱包服务" />
+                  <AccountHomeStat label="写入口径" value="账户账本" />
                   <AccountHomeStat label="兑换方向" value="耀晶兑米拉" />
-                  <AccountHomeStat label="资产定义" value="wallet panel" />
+                  <AccountHomeStat label="资产定义" value="钱包面板" />
                 </AccountHomeStatGrid>
               </AccountHomeSection>
 
               <AccountHomeSection>
-                <AccountHomeSectionHead kicker="Snapshot" title="聚合摘要" />
+          <AccountHomeSectionHead kicker="快照" title="聚合摘要" />
                 <AccountHomeList>
                   <AccountHomeListRow aside={<span className="app-note">{walletSnapshot?.recentEntryCount ?? walletPanel.recentEntries.length}</span>} title="快照流水数" />
                   <AccountHomeListRow aside={<span className="app-note">{progression ? `Lv.${progression.level}` : "未读取"}</span>} title="成长等级" />

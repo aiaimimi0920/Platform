@@ -1,4 +1,4 @@
-# NeuroPlatform Web
+# NeuroLoom Web
 
 This is the frontend shell for the new platform phase.
 

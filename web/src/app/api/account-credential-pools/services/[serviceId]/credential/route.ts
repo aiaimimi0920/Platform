@@ -22,7 +22,7 @@ export async function POST(_request: Request, context: RouteContext) {
       },
     );
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Credential unavailable";
+    const message = error instanceof Error ? error.message : "凭证暂不可用";
     return Response.json(
       { error: message },
       {

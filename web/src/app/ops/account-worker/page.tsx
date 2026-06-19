@@ -60,9 +60,9 @@ function toLocaleDateTime(value: string | null | undefined) {
 }
 
 function getWorkerHealthStatusLabel(status: "success" | "error" | null) {
-  if (status === "success") return "Healthy";
-  if (status === "error") return "Degraded";
-  return "Unknown";
+  if (status === "success") return "健康";
+  if (status === "error") return "降级";
+  return "未知";
 }
 
 function getWorkerHealthStatusBadgeVariant(status: "success" | "error" | null) {
@@ -72,9 +72,9 @@ function getWorkerHealthStatusBadgeVariant(status: "success" | "error" | null) {
 }
 
 function getFailureClusterCategoryLabel(category: DigestFailureCluster["category"]) {
-  if (category === "manual") return "Manual Cluster";
-  if (category === "mixed") return "Mixed Cluster";
-  return "Worker Cluster";
+  if (category === "manual") return "人工触发聚类";
+  if (category === "mixed") return "混合触发聚类";
+  return "后台任务聚类";
 }
 
 function getWorkerOpsFocusLabel(
@@ -84,20 +84,20 @@ function getWorkerOpsFocusLabel(
     | "archive-subscriptions"
     | "archive-cleanup-alert",
 ) {
-  if (focus === "archive-digest-queue") return "Digest Queue";
-  if (focus === "archive-failing-presets") return "Failing Presets";
-  if (focus === "archive-subscriptions") return "Mailbox Subscriptions";
-  return "Cleanup Alert";
+  if (focus === "archive-digest-queue") return "摘要队列";
+  if (focus === "archive-failing-presets") return "失败预设";
+  if (focus === "archive-subscriptions") return "站内邮箱订阅";
+  return "清理告警";
 }
 
 function getWorkerOpsActionIntentLabel(
   intent: "retry-digests" | "dismiss-digests" | "retry-archives" | "create-subscription" | "acknowledge-cleanup" | null,
 ) {
-  if (intent === "retry-digests") return "批量重试 Digest";
-  if (intent === "dismiss-digests") return "批量忽略 Digest";
+  if (intent === "retry-digests") return "批量重试摘要";
+  if (intent === "dismiss-digests") return "批量忽略摘要";
   if (intent === "retry-archives") return "立即重试失败归档";
   if (intent === "create-subscription") return "创建订阅规则";
-  if (intent === "acknowledge-cleanup") return "确认 Cleanup 告警";
+  if (intent === "acknowledge-cleanup") return "确认清理告警";
   return "观察模式";
 }
 
@@ -205,7 +205,7 @@ function buildFailureClusters(runs: Array<{ failedCount: number; errorMessage: s
       continue;
     }
 
-    const message = run.errorMessage?.trim() || "worker flush failed without explicit error";
+    const message = run.errorMessage?.trim() || "后台任务刷新失败但未提供明确错误";
     const existing = clusterMap.get(message);
     const latestAt = existing && new Date(existing.latestAt).getTime() > new Date(run.finishedAt).getTime()
       ? existing.latestAt
@@ -244,10 +244,10 @@ function buildWorkerRecommendations(args: {
     recommendations.push({
       key: "shadow-sync",
       title: "检查 Product Shadow Sync",
-      detail: `最近 shadow sync 处于 error 状态，错误：${args.workerHealth.lastProductShadowSyncError ?? "未知错误"}。这通常意味着 dedicated-db 商品影子预热或增量刷新需要介入。`,
+      detail: `最近商品影子同步处于错误状态，错误：${args.workerHealth.lastProductShadowSyncError ?? "未知错误"}。这通常意味着商品影子预热或增量刷新需要介入。`,
       variant: "warning",
       href: buildAccountWorkerPageHref(args.runWindow, "#worker-runtime"),
-      actionLabel: "查看 Worker Runtime",
+      actionLabel: "查看后台任务运行",
     });
   }
 
@@ -326,22 +326,22 @@ export default async function AccountWorkerOpsPage({ searchParams }: AccountWork
     <main className="app-page">
       <div className="mg-shell app-stack">
         <Panel className="app-stack">
-          <span className="mg-badge mg-badge--warning">Operator Ops</span>
-          <h1 className="mg-title">Account Worker Ops</h1>
+          <span className="mg-badge mg-badge--warning">运维动作</span>
+          <h1 className="mg-title">账户后台任务运维</h1>
           <p className="mg-copy">
-            这里聚焦 `account-worker` 的私网健康状态、digest queue 压力和最近 flush 趋势。产品运营页继续保留动作入口，运行单元状态在这里集中观察。
+            这里聚焦 `account-worker` 的私网健康状态、摘要队列压力和最近刷新趋势。产品运营页继续保留动作入口，运行单元状态在这里集中观察。
           </p>
           <div className="app-inline-actions">
             <Badge variant={getBacklogRiskVariant(backlogRisk.level)}>{backlogRisk.title}</Badge>
             <Link className="mg-btn mg-btn--secondary" href="/ops/products">
-              返回 Products Ops
+              返回商品运营
             </Link>
           </div>
         </Panel>
 
         {!isOperator ? (
           <Card className="app-stack">
-            <p className="app-banner app-banner--warning">当前账号无法访问 account worker 运维台，需要平台操作员权限。</p>
+            <p className="app-banner app-banner--warning">当前账号无法访问账户后台任务运维台，需要平台操作员权限。</p>
           </Card>
         ) : null}
 
@@ -355,16 +355,16 @@ export default async function AccountWorkerOpsPage({ searchParams }: AccountWork
           <>
             <div className="app-wallet-grid">
               <Card className="app-currency-card">
-                <p className="mg-subtitle">Risk</p>
-                <h2 className="app-card-title">Backlog</h2>
+                <p className="mg-subtitle">风险</p>
+                <h2 className="app-card-title">积压</h2>
                 <div className="app-inline-actions">
                   <Badge variant={getBacklogRiskVariant(backlogRisk.level)}>{backlogRisk.title}</Badge>
                 </div>
                 <p className="app-note">{backlogRisk.detail}</p>
               </Card>
               <Card className="app-currency-card">
-                <p className="mg-subtitle">Worker</p>
-                <h2 className="app-card-title">Digest Health</h2>
+                <p className="mg-subtitle">后台任务</p>
+                <h2 className="app-card-title">摘要健康</h2>
                 <div className="app-inline-actions">
                   <Badge variant={getWorkerHealthStatusBadgeVariant(null)}>
                     {getWorkerHealthStatusLabel(null)}
@@ -375,27 +375,27 @@ export default async function AccountWorkerOpsPage({ searchParams }: AccountWork
                 </p>
               </Card>
               <Card className="app-currency-card">
-                <p className="mg-subtitle">Queue</p>
-                <h2 className="app-card-title">Open / Due</h2>
+                <p className="mg-subtitle">队列</p>
+                <h2 className="app-card-title">打开 / 到期</h2>
                 <div className="app-currency-card__value">
                   {0} /{" "}
                   {0}
                 </div>
                 <p className="app-note">
-                  Scheduled {0}
+                  计划中 {0}
                 </p>
               </Card>
               <Card className="app-currency-card">
-                <p className="mg-subtitle">Runs</p>
-                <h2 className="app-card-title">Recent 8</h2>
+                <p className="mg-subtitle">运行</p>
+                <h2 className="app-card-title">最近 8 次</h2>
                 <div className="app-currency-card__value">{recentRuns.length}</div>
                 <p className="app-note">
                   平均发送 {averagePerRun(totalFlushed, recentRuns.length)} / 失败率 {failureRate(recentRuns)}
                 </p>
               </Card>
                 <Card className="app-currency-card">
-                  <p className="mg-subtitle">Worker</p>
-                  <h2 className="app-card-title">Shadow Sync</h2>
+                  <p className="mg-subtitle">后台任务</p>
+                  <h2 className="app-card-title">商品影子同步</h2>
                   <div className="app-inline-actions">
                     <Badge variant={getWorkerHealthStatusBadgeVariant(workerHealth?.lastProductShadowSyncStatus ?? null)}>
                     {getWorkerHealthStatusLabel(workerHealth?.lastProductShadowSyncStatus ?? null)}
@@ -406,34 +406,34 @@ export default async function AccountWorkerOpsPage({ searchParams }: AccountWork
                   </p>
                 </Card>
                 <Card className="app-currency-card">
-                  <p className="mg-subtitle">Worker</p>
-                  <h2 className="app-card-title">Outbox Recovery</h2>
+                  <p className="mg-subtitle">后台任务</p>
+                  <h2 className="app-card-title">发件箱恢复</h2>
                   <div className="app-inline-actions">
                     <Badge variant={getWorkerHealthStatusBadgeVariant(workerHealth?.lastOutboxRecoveryStatus ?? null)}>
                       {getWorkerHealthStatusLabel(workerHealth?.lastOutboxRecoveryStatus ?? null)}
                     </Badge>
                   </div>
                   <p className="app-note">
-                    最近恢复：{toLocaleDateTime(workerHealth?.lastOutboxRecoveryAt ?? null)} / Requeued{" "}
-                    {workerHealth?.lastOutboxRecoveryRequeuedCount ?? "暂无"} / Dead-letter{" "}
+                    最近恢复：{toLocaleDateTime(workerHealth?.lastOutboxRecoveryAt ?? null)} / 重新入队{" "}
+                    {workerHealth?.lastOutboxRecoveryRequeuedCount ?? "暂无"} / 死信{" "}
                     {workerHealth?.lastOutboxRecoveryDeadLetterCount ?? "暂无"}
                   </p>
                 </Card>
                 <Card className="app-currency-card">
-                  <p className="mg-subtitle">Subscriptions</p>
-                  <h2 className="app-card-title">Rules</h2>
+                  <p className="mg-subtitle">订阅</p>
+                  <h2 className="app-card-title">规则</h2>
                   <div className="app-currency-card__value">{subscriptions.length}</div>
-                  <p className="app-note">Pending digest {pendingDigests.length} 条。</p>
+                  <p className="app-note">待处理摘要 {pendingDigests.length} 条。</p>
               </Card>
             </div>
 
             <Card className="app-stack">
               <div className="app-task-card__header">
                 <div>
-                  <p className="mg-subtitle">Runbook</p>
+                  <p className="mg-subtitle">处理手册</p>
                   <h2 className="app-card-title">当前处理建议</h2>
                 </div>
-                <Badge variant={getBacklogRiskVariant(backlogRisk.level)}>{recommendations.length} Suggestions</Badge>
+                <Badge variant={getBacklogRiskVariant(backlogRisk.level)}>{recommendations.length} 条建议</Badge>
               </div>
               <div className="app-task-list">
                 {recommendations.map((recommendation) => (
@@ -459,11 +459,11 @@ export default async function AccountWorkerOpsPage({ searchParams }: AccountWork
             <Card className="app-stack">
               <div className="app-task-card__header">
                 <div>
-                  <p className="mg-subtitle">Recent Playbooks</p>
+                  <p className="mg-subtitle">最近处理会话</p>
                   <h2 className="app-card-title">最近运维会话</h2>
                 </div>
                 <Badge variant={normalizedRecentWorkerOpsSessions.length > 0 ? "warning" : "cyan"}>
-                  {normalizedRecentWorkerOpsSessions.length} Sessions
+                  {normalizedRecentWorkerOpsSessions.length} 个会话
                 </Badge>
               </div>
               {normalizedRecentWorkerOpsSessions.length > 0 ? (
@@ -499,20 +499,20 @@ export default async function AccountWorkerOpsPage({ searchParams }: AccountWork
                   ))}
                 </div>
               ) : (
-                <p className="app-note">当前还没有可重开的 worker playbook 会话。</p>
+                <p className="app-note">当前还没有可重开的后台任务处理会话。</p>
               )}
             </Card>
 
             <Card className="app-stack" id="failure-clusters">
               <div className="app-task-card__header">
                 <div>
-                  <p className="mg-subtitle">Failure Reasons</p>
+                  <p className="mg-subtitle">失败原因</p>
                   <h2 className="app-card-title">最近失败原因聚类</h2>
                 </div>
                 <div className="app-inline-actions">
                   <Badge variant="fuchsia">{getRunWindowLabel(runWindow)}</Badge>
                   <Badge variant={failureClusters.length > 0 ? "warning" : "cyan"}>
-                    {failureClusters.length} Clusters
+                    {failureClusters.length} 个聚类
                   </Badge>
                 </div>
               </div>
@@ -542,7 +542,7 @@ export default async function AccountWorkerOpsPage({ searchParams }: AccountWork
             <Card className="app-stack">
               <div className="app-task-card__header">
                 <div>
-                  <p className="mg-subtitle">Run Window</p>
+                  <p className="mg-subtitle">运行时间窗</p>
                   <h2 className="app-card-title">按时间窗查看 flush 趋势</h2>
                 </div>
                 <Badge variant="warning">{getRunWindowLabel(runWindow)}</Badge>
@@ -563,11 +563,11 @@ export default async function AccountWorkerOpsPage({ searchParams }: AccountWork
             <Card className="app-stack" id="worker-runtime">
               <div className="app-task-card__header">
                 <div>
-                  <p className="mg-subtitle">Worker Runtime</p>
+                  <p className="mg-subtitle">后台任务运行</p>
                   <h2 className="app-card-title">私网 `/health` 快照</h2>
                 </div>
                 <div className="app-inline-actions">
-                  <Badge variant="warning">Internal</Badge>
+                  <Badge variant="warning">内部</Badge>
                   <Badge variant={getWorkerHealthStatusBadgeVariant(null)}>
                     {getWorkerHealthStatusLabel(null)}
                   </Badge>
@@ -576,59 +576,59 @@ export default async function AccountWorkerOpsPage({ searchParams }: AccountWork
               {workerHealth ? (
                 <div className="app-detail-list">
                   <div className="app-detail-list__row">
-                    <span className="app-detail-list__label">Started At</span>
+                    <span className="app-detail-list__label">启动时间</span>
                     <span className="app-detail-list__value">{toLocaleDateTime(workerHealth.startedAt)}</span>
                   </div>
                   <div className="app-detail-list__row">
-                    <span className="app-detail-list__label">Last Cycle</span>
+                    <span className="app-detail-list__label">最近循环</span>
                     <span className="app-detail-list__value">{toLocaleDateTime(workerHealth.lastCycleAt)}</span>
                   </div>
                   <div className="app-detail-list__row">
-                    <span className="app-detail-list__label">Last Success</span>
+                    <span className="app-detail-list__label">最近成功</span>
                     <span className="app-detail-list__value">{toLocaleDateTime(workerHealth.lastSuccessAt)}</span>
                   </div>
                   <div className="app-detail-list__row">
-                    <span className="app-detail-list__label">Last Error</span>
+                    <span className="app-detail-list__label">最近错误</span>
                     <span className="app-detail-list__value">
                       {toLocaleDateTime(workerHealth.lastErrorAt)} / {workerHealth.lastErrorMessage ?? "无"}
                     </span>
                   </div>
                   <div className="app-detail-list__row">
-                    <span className="app-detail-list__label">Last Digest Run</span>
+                    <span className="app-detail-list__label">最近摘要运行</span>
                     <span className="app-detail-list__value">
                       {"暂无"} /{" "}
                       {toLocaleDateTime(null)}
                     </span>
                   </div>
                   <div className="app-detail-list__row">
-                    <span className="app-detail-list__label">Last Digest Error</span>
+                    <span className="app-detail-list__label">最近摘要错误</span>
                     <span className="app-detail-list__value">{"无"}</span>
                   </div>
                   <div className="app-detail-list__row">
-                    <span className="app-detail-list__label">Last Shadow Sync</span>
+                    <span className="app-detail-list__label">最近影子同步</span>
                     <span className="app-detail-list__value">
                       {toLocaleDateTime(workerHealth.lastProductShadowSyncAt)} /{" "}
                       {workerHealth.lastProductShadowSyncError ?? "无"}
                     </span>
                   </div>
                   <div className="app-detail-list__row">
-                    <span className="app-detail-list__label">Last Outbox Recovery</span>
+                    <span className="app-detail-list__label">最近发件箱恢复</span>
                     <span className="app-detail-list__value">
                       {toLocaleDateTime(workerHealth.lastOutboxRecoveryAt)} /{" "}
-                      {workerHealth.lastOutboxRecoveryStatus ?? "unknown"} / Requeued{" "}
-                      {workerHealth.lastOutboxRecoveryRequeuedCount ?? "暂无"} / Dead-letter{" "}
+                      {getWorkerHealthStatusLabel(workerHealth.lastOutboxRecoveryStatus ?? null)} / 重新入队{" "}
+                      {workerHealth.lastOutboxRecoveryRequeuedCount ?? "暂无"} / 死信{" "}
                       {workerHealth.lastOutboxRecoveryDeadLetterCount ?? "暂无"}
                     </span>
                   </div>
                   <div className="app-detail-list__row">
-                    <span className="app-detail-list__label">Outbox Recovery Totals</span>
+                    <span className="app-detail-list__label">发件箱恢复累计</span>
                     <span className="app-detail-list__value">
-                      Requeued {workerHealth.totalOutboxRecoveryRequeuedCount} / Dead-letter{" "}
+                      重新入队 {workerHealth.totalOutboxRecoveryRequeuedCount} / 死信{" "}
                       {workerHealth.totalOutboxRecoveryDeadLetterCount}
                     </span>
                   </div>
                   <div className="app-detail-list__row">
-                    <span className="app-detail-list__label">Outbox Recovery Error</span>
+                    <span className="app-detail-list__label">发件箱恢复错误</span>
                     <span className="app-detail-list__value">
                       {toLocaleDateTime(workerHealth.lastOutboxRecoveryErrorAt)} /{" "}
                       {workerHealth.lastOutboxRecoveryErrorMessage ?? "无"}
@@ -646,17 +646,17 @@ export default async function AccountWorkerOpsPage({ searchParams }: AccountWork
               <Card className="app-stack">
                 <div className="app-task-card__header">
                   <div>
-                    <p className="mg-subtitle">Digest Pressure</p>
+                    <p className="mg-subtitle">摘要压力</p>
                     <h2 className="app-card-title">运行单元视角</h2>
                   </div>
-                  <Badge variant="cyan">Worker Snapshot</Badge>
+                  <Badge variant="cyan">后台快照</Badge>
                 </div>
                 <p className="app-note">
-                  Open {0} / Due {0} /
-                  Scheduled {0}
+                  打开 {0} / 到期 {0} /
+                  计划中 {0}
                 </p>
                 <p className="app-note">
-                  Archive Failure {0} / Cleanup Failure{" "}
+                  归档失败 {0} / 清理失败{" "}
                   {0}
                 </p>
                 <p className="app-note">
@@ -667,17 +667,17 @@ export default async function AccountWorkerOpsPage({ searchParams }: AccountWork
               <Card className="app-stack">
                 <div className="app-task-card__header">
                   <div>
-                    <p className="mg-subtitle">Digest Pressure</p>
+                    <p className="mg-subtitle">摘要压力</p>
                     <h2 className="app-card-title">账户域视角</h2>
                   </div>
-                  <Badge variant="warning">Mailbox Summary</Badge>
+                  <Badge variant="warning">站内邮箱摘要</Badge>
                 </div>
                 <p className="app-note">
-                  Open {0} / Due {0} / Scheduled{" "}
+                  打开 {0} / 到期 {0} / 计划中{" "}
                   {0}
                 </p>
                 <p className="app-note">
-                  Archive Failure {0} / Cleanup Failure{" "}
+                  归档失败 {0} / 清理失败{" "}
                   {0}
                 </p>
                 <p className="app-note">
@@ -690,13 +690,13 @@ export default async function AccountWorkerOpsPage({ searchParams }: AccountWork
             <Card className="app-stack" id="flush-trend">
               <div className="app-task-card__header">
                 <div>
-                  <p className="mg-subtitle">Flush Trend</p>
+                  <p className="mg-subtitle">刷新趋势</p>
                   <h2 className="app-card-title">最近 digest flush 趋势</h2>
                 </div>
                 <div className="app-inline-actions">
                   <Badge variant="fuchsia">{getRunWindowLabel(runWindow)}</Badge>
-                  <Badge variant="warning">{workerRuns.length} Worker Runs</Badge>
-                  <Badge variant="cyan">{manualRuns.length} Manual Runs</Badge>
+                  <Badge variant="warning">{workerRuns.length} 后台任务运行</Badge>
+                  <Badge variant="cyan">{manualRuns.length} 人工运行</Badge>
                 </div>
               </div>
               <p className="app-note">
@@ -713,10 +713,10 @@ export default async function AccountWorkerOpsPage({ searchParams }: AccountWork
                         </div>
                         <div className="app-inline-actions">
                           <Badge variant={run.failedCount > 0 || run.errorMessage ? "warning" : "cyan"}>
-                            {run.failedCount > 0 || run.errorMessage ? "Degraded" : "Healthy"}
+                            {run.failedCount > 0 || run.errorMessage ? "降级" : "健康"}
                           </Badge>
-                          <Badge variant="fuchsia">Scan {run.scannedCount}</Badge>
-                          <Badge variant="cyan">Sent {run.flushedCount}</Badge>
+                          <Badge variant="fuchsia">扫描 {run.scannedCount}</Badge>
+                          <Badge variant="cyan">发送 {run.flushedCount}</Badge>
                         </div>
                       </div>
                       <p className="app-note">
@@ -738,13 +738,13 @@ export default async function AccountWorkerOpsPage({ searchParams }: AccountWork
               <Card className="app-stack">
                 <div className="app-task-card__header">
                   <div>
-                    <p className="mg-subtitle">Pending Digests</p>
+                    <p className="mg-subtitle">待发送摘要</p>
                     <h2 className="app-card-title">待发送队列预览</h2>
                   </div>
                   <div className="app-inline-actions">
-                    <Badge variant="warning">{pendingDigests.length} Pending</Badge>
+                    <Badge variant="warning">{pendingDigests.length} 待处理</Badge>
                     <Link className="mg-btn mg-btn--secondary" href="/ops/products">
-                      去 Products Ops 处理
+                      去商品运营处理
                     </Link>
                   </div>
                 </div>
@@ -765,10 +765,10 @@ export default async function AccountWorkerOpsPage({ searchParams }: AccountWork
                           </div>
                         </div>
                         <p className="app-note">
-                          聚合 {digest.eventCount} 条，最高失败 {String(digest.maxFailureCount ?? 0)}，Due {toLocaleDateTime(digest.dueAt)}
+                          聚合 {digest.eventCount} 条，最高失败 {String(digest.maxFailureCount ?? 0)}，到期 {toLocaleDateTime(digest.dueAt)}
                         </p>
                         <p className="app-note">
-                          渠道 {String(digest.operatorChannel ?? "全局")} / Namespace {String(digest.namespace ?? "全局")} / Batch{" "}
+                          渠道 {String(digest.operatorChannel ?? "全局")} / 命名空间 {String(digest.namespace ?? "全局")} / 批次{" "}
                           {String(digest.batchLabel ?? "全局")}
                         </p>
                       </div>
@@ -782,10 +782,10 @@ export default async function AccountWorkerOpsPage({ searchParams }: AccountWork
               <Card className="app-stack">
                 <div className="app-task-card__header">
                   <div>
-                    <p className="mg-subtitle">Subscriptions</p>
+                    <p className="mg-subtitle">订阅</p>
                     <h2 className="app-card-title">当前定向订阅预览</h2>
                   </div>
-                  <Badge variant="cyan">{subscriptions.length} Rules</Badge>
+                  <Badge variant="cyan">{subscriptions.length} 条规则</Badge>
                 </div>
                 {subscriptions.length > 0 ? (
                   <div className="app-task-list">
@@ -801,11 +801,11 @@ export default async function AccountWorkerOpsPage({ searchParams }: AccountWork
                           </Badge>
                         </div>
                         <p className="app-note">
-                          渠道 {String(subscription.operatorChannel ?? "全局")} / Namespace {String(subscription.namespace ?? "全局")} / Batch{" "}
+                          渠道 {String(subscription.operatorChannel ?? "全局")} / 命名空间 {String(subscription.namespace ?? "全局")} / 批次{" "}
                           {String(subscription.batchLabel ?? "全局")}
                         </p>
                         <p className="app-note">
-                          Digest {String(subscription.digestWindowMinutes ?? 0)} 分钟 / 升级阈值 {String(subscription.escalateAfterCount ?? "未设置")}
+                          摘要 {String(subscription.digestWindowMinutes ?? 0)} 分钟 / 升级阈值 {String(subscription.escalateAfterCount ?? "未设置")}
                         </p>
                       </div>
                     ))}

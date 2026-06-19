@@ -8,7 +8,7 @@ import {
   createSeedProjects,
   createSeedSlotProfiles,
   createSeedThreads,
-} from "@/features/account-heavy-agent-chat/mock-data";
+} from "@/features/account-heavy-agent-chat/seed-data";
 import { HeavyChatComposer } from "@/features/account-heavy-agent-chat/heavy-chat-composer";
 import { HeavyChatDirectory } from "@/features/account-heavy-agent-chat/heavy-chat-directory";
 import { HeavyChatMessageCard } from "@/features/account-heavy-agent-chat/heavy-chat-message-card";

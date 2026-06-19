@@ -224,14 +224,14 @@ export default async function EmailIngressOpsPage({ searchParams }: EmailIngress
   return (
     <div className="nt-shell" style={{ display: "grid", gap: 24, padding: "24px 0 40px" }}>
       <section style={{ display: "grid", gap: 12 }}>
-        <span className="nt-kicker">Email-Native / Mailgun</span>
+        <span className="nt-kicker">邮件入口 / Mailgun</span>
         <div style={{ display: "grid", gap: 10 }}>
           <h1 style={{ margin: 0, color: "rgba(243,245,247,0.98)", fontSize: "2rem", lineHeight: 1.1 }}>
             真实邮件网关
           </h1>
           <p style={{ margin: 0, color: "rgba(190,199,217,0.82)", maxWidth: "84ch", lineHeight: 1.7 }}>
-            这里集中回看真实邮件 provider 的入站审计、Email-Native 主链归一结果，以及失败记录的手动重试。
-            当前第一家正式 provider 是 Mailgun，公开 ingress 为
+            这里集中回看真实邮件服务商的入站审计、邮件入口主链归一结果，以及失败记录的手动重试。
+            当前第一家正式服务商是 Mailgun，公开入口为
             <code style={{ marginLeft: 6 }}>
               /v1/public/email-ingress/providers/mailgun
             </code>

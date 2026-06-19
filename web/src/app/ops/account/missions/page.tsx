@@ -375,15 +375,15 @@ export default async function MissionOpsPage({ searchParams }: MissionOpsPagePro
 
         {/* ── Inventory ── */}
         <div className="ops-card">
-          <h2 className="ops-card__title">Inventory</h2>
+          <h2 className="ops-card__title">任务库存</h2>
           <div className="ops-table-wrap">
             <table className="ops-table">
               <thead>
                 <tr>
-                  <th>Total</th>
-                  <th>Active</th>
-                  <th>Draft</th>
-                  <th>Archived</th>
+                  <th>总数</th>
+                  <th>已上线</th>
+                  <th>草稿</th>
+                  <th>已归档</th>
                 </tr>
               </thead>
               <tbody>

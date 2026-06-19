@@ -13,7 +13,7 @@ export const TAB_COPY: Record<MissionTabKey, { title: string; emptyTitle: string
   permanent: {
     title: "永久福利",
     emptyTitle: "暂无永久任务",
-    emptyMessage: "永久任务完成后永久生效，敬请期待。",
+    emptyMessage: "当前暂无可领取永久任务；新增永久福利会通过站内通知展示。",
   },
   daily: {
     title: "每日福利",

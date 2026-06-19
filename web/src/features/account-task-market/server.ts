@@ -74,7 +74,7 @@ export async function loadTaskMarketServerState(
       capabilitiesByAgentId = new Map(capabilityPairs);
       taskProposalsMap = new Map(proposalPairs);
     } catch {
-      proposalReadWarning = "Agent proposal 数据暂不可用，请稍后重试。";
+      proposalReadWarning = "智能体提案数据暂不可用，请稍后重试。";
     }
   }
 

@@ -46,12 +46,12 @@ function StateRow({ state }: { state: GatewayProviderCredentialModelStateView })
         </div>
       </div>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 10 }}>
-        <span className="nt-kicker">Provider: {state.providerAccountId}</span>
-        <span className="nt-kicker">Credential: {state.providerCredentialId ?? state.providerCredentialRef ?? "—"}</span>
-        <span className="nt-kicker">Profile: {state.protocolProfile ?? "—"}</span>
-        <span className="nt-kicker">Failures: {state.failureCount}</span>
-        <span className="nt-kicker">Cooldown: {formatDate(state.cooldownUntil)}</span>
-        <span className="nt-kicker">Updated: {formatDate(state.updatedAt)}</span>
+        <span className="nt-kicker">服务商：{state.providerAccountId}</span>
+        <span className="nt-kicker">凭证：{state.providerCredentialId ?? state.providerCredentialRef ?? "—"}</span>
+        <span className="nt-kicker">协议配置：{state.protocolProfile ?? "—"}</span>
+        <span className="nt-kicker">失败次数：{state.failureCount}</span>
+        <span className="nt-kicker">冷却截止：{formatDate(state.cooldownUntil)}</span>
+        <span className="nt-kicker">更新时间：{formatDate(state.updatedAt)}</span>
       </div>
       {state.lastError ? <span style={{ color: "rgba(252,165,165,0.9)" }}>{state.lastError}</span> : null}
     </NtPanel>
@@ -101,14 +101,14 @@ export default async function GatewayHealthPage({
     }
     const notice = buildGatewayDependencyUnavailableNotice(dependencyError, {
       resourceName: "健康状态与用量聚合",
-      continuation: "credential × model 状态机和 usage bucket 暂不可查看；其他运营页面仍可继续使用。",
+      continuation: "凭证 × 模型状态机和用量聚合桶暂不可查看；其他运营页面仍可继续使用。",
     });
 
     return (
       <div className="nt-shell" style={{ display: "grid", gap: 24, padding: "24px 0 40px" }}>
         <NtCard style={{ display: "grid", gap: 16 }}>
           <div>
-            <span className="nt-kicker">AI Gateway / Health</span>
+            <span className="nt-kicker">AI 网关 / 健康状态</span>
             <h1 style={{ margin: "6px 0 0", color: "rgba(243,245,247,0.98)" }}>健康状态与用量聚合</h1>
             <p style={{ margin: "8px 0 0", color: "rgba(148,163,184,0.9)" }}>
               页面已降级为依赖提示，避免 Gateway 离线时整页 500。
@@ -130,17 +130,17 @@ export default async function GatewayHealthPage({
       <NtCard style={{ display: "grid", gap: 16 }}>
         <div style={{ display: "flex", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
           <div>
-            <span className="nt-kicker">AI Gateway / Health</span>
+            <span className="nt-kicker">AI 网关 / 健康状态</span>
             <h1 style={{ margin: "6px 0 0", color: "rgba(243,245,247,0.98)" }}>健康状态与用量聚合</h1>
             <p style={{ margin: "8px 0 0", color: "rgba(148,163,184,0.9)" }}>
-              展示 provider credential × model 状态机、usage queue 聚合摘要与最近 bucket。状态来源于真实请求成功/失败，不依赖请求期探针。
+              展示服务商凭证 × 模型状态机、用量队列聚合摘要与最近聚合桶。状态来源于真实请求成功/失败，不依赖请求期探针。
             </p>
           </div>
           <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-            <NtBadge tone="glass">queue: {usageSummary.queueDepth}</NtBadge>
-            <NtBadge tone="cyan">24h req: {usageSummary.recentRequestCount}</NtBadge>
+            <NtBadge tone="glass">队列：{usageSummary.queueDepth}</NtBadge>
+            <NtBadge tone="cyan">24 小时请求：{usageSummary.recentRequestCount}</NtBadge>
             <NtBadge tone={usageSummary.alerts.length ? "warning" : "success"}>
-              alerts: {usageSummary.alerts.length}
+              告警：{usageSummary.alerts.length}
             </NtBadge>
           </div>
         </div>
@@ -162,7 +162,7 @@ export default async function GatewayHealthPage({
 
       {usageSummary.alerts.length ? (
         <NtCard style={{ display: "grid", gap: 10 }}>
-          <span className="nt-kicker">Operator Alerts</span>
+          <span className="nt-kicker">运维告警</span>
           {usageSummary.alerts.map((alert) => (
             <NtPanel key={alert.code} style={{ color: "rgba(252,211,77,0.92)" }}>
               [{alert.severity}] {alert.code}: {alert.message}
@@ -181,21 +181,21 @@ export default async function GatewayHealthPage({
 
         <NtCard style={{ display: "grid", gap: 12, alignSelf: "start" }}>
           <div>
-            <span className="nt-kicker">Usage Buckets</span>
+            <span className="nt-kicker">用量聚合</span>
             <h2 style={{ margin: "6px 0 0", color: "rgba(243,245,247,0.98)" }}>最近聚合</h2>
           </div>
           {usageBuckets.slice(0, 20).map((bucket) => (
             <NtPanel key={`${bucket.bucketStart}:${bucket.userId}:${bucket.providerCredentialRef}:${bucket.model}`} style={{ display: "grid", gap: 8 }}>
               <strong style={{ color: "rgba(243,245,247,0.92)" }}>{bucket.model}</strong>
-              <span className="nt-kicker">user: {bucket.userId}</span>
-              <span className="nt-kicker">credential: {bucket.providerCredentialRef}</span>
+              <span className="nt-kicker">用户：{bucket.userId}</span>
+              <span className="nt-kicker">凭证：{bucket.providerCredentialRef}</span>
               <span className="nt-kicker">
-                req {bucket.requestCount} / fail {bucket.failureCount} / tokens {bucket.totalTokens}
+                请求 {bucket.requestCount} / 失败 {bucket.failureCount} / Token {bucket.totalTokens}
               </span>
               <span className="nt-kicker">{formatDate(bucket.bucketStart)}</span>
             </NtPanel>
           ))}
-          {!usageBuckets.length ? <span style={{ color: "rgba(148,163,184,0.9)" }}>暂无聚合 bucket。</span> : null}
+          {!usageBuckets.length ? <span style={{ color: "rgba(148,163,184,0.9)" }}>暂无聚合桶。</span> : null}
         </NtCard>
       </div>
     </div>

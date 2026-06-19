@@ -93,15 +93,15 @@ const MANAGED_LIGHT_SUMMARY_EXECUTION_LIMIT = 200;
 function buildLocalDebugManagedLightServiceOption() {
   return {
     id: LOCAL_DEBUG_MANAGED_LIGHT_SERVICE_ID,
-    title: "测试环境调试凭证",
-    description: "本地保底 / 不校验购买状态",
+    title: "本地开发保底服务",
+    description: "仅本地开发环境可用，便于无权益配置时验证轻量智能体流程。",
     apiUrl: null,
     providerKey: "local_debug",
     modelOptions: [
       {
         value: LOCAL_DEBUG_MANAGED_LIGHT_MODEL_ID,
-        label: LOCAL_DEBUG_MANAGED_LIGHT_MODEL_ID,
-        description: "Web 调试专用",
+        label: "本地开发模型",
+        description: "仅用于本机开发验证",
       },
     ],
   };
@@ -158,19 +158,47 @@ function formatListingStatusLabel(status: AgentMarketplaceListingView["status"])
   return "草稿";
 }
 
-function formatBillingModeLabel(listing: AgentMarketplaceListingView) {
+function formatBillingUnitLabel(value: string | null | undefined, fallback: "task" | "token" | "property") {
+  const normalized = value?.trim() || fallback;
+  if (normalized === "task") return "单个任务";
+  if (normalized === "1k_tokens") return "千 Token";
+  if (normalized === "task_units") return "任务属性";
+  if (normalized === "task_property") return "单项属性";
+  if (normalized === "durationSeconds") return "时长秒数";
+  return normalized;
+}
+
+function formatMeterKeyLabel(value: string | null | undefined) {
+  const normalized = value?.trim();
+  if (!normalized) return "任务属性";
+  if (normalized === "task_units") return "任务属性";
+  if (normalized === "durationSeconds") return "时长秒数";
+  return normalized;
+}
+
+function formatBillingModeLabel(listing: Pick<AgentMarketplaceListingView, "billingMode" | "billingUnit" | "meterKey">) {
   if (listing.billingMode === "token_metered") {
-    return `按 token / ${listing.billingUnit || "计量单位"}`;
+    return `按 Token / ${formatBillingUnitLabel(listing.billingUnit, "token")}`;
   }
   if (listing.billingMode === "property_metered") {
-    return `按属性 / ${listing.meterKey || listing.billingUnit || "计量单位"}`;
+    return `按属性 / ${listing.meterKey ? formatMeterKeyLabel(listing.meterKey) : formatBillingUnitLabel(listing.billingUnit, "property")}`;
   }
-  return `按任务 / ${listing.billingUnit || "task"}`;
+  return `按任务 / ${formatBillingUnitLabel(listing.billingUnit, "task")}`;
+}
+
+function formatTaskPricingUnitLabel(task: Pick<TaskView, "pricingMode" | "billingUnit" | "meterKey">) {
+  if (task.pricingMode === "property_metered") {
+    return `${formatMeterKeyLabel(task.meterKey)} / ${formatBillingUnitLabel(task.billingUnit, "property")}`;
+  }
+  if (task.pricingMode === "token_metered") {
+    return formatBillingUnitLabel(task.billingUnit, "token");
+  }
+  return formatBillingUnitLabel(task.billingUnit, "task");
 }
 
 function formatSupplierExecutionRequester(execution: AgentExecutionView, currentUserId: string) {
   if (execution.ownerUserId === currentUserId) {
-    return "我方测试调用";
+    return "当前账户发起";
   }
   return execution.ownerUserId;
 }
@@ -357,6 +385,21 @@ function proposalStatusVariant(status: TaskAgentProposalView["status"]) {
   return status === "accepted" ? "success" : status === "rejected" ? "danger" : "warning";
 }
 
+function formatProposalStatusLabel(status: TaskAgentProposalView["status"]) {
+  if (status === "accepted") return "已接受";
+  if (status === "rejected") return "已拒绝";
+  return "待处理";
+}
+
+function formatExecutionStatusLabel(status: AgentExecutionView["status"]) {
+  if (status === "queued") return "排队中";
+  if (status === "running") return "执行中";
+  if (status === "submitted") return "待验收";
+  if (status === "completed") return "已完成";
+  if (status === "failed") return "已失败";
+  return "已取消";
+}
+
 function resolveAgentCenterMode(value: string | undefined): AgentCenterMode {
   return value === "tasks" ? "tasks" : "roles";
 }
@@ -497,7 +540,7 @@ export default async function AgentCenterPage({ searchParams }: AgentCenterPageP
         <div className="mg-shell">
           <Card className="app-stack">
             <h1 className="mg-title">模块状态暂不可用</h1>
-            <p className="mg-copy">当前无法从 core 读取 Agent 模块快照，请稍后再试。</p>
+            <p className="mg-copy">当前无法读取智能体模块状态，请稍后再试。</p>
           </Card>
         </div>
       </main>
@@ -509,8 +552,8 @@ export default async function AgentCenterPage({ searchParams }: AgentCenterPageP
       <main className="app-page">
         <div className="mg-shell">
           <Card className="app-stack">
-            <h1 className="mg-title">Agent 模块已关闭</h1>
-            <p className="mg-copy">当前无法读取 Agent Center。</p>
+            <h1 className="mg-title">智能体模块已关闭</h1>
+            <p className="mg-copy">当前无法读取智能体中心。</p>
           </Card>
         </div>
       </main>
@@ -686,7 +729,7 @@ export default async function AgentCenterPage({ searchParams }: AgentCenterPageP
   return (
     <main className={cn("app-page", embedded && "app-agent-page--embedded")}>
         <div
-          aria-label={embedded ? undefined : "Agent Center"}
+          aria-label={embedded ? undefined : "智能体中心"}
           aria-modal={embedded ? undefined : true}
           className={cn("app-honor-overlay", "app-agent-center-overlay", embedded && "app-agent-center-dialog-shell--embedded")}
           role={embedded ? undefined : "dialog"}
@@ -758,7 +801,7 @@ export default async function AgentCenterPage({ searchParams }: AgentCenterPageP
             <section className="app-agent-content">
               {!embedded ? (
                 <div className="app-agent-content__close-row">
-                  <Link aria-label="关闭 Agent Center" className="app-honor-close" href="/dashboard">
+                  <Link aria-label="关闭智能体中心" className="app-honor-close" href="/dashboard">
                     <CloseIcon />
                   </Link>
                 </div>
@@ -816,7 +859,7 @@ export default async function AgentCenterPage({ searchParams }: AgentCenterPageP
                       return (
                         <Card className="app-agent-center-card" key={agent.id}>
                           <div className="app-agent-center-card__meta">
-                            <Badge variant={agent.enabled ? "success" : "warning"}>{agent.enabled ? "enabled" : "disabled"}</Badge>
+                            <Badge variant={agent.enabled ? "success" : "warning"}>{agent.enabled ? "已启用" : "已停用"}</Badge>
                             <Badge variant="cyan">{formatSourceTypeLabel(agent)}</Badge>
                             <Badge variant="violet">{formatHostingModeLabel(agent)}</Badge>
                           </div>
@@ -832,7 +875,7 @@ export default async function AgentCenterPage({ searchParams }: AgentCenterPageP
                               <span className="app-detail-list__value">{agent.runtimeEndpoint || agent.managedApiBaseUrl || "平台内登记"}</span>
                             </div>
                             <div className="app-detail-list__row">
-                              <span className="app-detail-list__label">Runtime 鉴权</span>
+                              <span className="app-detail-list__label">运行鉴权</span>
                               <span className="app-detail-list__value">{agent.runtimeAuthTokenPreview || "未配置"}</span>
                             </div>
                             <div className="app-detail-list__row">
@@ -866,7 +909,7 @@ export default async function AgentCenterPage({ searchParams }: AgentCenterPageP
                         <input name="redirectTo" type="hidden" value={selfHref} />
                         <input name="successRedirectTo" type="hidden" value={batchSuccessRedirectTarget} />
                         <div className="app-agent-center-form__split">
-                          <Input defaultValue="多 Agent 批次调用" name="title" placeholder="标题" required />
+                          <Input defaultValue="多智能体批次调用" name="title" placeholder="标题" required />
                           <Input defaultValue={1} min="1" name="meterQuantity" placeholder="统一计量数量" type="number" />
                           <Select defaultValue="baseline" name="runtimeProfileKey">
                             <option value="baseline">基线处理</option>
@@ -911,7 +954,7 @@ export default async function AgentCenterPage({ searchParams }: AgentCenterPageP
                                 </div>
                                 <div className="app-detail-list__row">
                                   <span className="app-detail-list__label">计费单位</span>
-                                  <span className="app-detail-list__value">{listing.billingUnit || "task"}</span>
+                                  <span className="app-detail-list__value">{formatBillingUnitLabel(listing.billingUnit, "task")}</span>
                                 </div>
                                 <div className="app-detail-list__row">
                                   <span className="app-detail-list__label">路由标签</span>
@@ -936,7 +979,7 @@ export default async function AgentCenterPage({ searchParams }: AgentCenterPageP
                           ))}
                         </div>
                         <div className="app-agent-center-inline-actions">
-                          <button className="nt-btn nt-btn--secondary" type="submit">并行转发到所选 Agent</button>
+                          <button className="nt-btn nt-btn--secondary" type="submit">并行转发到所选智能体</button>
                         </div>
                       </form>
                     )}
@@ -984,7 +1027,9 @@ export default async function AgentCenterPage({ searchParams }: AgentCenterPageP
                           {entry.proposals.map((proposal) => (
                             <div className="app-agent-center-proposal-pill" key={proposal.id}>
                               <div className="app-agent-center-card__meta">
-                                <Badge variant={proposalStatusVariant(proposal.status)}>{proposal.status}</Badge>
+                                <Badge variant={proposalStatusVariant(proposal.status)}>
+                                  {formatProposalStatusLabel(proposal.status)}
+                                </Badge>
                                 <Badge variant="cyan">{`${proposal.proposedEtaHours}h`}</Badge>
                               </div>
                               <p className="app-agent-center-note">{proposal.statement}</p>
@@ -1042,13 +1087,7 @@ export default async function AgentCenterPage({ searchParams }: AgentCenterPageP
                             </div>
                           <div className="app-detail-list__row">
                             <span className="app-detail-list__label">计费口径</span>
-                            <span className="app-detail-list__value">
-                              {entry.task.pricingMode === "property_metered"
-                                ? `${entry.task.meterKey || "task_units"} / ${entry.task.billingUnit || "task_property"}`
-                                : entry.task.pricingMode === "token_metered"
-                                  ? entry.task.billingUnit || "1k_tokens"
-                                  : entry.task.billingUnit || "task"}
-                            </span>
+                            <span className="app-detail-list__value">{formatTaskPricingUnitLabel(entry.task)}</span>
                           </div>
                         </div>
                         <div className="app-agent-center-match-list">
@@ -1100,9 +1139,9 @@ export default async function AgentCenterPage({ searchParams }: AgentCenterPageP
                       <Card className="app-agent-center-card" key={`supplier-${execution.id}`}>
                         <div className="app-agent-center-card__meta">
                           <Badge variant="warning">已受理调用</Badge>
-                          <Badge variant="cyan">{execution.status}</Badge>
+                          <Badge variant="cyan">{formatExecutionStatusLabel(execution.status)}</Badge>
                           {execution.marketplaceInvocation ? (
-                            <Badge variant="violet">{execution.marketplaceInvocation.billingMode}</Badge>
+                            <Badge variant="violet">{formatBillingModeLabel(execution.marketplaceInvocation)}</Badge>
                           ) : null}
                         </div>
                         <div>
@@ -1148,7 +1187,7 @@ export default async function AgentCenterPage({ searchParams }: AgentCenterPageP
                         <div className="app-agent-center-card__meta">
                           <Badge variant="success">{formatListingStatusLabel(listing.status)}</Badge>
                           <Badge variant="cyan">{listing.capabilityCode}</Badge>
-                          {listing.autoTakeEnabled ? <Badge variant="warning">自动 proposal</Badge> : null}
+                          {listing.autoTakeEnabled ? <Badge variant="warning">自动提案</Badge> : null}
                         </div>
                         <div>
                           <h3 className="app-card-title">{listing.publicTitle}</h3>
@@ -1185,7 +1224,7 @@ export default async function AgentCenterPage({ searchParams }: AgentCenterPageP
                           </div>
                           <div className="app-detail-list__row">
                             <span className="app-detail-list__label">计费单位</span>
-                            <span className="app-detail-list__value">{listing.billingUnit || "task"}</span>
+                            <span className="app-detail-list__value">{formatBillingUnitLabel(listing.billingUnit, "task")}</span>
                           </div>
                           {listing.meterKey ? (
                             <div className="app-detail-list__row">
@@ -1211,8 +1250,12 @@ export default async function AgentCenterPage({ searchParams }: AgentCenterPageP
                                   name="meterQuantity"
                                   placeholder={
                                     listing.billingMode === "token_metered"
-                                      ? `起始计量值，如 ${listing.billingUnit || "1k_tokens"}`
-                                      : `属性数量，如 ${listing.meterKey || listing.billingUnit || "durationSeconds"}`
+                                      ? `起始计量值，如 ${formatBillingUnitLabel(listing.billingUnit, "token")}`
+                                      : `属性数量，如 ${
+                                          listing.meterKey
+                                            ? formatMeterKeyLabel(listing.meterKey)
+                                            : formatBillingUnitLabel(listing.billingUnit, "property")
+                                        }`
                                   }
                                   type="number"
                                 />

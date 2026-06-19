@@ -56,7 +56,7 @@ export function ProjectSponsorPanel({
     <section className="mg-terminal-section app-project-sponsor-panel">
       <div className="app-project-sponsor-panel__header">
         <h3 className="mg-card__title">赞助项目</h3>
-        <Badge variant={sponsorOpen ? "success" : "warning"}>{sponsorOpen ? "开放赞助" : "暂未开放"}</Badge>
+        <Badge variant={sponsorOpen ? "success" : "warning"}>{sponsorOpen ? "开放赞助" : "暂不接收赞助"}</Badge>
       </div>
 
       <div className="app-project-sponsor-panel__stats">
@@ -105,7 +105,7 @@ export function ProjectSponsorPanel({
           disabled={!sponsorOpen}
           type="submit"
         >
-          {sponsorOpen ? "确认赞助" : "暂未开放"}
+          {sponsorOpen ? "确认赞助" : "暂不接收赞助"}
         </button>
       </form>
     </section>

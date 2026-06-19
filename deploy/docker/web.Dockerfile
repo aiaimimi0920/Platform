@@ -27,7 +27,7 @@ COPY web web
 
 RUN npm run build --workspace @neuro/contracts
 RUN npm run build --workspace @neuro/backend-foundation
-RUN npm run build --workspace neuroplatform-web
+RUN npm run build --workspace @neuro/web
 
 FROM node:20-bookworm-slim AS runtime
 

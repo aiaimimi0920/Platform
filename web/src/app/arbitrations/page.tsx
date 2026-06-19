@@ -112,6 +112,7 @@ type ArbitrationCoreClient = {
 
 const arbitrationClient = coreClient as unknown as ArbitrationCoreClient;
 const arbitrationStatuses: Exclude<ArbitrationStatus, "open">[] = ["under_review", "resolved", "rejected"];
+const arbitrationStatusOptions: ArbitrationStatus[] = ["open", ...arbitrationStatuses];
 const taskResolutionOptions: { value: ArbitrationTaskResolutionAction; label: string }[] = [
   { value: "none", label: "仅结案，不改任务状态" },
   { value: "accept", label: "裁定验收通过并放款" },
@@ -125,10 +126,10 @@ function toLocaleDateTime(value: string | null | undefined) {
 }
 
 const statusLabel: Record<ArbitrationStatus, string> = {
-  open: "Open",
-  under_review: "Under Review",
-  resolved: "Resolved",
-  rejected: "Rejected",
+  open: "待受理",
+  under_review: "审理中",
+  resolved: "已裁决",
+  rejected: "已驳回",
 };
 
 const statusVariant: Record<ArbitrationStatus, "warning" | "cyan" | "success" | "danger"> = {
@@ -160,6 +161,87 @@ const evidenceKindLabel: Record<ArbitrationEvidenceKind, string> = {
   screenshot_ref: "截图引用",
 };
 
+function formatTaskResolutionAction(value: string) {
+  return taskResolutionOptions.find((option) => option.value === value)?.label ?? "自定义裁定动作";
+}
+
+function formatReputationImpact(value: string) {
+  return value in reputationImpactLabel ? reputationImpactLabel[value as ArbitrationImpact] : "自定义信誉影响";
+}
+
+function formatEvidenceKind(value: string) {
+  return value in evidenceKindLabel ? evidenceKindLabel[value as ArbitrationEvidenceKind] : "自定义证据类型";
+}
+
+function formatArbitrationEntityType(value: string) {
+  switch (value) {
+    case "task":
+      return "任务";
+    default:
+      return "自定义对象";
+  }
+}
+
+function formatArbitrationStatus(value: string) {
+  return value in statusLabel ? statusLabel[value as ArbitrationStatus] : "自定义状态";
+}
+
+function formatReviewRoundStatus(value: string) {
+  switch (value) {
+    case "open":
+      return "审理中";
+    case "completed":
+      return "已完成";
+    default:
+      return "自定义轮次状态";
+  }
+}
+
+function formatStorageMode(value: string) {
+  switch (value) {
+    case "local":
+      return "本地保存";
+    case "remote":
+      return "远程保存";
+    default:
+      return "自定义存储";
+  }
+}
+
+function formatRemoteUploadStrategy(value: string) {
+  switch (value) {
+    case "local_filesystem":
+      return "本地文件系统";
+    case "server_proxy_put":
+      return "服务端代理上传";
+    case "prepared_remote_put":
+      return "预签名直传";
+    default:
+      return "自定义上传方式";
+  }
+}
+
+function formatUploadState(value: string) {
+  switch (value) {
+    case "prepared":
+      return "待上传";
+    case "uploaded":
+      return "已上传";
+    case "archived":
+      return "已归档";
+    default:
+      return "自定义上传状态";
+  }
+}
+
+function formatRemoteConfigState(enabled: boolean, enabledLabel: string, disabledLabel: string) {
+  return enabled ? enabledLabel : disabledLabel;
+}
+
+function formatCleanupRequestState(cleanupRequestedAt: string | null | undefined) {
+  return cleanupRequestedAt ? "已请求清理" : "继续保留";
+}
+
 function toMessage(error: unknown, fallback: string) {
   if (isRedirectError(error)) {
     throw error;
@@ -168,9 +250,9 @@ function toMessage(error: unknown, fallback: string) {
   return fallback;
 }
 
-function formatBucketList(buckets: Array<{ key: string; count: number }>) {
+function formatBucketList(buckets: Array<{ key: string; count: number }>, formatKey: (key: string) => string = (key) => key) {
   if (buckets.length === 0) return "暂无";
-  return buckets.map((bucket) => `${bucket.key} (${bucket.count})`).join(" / ");
+  return buckets.map((bucket) => `${formatKey(bucket.key)} (${bucket.count})`).join(" / ");
 }
 
 function renderArbitrationFollowUpFields(args: {
@@ -218,6 +300,19 @@ function buildArbitrationsRedirect(args: {
   return `/ops/account/arbitrations?${params.toString()}`;
 }
 
+function redirectArbitrationActionUnavailable(args: {
+  message: string;
+  followUp?: ReturnType<typeof readArbitrationsFollowUp>;
+}): never {
+  redirect(
+    buildArbitrationsRedirect({
+      status: "error",
+      message: args.message,
+      ...(args.followUp ?? {}),
+    }),
+  );
+}
+
 function readArbitrationsFollowUp(formData: FormData) {
   return {
     caseStatus: String(formData.get("followUpCaseStatus") || "").trim() || null,
@@ -233,15 +328,18 @@ export async function createArbitrationCaseAction(formData: FormData) {
   "use server";
 
   const userContext = await requirePlatformUserContext();
+  const followUp = readArbitrationsFollowUp(formData);
   const createArbitrationCase = arbitrationClient.createArbitrationCase;
   if (!createArbitrationCase) {
-    redirect(`/ops/account/arbitrations?status=error&message=${encodeURIComponent("仲裁接口暂未接入 core-client。")}`);
+    redirectArbitrationActionUnavailable({
+      message: "当前环境未启用创建仲裁操作。",
+      followUp,
+    });
   }
 
   const entityId = String(formData.get("taskId") || "").trim();
   const reason = String(formData.get("reason") || "").trim();
   const evidenceSummary = String(formData.get("evidenceSummary") || "").trim();
-  const followUp = readArbitrationsFollowUp(formData);
 
   if (!entityId || !reason) {
     redirect(
@@ -283,16 +381,19 @@ export async function updateArbitrationCaseStatusAction(formData: FormData) {
   "use server";
 
   const userContext = await requirePlatformOperatorUserContext();
+  const followUp = readArbitrationsFollowUp(formData);
   const updateArbitrationCaseStatus = arbitrationClient.updateArbitrationCaseStatus;
   if (!updateArbitrationCaseStatus) {
-    redirect(`/ops/account/arbitrations?status=error&message=${encodeURIComponent("仲裁状态更新接口暂未接入 core-client。")}`);
+    redirectArbitrationActionUnavailable({
+      message: "当前环境未启用仲裁状态更新。",
+      followUp,
+    });
   }
 
   const caseId = String(formData.get("caseId") || "").trim();
   const status = String(formData.get("status") || "").trim();
   const resolutionSummary = String(formData.get("resolutionSummary") || "").trim();
   const taskResolutionAction = String(formData.get("taskResolutionAction") || "none").trim();
-  const followUp = readArbitrationsFollowUp(formData);
   if (!caseId || !arbitrationStatuses.includes(status as Exclude<ArbitrationStatus, "open">)) {
     redirect(
       buildArbitrationsRedirect({
@@ -335,9 +436,13 @@ export async function addArbitrationEvidenceAction(formData: FormData) {
   "use server";
 
   const userContext = await requirePlatformUserContext();
+  const followUp = readArbitrationsFollowUp(formData);
   const addArbitrationEvidence = arbitrationClient.addArbitrationEvidence;
   if (!addArbitrationEvidence) {
-    redirect(`/ops/account/arbitrations?status=error&message=${encodeURIComponent("仲裁证据接口暂未接入 core-client。")}`);
+    redirectArbitrationActionUnavailable({
+      message: "当前环境未启用仲裁证据提交。",
+      followUp,
+    });
   }
 
   const caseId = String(formData.get("caseId") || "").trim();
@@ -345,7 +450,6 @@ export async function addArbitrationEvidenceAction(formData: FormData) {
   const title = String(formData.get("title") || "").trim();
   const content = String(formData.get("content") || "").trim();
   const url = String(formData.get("url") || "").trim();
-  const followUp = readArbitrationsFollowUp(formData);
 
   if (!caseId || !title || !kind) {
     redirect(
@@ -387,13 +491,16 @@ export async function claimArbitrationCaseAction(formData: FormData) {
   "use server";
 
   const userContext = await requirePlatformOperatorUserContext();
+  const followUp = readArbitrationsFollowUp(formData);
   const claimArbitrationCase = arbitrationClient.claimArbitrationCase;
   if (!claimArbitrationCase) {
-    redirect(`/ops/account/arbitrations?status=error&message=${encodeURIComponent("仲裁认领接口暂未接入 core-client。")}`);
+    redirectArbitrationActionUnavailable({
+      message: "当前环境未启用仲裁认领操作。",
+      followUp,
+    });
   }
 
   const caseId = String(formData.get("caseId") || "").trim();
-  const followUp = readArbitrationsFollowUp(formData);
   if (!caseId) {
     redirect(buildArbitrationsRedirect({ status: "error", message: "案件参数无效。", ...followUp }));
   }
@@ -436,13 +543,16 @@ export async function releaseArbitrationCaseAction(formData: FormData) {
   "use server";
 
   const userContext = await requirePlatformOperatorUserContext();
+  const followUp = readArbitrationsFollowUp(formData);
   const releaseArbitrationCase = arbitrationClient.releaseArbitrationCase;
   if (!releaseArbitrationCase) {
-    redirect(`/ops/account/arbitrations?status=error&message=${encodeURIComponent("仲裁释放接口暂未接入 core-client。")}`);
+    redirectArbitrationActionUnavailable({
+      message: "当前环境未启用仲裁释放操作。",
+      followUp,
+    });
   }
 
   const caseId = String(formData.get("caseId") || "").trim();
-  const followUp = readArbitrationsFollowUp(formData);
   if (!caseId) {
     redirect(buildArbitrationsRedirect({ status: "error", message: "案件参数无效。", ...followUp }));
   }
@@ -459,14 +569,17 @@ export async function assignArbitrationCaseAction(formData: FormData) {
   "use server";
 
   const userContext = await requirePlatformOperatorUserContext();
+  const followUp = readArbitrationsFollowUp(formData);
   const assignArbitrationCase = arbitrationClient.assignArbitrationCase;
   if (!assignArbitrationCase) {
-    redirect(`/ops/account/arbitrations?status=error&message=${encodeURIComponent("仲裁派单接口暂未接入 core-client。")}`);
+    redirectArbitrationActionUnavailable({
+      message: "当前环境未启用仲裁派单操作。",
+      followUp,
+    });
   }
 
   const caseId = String(formData.get("caseId") || "").trim();
   const assigneeUserId = String(formData.get("assigneeUserId") || "").trim();
-  const followUp = readArbitrationsFollowUp(formData);
   if (!caseId || !assigneeUserId) {
     redirect(buildArbitrationsRedirect({ status: "error", message: "案件派单参数无效。", ...followUp }));
   }
@@ -495,12 +608,15 @@ export async function releaseStaleArbitrationCasesAction(formData: FormData) {
   "use server";
 
   const userContext = await requirePlatformOperatorUserContext();
+  const followUp = readArbitrationsFollowUp(formData);
   const releaseStaleArbitrationCases = arbitrationClient.releaseStaleArbitrationCases;
   if (!releaseStaleArbitrationCases) {
-    redirect(`/ops/account/arbitrations?status=error&message=${encodeURIComponent("仲裁超时释放接口暂未接入 core-client。")}`);
+    redirectArbitrationActionUnavailable({
+      message: "当前环境未启用仲裁超时释放。",
+      followUp,
+    });
   }
 
-  const followUp = readArbitrationsFollowUp(formData);
   const limit = Number(formData.get("limit") || 20);
 
   try {
@@ -529,12 +645,15 @@ export async function cleanupRemoteArbitrationAttachmentsAction(formData: FormDa
   "use server";
 
   const userContext = await requirePlatformOperatorUserContext();
+  const followUp = readArbitrationsFollowUp(formData);
   const cleanupResolvedRemoteArbitrationAttachments = arbitrationClient.cleanupResolvedRemoteArbitrationAttachments;
   if (!cleanupResolvedRemoteArbitrationAttachments) {
-    redirect(`/ops/account/arbitrations?status=error&message=${encodeURIComponent("远程仲裁附件清理接口暂未接入 core-client。")}`);
+    redirectArbitrationActionUnavailable({
+      message: "当前环境未启用远程附件清理。",
+      followUp,
+    });
   }
 
-  const followUp = readArbitrationsFollowUp(formData);
   const limit = Number(formData.get("limit") || 20);
 
   try {
@@ -563,13 +682,16 @@ export async function archiveArbitrationAttachmentAction(formData: FormData) {
   "use server";
 
   const userContext = await requirePlatformOperatorUserContext();
+  const followUp = readArbitrationsFollowUp(formData);
   const archiveArbitrationEvidenceAttachment = arbitrationClient.archiveArbitrationEvidenceAttachment;
   if (!archiveArbitrationEvidenceAttachment) {
-    redirect(`/ops/account/arbitrations?status=error&message=${encodeURIComponent("远程仲裁附件归档接口暂未接入 core-client。")}`);
+    redirectArbitrationActionUnavailable({
+      message: "当前环境未启用远程附件归档。",
+      followUp,
+    });
   }
 
   const attachmentId = String(formData.get("attachmentId") || "").trim();
-  const followUp = readArbitrationsFollowUp(formData);
   if (!attachmentId) {
     redirect(buildArbitrationsRedirect({ status: "error", message: "附件参数无效。", ...followUp }));
   }
@@ -592,13 +714,16 @@ export async function requestArbitrationAttachmentCleanupAction(formData: FormDa
   "use server";
 
   const userContext = await requirePlatformOperatorUserContext();
+  const followUp = readArbitrationsFollowUp(formData);
   const requestCleanup = arbitrationClient.requestArbitrationEvidenceAttachmentCleanup;
   if (!requestCleanup) {
-    redirect(`/ops/account/arbitrations?status=error&message=${encodeURIComponent("远程仲裁附件清理请求接口暂未接入 core-client。")}`);
+    redirectArbitrationActionUnavailable({
+      message: "当前环境未启用远程附件清理请求。",
+      followUp,
+    });
   }
 
   const attachmentId = String(formData.get("attachmentId") || "").trim();
-  const followUp = readArbitrationsFollowUp(formData);
   if (!attachmentId) {
     redirect(buildArbitrationsRedirect({ status: "error", message: "附件参数无效。", ...followUp }));
   }
@@ -621,15 +746,18 @@ export async function advanceArbitrationReviewRoundAction(formData: FormData) {
   "use server";
 
   const userContext = await requirePlatformOperatorUserContext();
+  const followUp = readArbitrationsFollowUp(formData);
   const advanceReviewRound = arbitrationClient.advanceArbitrationReviewRound;
   if (!advanceReviewRound) {
-    redirect(`/ops/account/arbitrations?status=error&message=${encodeURIComponent("仲裁轮次推进接口暂未接入 core-client。")}`);
+    redirectArbitrationActionUnavailable({
+      message: "当前环境未启用仲裁轮次推进。",
+      followUp,
+    });
   }
 
   const caseId = String(formData.get("caseId") || "").trim();
   const summary = String(formData.get("summary") || "").trim();
   const assignToOperatorUserId = String(formData.get("assignToOperatorUserId") || "").trim();
-  const followUp = readArbitrationsFollowUp(formData);
   if (!caseId) {
     redirect(buildArbitrationsRedirect({ status: "error", message: "案件参数无效。", ...followUp }));
   }
@@ -682,7 +810,7 @@ export default async function ArbitrationsPage({ searchParams }: ArbitrationsPag
         <div className="mg-shell">
           <Card className="app-stack">
             <h1 className="mg-title">模块状态暂不可用</h1>
-            <p className="mg-copy">当前无法从 core 读取模块快照，请稍后再试。</p>
+            <p className="mg-copy">当前无法读取模块状态，请稍后再试。</p>
           </Card>
         </div>
       </main>
@@ -767,14 +895,14 @@ export default async function ArbitrationsPage({ searchParams }: ArbitrationsPag
         {!arbitrationApiReady ? (
           <Card className="app-stack">
             <p className="app-banner app-banner--error">
-              仲裁能力函数尚未在 `core-client` 暴露，页面以只读壳模式展示。接入后可直接使用下方表单与状态按钮。
+              当前环境未启用仲裁操作能力，页面先以只读模式展示案件与状态概览。
             </p>
           </Card>
         ) : null}
 
         <div className="app-shell-grid">
           <Card className="app-stack">
-            <p className="mg-subtitle">Create Case</p>
+            <p className="mg-subtitle">发起案件</p>
             <h2 className="app-card-title">发起仲裁案件</h2>
             <form action={createArbitrationCaseAction} className="app-form-grid">
               {renderArbitrationFollowUpFields({
@@ -796,26 +924,26 @@ export default async function ArbitrationsPage({ searchParams }: ArbitrationsPag
               <Textarea name="reason" placeholder="填写仲裁理由，例如争议点、预期处理方式。" required rows={4} />
               <Textarea name="evidenceSummary" placeholder="证据摘要（可选）：提交聊天记录、日志、截图说明。" rows={3} />
               <button className="mg-btn mg-btn--primary" disabled={!arbitrationApiReady || tasks.length === 0} type="submit">
-                {tasks.length === 0 ? "暂无任务可选" : arbitrationApiReady ? "提交仲裁" : "等待仲裁接口接入"}
+                {tasks.length === 0 ? "暂无任务可选" : arbitrationApiReady ? "提交仲裁" : "当前环境未启用提交"}
               </button>
             </form>
           </Card>
 
           <Card className="app-stack">
-            <p className="mg-subtitle">Rules</p>
+            <p className="mg-subtitle">案件规则</p>
             <h2 className="app-card-title">当前案件范围</h2>
             <div className="app-detail-list">
               <div className="app-detail-list__row">
                 <span className="app-detail-list__label">实体类型</span>
-                <span className="app-detail-list__value">task</span>
+                <span className="app-detail-list__value">任务</span>
               </div>
               <div className="app-detail-list__row">
                 <span className="app-detail-list__label">状态流转</span>
-                <span className="app-detail-list__value">open / under_review / resolved / rejected</span>
+                <span className="app-detail-list__value">待受理 → 审理中 → 已裁决 / 已驳回</span>
               </div>
               <div className="app-detail-list__row">
                 <span className="app-detail-list__label">状态更新权限</span>
-                <span className="app-detail-list__value">仅 `canUpdateStatus=true` 可操作</span>
+                <span className="app-detail-list__value">仅具备状态更新权限的案件可操作</span>
               </div>
             </div>
             <p className="app-note">
@@ -827,29 +955,29 @@ export default async function ArbitrationsPage({ searchParams }: ArbitrationsPag
         {arbitrationSummary ? (
           <div className="app-wallet-grid">
             <Card className="app-currency-card">
-              <p className="mg-subtitle">Cases</p>
+              <p className="mg-subtitle">案件</p>
               <h2 className="app-card-title">总案件数</h2>
               <div className="app-currency-card__value">{arbitrationSummary.totalCount}</div>
-              <p className="app-note">待 operator 处理：{arbitrationSummary.awaitingOperatorCount}</p>
+              <p className="app-note">待处理人处理：{arbitrationSummary.awaitingOperatorCount}</p>
             </Card>
             <Card className="app-currency-card">
-              <p className="mg-subtitle">By Status</p>
+              <p className="mg-subtitle">按状态</p>
               <h2 className="app-card-title">状态分布</h2>
-              <p className="app-note">{formatBucketList(arbitrationSummary.byStatus)}</p>
+              <p className="app-note">{formatBucketList(arbitrationSummary.byStatus, formatArbitrationStatus)}</p>
             </Card>
             <Card className="app-currency-card">
-              <p className="mg-subtitle">Resolution</p>
+              <p className="mg-subtitle">裁定</p>
               <h2 className="app-card-title">任务裁定动作</h2>
-              <p className="app-note">{formatBucketList(arbitrationSummary.byTaskResolutionAction)}</p>
+              <p className="app-note">{formatBucketList(arbitrationSummary.byTaskResolutionAction, formatTaskResolutionAction)}</p>
             </Card>
             <Card className="app-currency-card">
-              <p className="mg-subtitle">Impact</p>
+              <p className="mg-subtitle">影响</p>
               <h2 className="app-card-title">信誉影响</h2>
-              <p className="app-note">{formatBucketList(arbitrationSummary.byReputationImpact)}</p>
+              <p className="app-note">{formatBucketList(arbitrationSummary.byReputationImpact, formatReputationImpact)}</p>
               <p className="app-note">已应用效果：{arbitrationSummary.resolvedWithEffectsCount}</p>
             </Card>
             <Card className="app-currency-card">
-              <p className="mg-subtitle">Evidence</p>
+              <p className="mg-subtitle">证据</p>
               <h2 className="app-card-title">证据覆盖</h2>
               <p className="app-note">
                 有证据案件：{arbitrationSummary.casesWithEvidenceCount} / 无证据案件：{arbitrationSummary.casesWithoutEvidenceCount}
@@ -858,28 +986,28 @@ export default async function ArbitrationsPage({ searchParams }: ArbitrationsPag
               <p className="app-note">
                 远程附件：{arbitrationSummary.remoteAttachmentCount} / 请求清理 {arbitrationSummary.cleanupRequestedRemoteAttachmentCount} / 已归档 {arbitrationSummary.archivedRemoteAttachmentCount}
               </p>
-              <p className="app-note">{formatBucketList(arbitrationSummary.byEvidenceKind)}</p>
+              <p className="app-note">{formatBucketList(arbitrationSummary.byEvidenceKind, formatEvidenceKind)}</p>
             </Card>
             <Card className="app-currency-card">
-              <p className="mg-subtitle">Assignment</p>
+              <p className="mg-subtitle">认领</p>
               <h2 className="app-card-title">认领状态</h2>
               <p className="app-note">已认领：{arbitrationSummary.claimedCount}</p>
               <p className="app-note">未认领：{arbitrationSummary.unclaimedCount}</p>
             </Card>
             {arbitrationWorkload ? (
               <Card className="app-currency-card">
-                <p className="mg-subtitle">Operator Workload</p>
+                <p className="mg-subtitle">处理负载</p>
                 <h2 className="app-card-title">工作负载</h2>
                 <p className="app-note">我认领的案件：{arbitrationWorkload.mineCount}</p>
-                <p className="app-note">Stale claims：{arbitrationWorkload.staleClaimedCount}</p>
+                <p className="app-note">逾期认领：{arbitrationWorkload.staleClaimedCount}</p>
                 <p className="app-note">
-                  Stale rounds：{arbitrationWorkload.staleRoundCount}
+                  逾期轮次：{arbitrationWorkload.staleRoundCount}
                   {arbitrationWorkload.oldestStaleRoundAgeHours !== null
-                    ? ` / 最老 ${arbitrationWorkload.oldestStaleRoundAgeHours}h`
+                    ? ` / 最早超期 ${arbitrationWorkload.oldestStaleRoundAgeHours} 小时`
                     : ""}
                 </p>
                 <p className="app-note">
-                  推荐 operator：{arbitrationWorkload.recommendedAssigneeUserId || "暂无"}
+                  推荐处理人：{arbitrationWorkload.recommendedAssigneeUserId || "暂无"}
                 </p>
                 <p className="app-note">
                   自动释放：{arbitrationWorkload.autoReleaseEnabled ? "启用" : "未启用"}
@@ -902,7 +1030,7 @@ export default async function ArbitrationsPage({ searchParams }: ArbitrationsPag
           <Card className="app-stack">
             <div className="app-task-card__header">
               <div>
-                <p className="mg-subtitle">Operator Workload</p>
+                <p className="mg-subtitle">处理负载</p>
                 <h2 className="app-card-title">认领队列与工作负载</h2>
               </div>
               <div className="app-inline-actions">
@@ -930,7 +1058,7 @@ export default async function ArbitrationsPage({ searchParams }: ArbitrationsPag
                   })}
                   <input name="limit" type="hidden" value="20" />
                   <button className="mg-btn mg-btn--glass" type="submit">
-                    释放 stale claims
+                    释放逾期认领
                   </button>
                 </form>
                 <form action={cleanupRemoteArbitrationAttachmentsAction}>
@@ -951,21 +1079,21 @@ export default async function ArbitrationsPage({ searchParams }: ArbitrationsPag
             </div>
             <div className="app-detail-list">
               <div className="app-detail-list__row">
-                <span className="app-detail-list__label">已认领 / 未认领 / Stale</span>
+                <span className="app-detail-list__label">已认领 / 未认领 / 逾期</span>
                 <span className="app-detail-list__value">
                   {arbitrationWorkload.claimedCount} / {arbitrationWorkload.unclaimedCount} / {arbitrationWorkload.staleClaimedCount}
                 </span>
               </div>
               <div className="app-detail-list__row">
-                <span className="app-detail-list__label">当前 operator</span>
+                <span className="app-detail-list__label">当前处理人</span>
                 <span className="app-detail-list__value">我认领的案件：{arbitrationWorkload.mineCount}</span>
               </div>
               <div className="app-detail-list__row">
-                <span className="app-detail-list__label">Stale rounds</span>
+                <span className="app-detail-list__label">逾期轮次</span>
                 <span className="app-detail-list__value">
                   {arbitrationWorkload.staleRoundCount}
                   {arbitrationWorkload.oldestStaleRoundAgeHours !== null
-                    ? ` / 最老 ${arbitrationWorkload.oldestStaleRoundAgeHours}h`
+                    ? ` / 最早超期 ${arbitrationWorkload.oldestStaleRoundAgeHours} 小时`
                     : ""}
                 </span>
               </div>
@@ -984,11 +1112,11 @@ export default async function ArbitrationsPage({ searchParams }: ArbitrationsPag
               </div>
               <div className="app-detail-list__row">
                 <span className="app-detail-list__label">按状态</span>
-                <span className="app-detail-list__value">{formatBucketList(arbitrationWorkload.byStatus)}</span>
+                <span className="app-detail-list__value">{formatBucketList(arbitrationWorkload.byStatus, formatArbitrationStatus)}</span>
               </div>
               <div className="app-detail-list__row">
                 <span className="app-detail-list__label">按轮次状态</span>
-                <span className="app-detail-list__value">{formatBucketList(arbitrationWorkload.byReviewRoundStatus)}</span>
+                <span className="app-detail-list__value">{formatBucketList(arbitrationWorkload.byReviewRoundStatus, formatReviewRoundStatus)}</span>
               </div>
             </div>
             <div className="app-task-list">
@@ -996,26 +1124,26 @@ export default async function ArbitrationsPage({ searchParams }: ArbitrationsPag
                 <div className="app-task-card app-task-card--runtime-managed" key={bucket.key}>
                   <div className="app-task-card__header">
                     <div>
-                      <p className="mg-subtitle">Operator</p>
+                      <p className="mg-subtitle">处理人</p>
                       <h3 className="app-card-title">{bucket.key}</h3>
                     </div>
                     <Badge variant={bucket.staleClaimCount > 0 ? "warning" : "cyan"}>
-                      stale {bucket.staleClaimCount}
+                      逾期 {bucket.staleClaimCount}
                     </Badge>
                   </div>
                   <div className="app-detail-list">
                     <div className="app-detail-list__row">
-                      <span className="app-detail-list__label">Claimed</span>
+                      <span className="app-detail-list__label">已认领</span>
                       <span className="app-detail-list__value">{bucket.claimedCount}</span>
                     </div>
                     <div className="app-detail-list__row">
-                      <span className="app-detail-list__label">Open rounds</span>
+                      <span className="app-detail-list__label">进行中轮次</span>
                       <span className="app-detail-list__value">{bucket.openRoundCount}</span>
                     </div>
                     <div className="app-detail-list__row">
                       <span className="app-detail-list__label">平均认领时长</span>
                       <span className="app-detail-list__value">
-                        {bucket.avgClaimAgeHours !== null ? `${bucket.avgClaimAgeHours}h` : "暂无"}
+                        {bucket.avgClaimAgeHours !== null ? `${bucket.avgClaimAgeHours} 小时` : "暂无"}
                       </span>
                     </div>
                   </div>
@@ -1029,7 +1157,7 @@ export default async function ArbitrationsPage({ searchParams }: ArbitrationsPag
           <Card className="app-stack">
             <div className="app-task-card__header">
               <div>
-                <p className="mg-subtitle">Remote Cleanup Queue</p>
+                <p className="mg-subtitle">清理队列</p>
                 <h2 className="app-card-title">远程附件保留与清理</h2>
               </div>
             </div>
@@ -1037,40 +1165,40 @@ export default async function ArbitrationsPage({ searchParams }: ArbitrationsPag
               <div className="app-detail-list__row">
                 <span className="app-detail-list__label">存储策略</span>
                 <span className="app-detail-list__value">
-                  {cleanupQueue.policy.storageMode} / {cleanupQueue.policy.remoteUploadStrategy}
+                  {formatStorageMode(cleanupQueue.policy.storageMode)} / {formatRemoteUploadStrategy(cleanupQueue.policy.remoteUploadStrategy)}
                   {cleanupQueue.policy.remoteProviderKey ? ` / ${cleanupQueue.policy.remoteProviderKey}` : ""}
                 </span>
               </div>
               <div className="app-detail-list__row">
-                <span className="app-detail-list__label">Pending / due now</span>
+                <span className="app-detail-list__label">待清理 / 当前到期</span>
                 <span className="app-detail-list__value">
                   {cleanupQueue.pendingCount} / {cleanupQueue.dueNowCount}
                 </span>
               </div>
               <div className="app-detail-list__row">
-                <span className="app-detail-list__label">Cleanup requested</span>
+                <span className="app-detail-list__label">已请求清理</span>
                 <span className="app-detail-list__value">{cleanupQueue.cleanupRequestedCount}</span>
               </div>
               <div className="app-detail-list__row">
-                <span className="app-detail-list__label">Failed cleanup / max attempts</span>
+                <span className="app-detail-list__label">清理失败 / 最大尝试</span>
                 <span className="app-detail-list__value">
                   {cleanupQueue.failedCount} / {cleanupQueue.policy.cleanupMaxAttempts}
                 </span>
               </div>
               <div className="app-detail-list__row">
-                <span className="app-detail-list__label">Oldest retention expiry</span>
+                <span className="app-detail-list__label">最早保留到期</span>
                 <span className="app-detail-list__value">{toLocaleDateTime(cleanupQueue.oldestRetentionExpiresAt)}</span>
               </div>
               <div className="app-detail-list__row">
-                <span className="app-detail-list__label">By case status</span>
-                <span className="app-detail-list__value">{formatBucketList(cleanupQueue.byCaseStatus)}</span>
+                <span className="app-detail-list__label">按案件状态</span>
+                <span className="app-detail-list__value">{formatBucketList(cleanupQueue.byCaseStatus, formatArbitrationStatus)}</span>
               </div>
               <div className="app-detail-list__row">
                 <span className="app-detail-list__label">远程配置</span>
                 <span className="app-detail-list__value">
-                  {cleanupQueue.policy.remoteBaseUrlConfigured ? "base-url" : "no-base-url"} /{" "}
-                  {cleanupQueue.policy.remoteUploadBaseUrlConfigured ? "upload-url" : "no-upload-url"} /{" "}
-                  {cleanupQueue.policy.remoteAuthConfigured ? "auth-ready" : "no-auth"}
+                  {formatRemoteConfigState(cleanupQueue.policy.remoteBaseUrlConfigured, "读取地址已配置", "读取地址未配置")} /{" "}
+                  {formatRemoteConfigState(cleanupQueue.policy.remoteUploadBaseUrlConfigured, "上传地址已配置", "上传地址未配置")} /{" "}
+                  {formatRemoteConfigState(cleanupQueue.policy.remoteAuthConfigured, "鉴权已配置", "鉴权未配置")}
                 </span>
               </div>
             </div>
@@ -1080,31 +1208,31 @@ export default async function ArbitrationsPage({ searchParams }: ArbitrationsPag
                   <div className="app-task-card" key={candidate.attachmentId}>
                     <div className="app-task-card__header">
                       <div>
-                        <p className="mg-subtitle">{candidate.caseStatus}</p>
+                        <p className="mg-subtitle">{statusLabel[candidate.caseStatus]}</p>
                         <h3 className="app-card-title">{candidate.fileName}</h3>
                       </div>
                       <div className="app-inline-actions">
                         <Badge variant={candidate.cleanupRequestedAt ? "warning" : "cyan"}>
-                          {candidate.cleanupRequestedAt ? "cleanup_requested" : "retained"}
+                          {formatCleanupRequestState(candidate.cleanupRequestedAt)}
                         </Badge>
                         {candidate.hoursPastRetention !== null && candidate.hoursPastRetention > 0 ? (
-                          <Badge variant="danger">{candidate.hoursPastRetention}h overdue</Badge>
+                          <Badge variant="danger">{candidate.hoursPastRetention} 小时超期</Badge>
                         ) : null}
                       </div>
                     </div>
                     <p className="app-note">
-                      case {candidate.caseId} / evidence {candidate.evidenceId}
+                      案件 {candidate.caseId} / 证据 {candidate.evidenceId}
                     </p>
                     <p className="app-note">
-                      retention {toLocaleDateTime(candidate.retentionExpiresAt)} / cleanup request{" "}
+                      保留到期 {toLocaleDateTime(candidate.retentionExpiresAt)} / 清理请求{" "}
                       {toLocaleDateTime(candidate.cleanupRequestedAt)}
                     </p>
                     <p className="app-note">
-                      cleanup attempts {candidate.cleanupAttemptCount} / last attempt{" "}
+                      清理尝试 {candidate.cleanupAttemptCount} 次 / 最近尝试{" "}
                       {toLocaleDateTime(candidate.lastCleanupAttemptAt)}
                     </p>
                     {candidate.lastCleanupError ? (
-                      <p className="app-note">last cleanup error: {candidate.lastCleanupError}</p>
+                      <p className="app-note">最近清理错误：{candidate.lastCleanupError}</p>
                     ) : null}
                     <div className="app-link-row">
                       {!candidate.cleanupRequestedAt ? (
@@ -1150,30 +1278,34 @@ export default async function ArbitrationsPage({ searchParams }: ArbitrationsPag
         <Card className="app-stack">
           <div className="app-task-card__header">
             <div>
-              <p className="mg-subtitle">Operator Filters</p>
+              <p className="mg-subtitle">处理筛选</p>
               <h2 className="app-card-title">筛选仲裁案件</h2>
             </div>
           </div>
           <form action="/ops/account/arbitrations" className="app-form-grid" method="get">
             <select className="mg-select" name="caseStatus" defaultValue={caseStatusFilter}>
               <option value="">全部状态</option>
-              <option value="open">open</option>
-              <option value="under_review">under_review</option>
-              <option value="resolved">resolved</option>
-              <option value="rejected">rejected</option>
+              {arbitrationStatusOptions.map((statusOption) => (
+                <option key={statusOption} value={statusOption}>
+                  {statusLabel[statusOption]}
+                </option>
+              ))}
             </select>
             <select className="mg-select" name="taskResolutionAction" defaultValue={taskResolutionActionFilter}>
               <option value="">全部任务裁定动作</option>
-              <option value="none">none</option>
-              <option value="accept">accept</option>
-              <option value="default">default</option>
-              <option value="cancel">cancel</option>
+              {taskResolutionOptions.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
             </select>
             <select className="mg-select" name="impact" defaultValue={impactFilter}>
               <option value="">全部信誉影响</option>
-              <option value="favorable">favorable</option>
-              <option value="unfavorable">unfavorable</option>
-              <option value="neutral">neutral</option>
+              {Object.entries(reputationImpactLabel).map(([value, label]) => (
+                <option key={value} value={value}>
+                  {label}
+                </option>
+              ))}
             </select>
             <select className="mg-select" name="hasEvidence" defaultValue={hasEvidenceFilter}>
               <option value="">全部证据覆盖</option>
@@ -1201,7 +1333,7 @@ export default async function ArbitrationsPage({ searchParams }: ArbitrationsPag
         </Card>
 
         <Card className="app-stack">
-          <p className="mg-subtitle">Cases</p>
+          <p className="mg-subtitle">案件</p>
           <h2 className="app-card-title">仲裁案件列表</h2>
           {filteredCases.length === 0 ? (
             <p className="mg-copy">当前没有仲裁案件。</p>
@@ -1214,7 +1346,7 @@ export default async function ArbitrationsPage({ searchParams }: ArbitrationsPag
                   <div className="app-task-card" key={arbitrationCase.id}>
                     <div className="app-task-card__header">
                       <div>
-                        <p className="mg-subtitle">{arbitrationCase.entityType}</p>
+                        <p className="mg-subtitle">{formatArbitrationEntityType(arbitrationCase.entityType)}</p>
                         <h3 className="app-card-title">案件 {arbitrationCase.id}</h3>
                       </div>
                       <Badge variant={statusVariant[arbitrationCase.status]}>{statusLabel[arbitrationCase.status]}</Badge>
@@ -1224,7 +1356,7 @@ export default async function ArbitrationsPage({ searchParams }: ArbitrationsPag
                     <div className="app-stack">
                       <div className="app-task-card__header">
                         <div>
-                          <p className="mg-subtitle">Evidence Objects</p>
+                          <p className="mg-subtitle">证据对象</p>
                           <h4 className="app-card-title">结构化证据</h4>
                         </div>
                         <Badge variant="cyan">{arbitrationCase.evidences.length} 条</Badge>
@@ -1255,7 +1387,7 @@ export default async function ArbitrationsPage({ searchParams }: ArbitrationsPag
                               ) : null}
                               {evidence.attachments.length > 0 ? (
                                 <div className="app-stack">
-                                  <p className="mg-subtitle">Attachment Repository</p>
+                                  <p className="mg-subtitle">附件库</p>
                                   <div className="app-task-list">
                                     {evidence.attachments.map((attachment) => (
                                       <div className="app-task-card" key={attachment.id}>
@@ -1267,21 +1399,21 @@ export default async function ArbitrationsPage({ searchParams }: ArbitrationsPag
                                           <div className="app-inline-actions">
                                             <Badge variant="cyan">{Math.max(1, Math.ceil(attachment.sizeBytes / 1024))} KB</Badge>
                                             <Badge variant={attachment.storageMode === "remote" ? "violet" : "cyan"}>
-                                              {attachment.storageMode}
+                                              {formatStorageMode(attachment.storageMode)}
                                             </Badge>
                                             <Badge variant={attachment.uploadState === "uploaded" ? "success" : attachment.uploadState === "prepared" ? "warning" : "danger"}>
-                                              {attachment.uploadState}
+                                              {formatUploadState(attachment.uploadState)}
                                             </Badge>
-                                            {attachment.archivedAt ? <Badge variant="warning">archived</Badge> : null}
+                                            {attachment.archivedAt ? <Badge variant="warning">已归档</Badge> : null}
                                           </div>
                                         </div>
                                         <p className="app-note">上传人：{attachment.uploaderUserId}</p>
                                         <p className="app-note">上传时间：{new Date(attachment.createdAt).toLocaleString("zh-CN")}</p>
                                         <p className="app-note">
-                                          prepared {toLocaleDateTime(attachment.uploadPreparedAt)} / completed {toLocaleDateTime(attachment.uploadCompletedAt)}
+                                          准备时间 {toLocaleDateTime(attachment.uploadPreparedAt)} / 完成时间 {toLocaleDateTime(attachment.uploadCompletedAt)}
                                         </p>
                                         <p className="app-note">
-                                          retention {toLocaleDateTime(attachment.retentionExpiresAt)} / cleanup requested {toLocaleDateTime(attachment.cleanupRequestedAt)}
+                                          保留到期 {toLocaleDateTime(attachment.retentionExpiresAt)} / 清理请求 {toLocaleDateTime(attachment.cleanupRequestedAt)}
                                         </p>
                                         {attachment.remoteUrl ? <p className="app-note">远程地址：{attachment.remoteUrl}</p> : null}
                                         {attachment.archivedAt ? (
@@ -1386,7 +1518,9 @@ export default async function ArbitrationsPage({ searchParams }: ArbitrationsPag
                       </div>
                       <div className="app-detail-list__row">
                         <span className="app-detail-list__label">任务裁定动作</span>
-                        <span className="app-detail-list__value">{arbitrationCase.taskResolutionAction || "未设置"}</span>
+                        <span className="app-detail-list__value">
+                          {arbitrationCase.taskResolutionAction ? formatTaskResolutionAction(arbitrationCase.taskResolutionAction) : "未设置"}
+                        </span>
                       </div>
                       <div className="app-detail-list__row">
                         <span className="app-detail-list__label">信誉影响</span>
@@ -1418,8 +1552,8 @@ export default async function ArbitrationsPage({ searchParams }: ArbitrationsPag
                       <div className="app-detail-list__row">
                         <span className="app-detail-list__label">认领时长</span>
                         <span className="app-detail-list__value">
-                          {arbitrationCase.claimAgeHours !== null ? `${arbitrationCase.claimAgeHours}h` : "未认领"}
-                          {arbitrationCase.isStaleClaim ? " · stale claim" : ""}
+                          {arbitrationCase.claimAgeHours !== null ? `${arbitrationCase.claimAgeHours} 小时` : "未认领"}
+                          {arbitrationCase.isStaleClaim ? " · 逾期认领" : ""}
                         </span>
                       </div>
                       <div className="app-detail-list__row">
@@ -1430,23 +1564,25 @@ export default async function ArbitrationsPage({ searchParams }: ArbitrationsPag
 
                     {arbitrationCase.reviewRounds?.length ? (
                       <div className="app-stack">
-                        <h4 className="app-card-title">Review Rounds</h4>
+                        <h4 className="app-card-title">审理轮次</h4>
                         <div className="app-task-list">
                           {arbitrationCase.reviewRounds.map((round) => (
                             <div className="app-task-card" key={round.id}>
                               <div className="app-task-card__header">
                                 <div>
-                                  <p className="mg-subtitle">Round {round.roundNumber}</p>
+                                  <p className="mg-subtitle">第 {round.roundNumber} 轮</p>
                                   <h5 className="app-card-title">{round.summary || "暂无轮次摘要"}</h5>
                                 </div>
                                 <div className="app-inline-actions">
-                                  <Badge variant={round.status === "completed" ? "success" : "cyan"}>{round.status}</Badge>
-                                  {round.isRoundStale ? <Badge variant="danger">round stale</Badge> : null}
+                                  <Badge variant={round.status === "completed" ? "success" : "cyan"}>
+                                    {formatReviewRoundStatus(round.status)}
+                                  </Badge>
+                                  {round.isRoundStale ? <Badge variant="danger">轮次逾期</Badge> : null}
                                 </div>
                               </div>
                               <div className="app-detail-list">
                                 <div className="app-detail-list__row">
-                                  <span className="app-detail-list__label">指派 operator</span>
+                                  <span className="app-detail-list__label">指派处理人</span>
                                   <span className="app-detail-list__value">{round.assignedOperatorUserId || "未指定"}</span>
                                 </div>
                                 <div className="app-detail-list__row">
@@ -1462,7 +1598,7 @@ export default async function ArbitrationsPage({ searchParams }: ArbitrationsPag
                                 <div className="app-detail-list__row">
                                   <span className="app-detail-list__label">轮次时长</span>
                                   <span className="app-detail-list__value">
-                                    {round.roundAgeHours !== null ? `${round.roundAgeHours}h` : "暂无"}
+                                    {round.roundAgeHours !== null ? `${round.roundAgeHours} 小时` : "暂无"}
                                   </span>
                                 </div>
                               </div>
@@ -1518,10 +1654,10 @@ export default async function ArbitrationsPage({ searchParams }: ArbitrationsPag
                               assignment: assignmentFilter,
                             })}
                             <select className="mg-select" defaultValue={arbitrationWorkload.recommendedAssigneeUserId || ""} name="assigneeUserId">
-                              <option value="">选择 operator</option>
+                              <option value="">选择处理人</option>
                               {arbitrationWorkload.byAssignee.map((bucket) => (
                                 <option key={bucket.key} value={bucket.key}>
-                                  {bucket.key} · claimed {bucket.claimedCount} · stale {bucket.staleClaimCount}
+                                  {bucket.key} · 已认领 {bucket.claimedCount} · 逾期 {bucket.staleClaimCount}
                                 </option>
                               ))}
                             </select>
@@ -1547,7 +1683,7 @@ export default async function ArbitrationsPage({ searchParams }: ArbitrationsPag
                             assignment: assignmentFilter,
                           })}
                           <Textarea name="summary" placeholder="本轮审理结论 / 交接说明" rows={3} />
-                          <Input name="assignToOperatorUserId" placeholder="下一轮 operator 用户 ID（可选）" />
+                          <Input name="assignToOperatorUserId" placeholder="下一轮运维用户 ID（可选）" />
                           <button className="mg-btn mg-btn--secondary" type="submit">
                             创建下一轮审理
                           </button>
@@ -1556,7 +1692,7 @@ export default async function ArbitrationsPage({ searchParams }: ArbitrationsPag
                     ) : null}
 
                     <div className="app-stack">
-                      <h4 className="app-card-title">Case Timeline</h4>
+                      <h4 className="app-card-title">案件时间线</h4>
                       <div className="app-task-list">
                         {arbitrationCase.timeline.map((entry) => (
                           <div className="app-task-card" key={`${arbitrationCase.id}-${entry.kind}-${entry.occurredAt}`}>

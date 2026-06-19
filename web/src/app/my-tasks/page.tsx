@@ -74,7 +74,7 @@ export default async function MyTasksPage({ searchParams }: MyTasksPageProps) {
         <div className="mg-shell">
           <Card className="app-stack">
             <h1 className="mg-title">模块状态暂不可用</h1>
-            <p className="mg-copy">当前无法从 core 读取模块快照，请稍后再试。</p>
+            <p className="mg-copy">当前无法读取模块状态，请稍后再试。</p>
           </Card>
         </div>
       </main>
@@ -155,11 +155,11 @@ export default async function MyTasksPage({ searchParams }: MyTasksPageProps) {
             { label: "活跃承接", value: formatAccountNumber(activeAssignedCount) },
           ]}
           hudItems={hudItems}
-          kicker="Task Terminal"
+          kicker="任务终端"
           navItems={navItems}
           railFooter={
             <AccountHomeRailCard>
-              <AccountHomeSectionHead kicker="Status" title="任务摘要" />
+          <AccountHomeSectionHead kicker="状态" title="任务摘要" />
               <AccountHomeList>
                 <AccountHomeListRow aside={<span className="app-note">{openCreatedCount}</span>} title="待分配发布任务" />
                 <AccountHomeListRow aside={<span className="app-note">{activeAssignedCount}</span>} title="活跃承接任务" />
@@ -182,7 +182,7 @@ export default async function MyTasksPage({ searchParams }: MyTasksPageProps) {
           title="我的任务"
           titleBadges={
             <>
-              <Badge variant="cyan">Task Hub</Badge>
+              <Badge variant="cyan">任务中心</Badge>
               <Badge variant="violet">My View</Badge>
               {progression ? <Badge variant="warning">{`Lv.${progression.level}`}</Badge> : null}
             </>
@@ -192,7 +192,7 @@ export default async function MyTasksPage({ searchParams }: MyTasksPageProps) {
             <div className="app-account-content-main">
               <AccountHomeSection>
                 <AccountHomeSectionHead
-                  kicker="Created"
+          kicker="我发布"
                   title="我发布的任务"
                   actions={<span className="app-note">{myCreatedTasks.length} 条</span>}
                 />
@@ -261,7 +261,7 @@ export default async function MyTasksPage({ searchParams }: MyTasksPageProps) {
 
               <AccountHomeSection>
                 <AccountHomeSectionHead
-                  kicker="Assigned"
+          kicker="我承接"
                   title="我承接的任务"
                   actions={<span className="app-note">{myAssignedTasks.length} 条</span>}
                 />
@@ -315,7 +315,7 @@ export default async function MyTasksPage({ searchParams }: MyTasksPageProps) {
 
             <div className="app-account-content-side">
               <AccountHomeSection>
-                <AccountHomeSectionHead kicker="Quick Publish" title="直接发布任务" />
+          <AccountHomeSectionHead kicker="快速发布" title="直接发布任务" />
                 <form action={createTaskAction} className="app-form-grid">
                   <input name="redirectTo" type="hidden" value="/my-tasks" />
                   <Input name="title" placeholder="任务标题" required />
@@ -337,7 +337,7 @@ export default async function MyTasksPage({ searchParams }: MyTasksPageProps) {
               </AccountHomeSection>
 
               <AccountHomeSection>
-                <AccountHomeSectionHead kicker="Summary" title="任务视图摘要" />
+          <AccountHomeSectionHead kicker="摘要" title="任务视图摘要" />
                 <AccountHomeStatGrid>
                   <AccountHomeStat label="我发布的" value={myCreatedTasks.length} />
                   <AccountHomeStat label="我承接的" value={myAssignedTasks.length} />
@@ -347,12 +347,12 @@ export default async function MyTasksPage({ searchParams }: MyTasksPageProps) {
               </AccountHomeSection>
 
               <AccountHomeSection>
-                <AccountHomeSectionHead kicker="Boundary" title="当前实现边界" />
+          <AccountHomeSectionHead kicker="范围" title="账户页能力" />
                 <AccountHomeList>
-                  <AccountHomeListRow aside={<span className="app-note">/v1/tasks/mine</span>} title="读取方式" />
-                  <AccountHomeListRow aside={<span className="app-note">个人视角 + 快速发布/流转</span>} title="当前定位" />
-                  <AccountHomeListRow aside={<span className="app-note">/tasks</span>} title="完整操作入口" />
-                  <AccountHomeListRow aside={<span className="app-note">platform owner</span>} title="业务 owner" />
+                  <AccountHomeListRow aside={<span className="app-note">我发布和我承接的任务</span>} title="数据范围" />
+                  <AccountHomeListRow aside={<span className="app-note">个人视角 + 快速发布 / 流转</span>} title="当前定位" />
+                  <AccountHomeListRow aside={<span className="app-note">任务中心完整操作台</span>} title="进阶入口" />
+                  <AccountHomeListRow aside={<span className="app-note">平台业务链路</span>} title="归属口径" />
                 </AccountHomeList>
               </AccountHomeSection>
             </div>

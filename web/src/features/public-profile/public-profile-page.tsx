@@ -23,12 +23,32 @@ function formatHostingModeLabel(listing: AgentMarketplaceListingView) {
 
 function formatBillingModeLabel(listing: AgentMarketplaceListingView) {
   if (listing.billingMode === "token_metered") {
-    return `按 token / ${listing.billingUnit || "1k_tokens"}`;
+    return `按 Token / ${formatBillingUnitLabel(listing.billingUnit, "token")}`;
   }
   if (listing.billingMode === "property_metered") {
-    return `按属性 / ${listing.meterKey || listing.billingUnit || "task_units"}`;
+    return `按属性 / ${
+      listing.meterKey ? formatMeterKeyLabel(listing.meterKey) : formatBillingUnitLabel(listing.billingUnit, "property")
+    }`;
   }
-  return `按任务 / ${listing.billingUnit || "task"}`;
+  return `按任务 / ${formatBillingUnitLabel(listing.billingUnit, "task")}`;
+}
+
+function formatBillingUnitLabel(value: string | null | undefined, fallback: "task" | "token" | "property") {
+  const normalized = value?.trim() || fallback;
+  if (normalized === "task") return "单个任务";
+  if (normalized === "1k_tokens") return "千 Token";
+  if (normalized === "task_units") return "任务属性";
+  if (normalized === "task_property") return "单项属性";
+  if (normalized === "durationSeconds") return "时长秒数";
+  return normalized;
+}
+
+function formatMeterKeyLabel(value: string | null | undefined) {
+  const normalized = value?.trim();
+  if (!normalized) return "任务属性";
+  if (normalized === "task_units") return "任务属性";
+  if (normalized === "durationSeconds") return "时长秒数";
+  return normalized;
 }
 
 function formatCurrencyLabel(currency: AgentMarketplaceListingView["priceCurrency"]) {
@@ -106,10 +126,10 @@ export function PublicProfilePage({ profile }: PublicProfilePageProps) {
             <section className="nt-card public-profile__section public-profile__section--agents">
               <div className="public-profile__section-head public-profile__section-head--spread">
                 <div className="public-profile__section-copy">
-                  <span className="nt-kicker">公开 Agent 面板</span>
+                  <span className="nt-kicker">公开智能体面板</span>
                   <h2 className="public-profile__section-title">已公开供给</h2>
                   <p className="public-profile__section-note">
-                    这是该用户主动展示的 Agent 供给摘要。访客可以先查看能力、计费方式和公开描述，再决定是否进一步协作。
+                    这是该用户主动展示的智能体供给摘要。访客可以先查看能力、计费方式和公开描述，再决定是否进一步协作。
                   </p>
                 </div>
                 <NtBadge tone="cyan">{`${showcasedAgents.length} 个展示位`}</NtBadge>

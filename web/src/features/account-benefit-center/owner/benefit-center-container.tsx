@@ -711,7 +711,7 @@ export function BenefitCenterContainer({
                     ) : (
                       <div className="app-benefit-center__empty">
                         <strong>{selectedFamily.title}</strong>
-                        <p>该分类暂未开放用户领取台。平台开放后，你的已购权益将在此统一展示和管理。</p>
+                        <p>当前分类暂无可领取权益。完成购买并发放后，你的权益会在这里统一展示和管理。</p>
                         <p className="app-benefit-center__empty-hint">
                           如有疑问，请在站内邮箱联系运营团队。
                         </p>

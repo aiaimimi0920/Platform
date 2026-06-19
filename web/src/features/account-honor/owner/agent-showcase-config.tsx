@@ -68,7 +68,7 @@ export function useAgentShowcaseConfig({ agentCatalog, agentShowcase }: UseAgent
       }
 
       if (current.length >= 4) {
-        setAgentShowcaseError("最多展示 4 个 Agent");
+        setAgentShowcaseError("最多展示 4 个智能体");
         return current;
       }
 
@@ -97,13 +97,13 @@ export function useAgentShowcaseConfig({ agentCatalog, agentShowcase }: UseAgent
 
       const payload = (await response.json().catch(() => null)) as { error?: string } | null;
       if (!response.ok) {
-        throw new Error(payload?.error || "展示 Agent 保存失败");
+        throw new Error(payload?.error || "展示智能体保存失败");
       }
 
       setVisibleAgentShowcase(selectShowcasedAgents(agentCatalog, agentDraftIds));
       setAgentConfigOpen(false);
     } catch (error) {
-      setAgentShowcaseError(error instanceof Error ? error.message : "展示 Agent 保存失败");
+      setAgentShowcaseError(error instanceof Error ? error.message : "展示智能体保存失败");
     } finally {
       setSavingAgentShowcase(false);
     }
@@ -114,21 +114,21 @@ export function useAgentShowcaseConfig({ agentCatalog, agentShowcase }: UseAgent
       ? createPortal(
           <>
             <button
-              aria-label="关闭 Agent 展示配置"
+              aria-label="关闭智能体展示配置"
               className="app-account-honor-inline-dialog__backdrop"
               onClick={() => setAgentConfigOpen(false)}
               type="button"
             />
             <div
-              aria-label="Agent 展示配置"
+              aria-label="智能体展示配置"
               aria-modal="true"
               className="app-account-honor-inline-dialog app-account-honor-inline-dialog--agent-config"
               role="dialog"
             >
               <div className="app-account-honor-inline-dialog__head">
-                <span className="mg-terminal-kicker">展示 Agent</span>
+                <span className="mg-terminal-kicker">展示智能体</span>
                 <button
-                  aria-label="关闭 Agent 展示配置"
+                  aria-label="关闭智能体展示配置"
                   className="app-account-honor-inline-dialog__close"
                   onClick={() => setAgentConfigOpen(false)}
                   type="button"
@@ -138,7 +138,7 @@ export function useAgentShowcaseConfig({ agentCatalog, agentShowcase }: UseAgent
               </div>
 
               <div className="app-account-honor-agent-config__summary">
-                <span>最多展示 4 个 Agent</span>
+                <span>最多展示 4 个智能体</span>
                 <strong>{`${agentDraftIds.length}/4`}</strong>
               </div>
 

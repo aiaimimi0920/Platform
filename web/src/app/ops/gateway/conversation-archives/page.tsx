@@ -94,14 +94,14 @@ function ArchiveRow({
         <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
           <NtBadge tone={statusTone(archive.status)}>{archive.status}</NtBadge>
           {archive.failureClass ? <NtBadge tone="warning">{archive.failureClass}</NtBadge> : null}
-          {archive.truncatedRequest || archive.truncatedResponse ? <NtBadge tone="warning">truncated</NtBadge> : null}
+          {archive.truncatedRequest || archive.truncatedResponse ? <NtBadge tone="warning">已截断</NtBadge> : null}
         </div>
       </div>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 10 }}>
         <DetailLine label="用户" value={archive.userId ?? "—"} />
-        <DetailLine label="Provider" value={archive.providerAccountId ?? "—"} />
+        <DetailLine label="服务商" value={archive.providerAccountId ?? "—"} />
         <DetailLine label="协议" value={archive.protocolProfile ?? archive.protocolFamily} />
-        <DetailLine label="Endpoint" value={archive.endpointKind} />
+        <DetailLine label="端点" value={archive.endpointKind} />
         <DetailLine label="创建时间" value={formatDate(archive.createdAt)} />
       </div>
       {archive.archiveError ? <span style={{ color: "rgba(252,165,165,0.92)" }}>{archive.archiveError}</span> : null}
@@ -135,7 +135,7 @@ export default async function GatewayConversationArchivesPage({
   } catch (error) {
     dependencyNotice = buildGatewayDependencyUnavailableNotice(error, {
       resourceName: "用户级对话存档",
-      continuation: "存档列表和 artifact 预览暂不可查看；其他运营页面仍可继续使用。",
+      continuation: "存档列表和归档预览暂不可查看；其他运营页面仍可继续使用。",
     });
   }
   const filteredArchives = archives.filter((archive) =>
@@ -149,8 +149,8 @@ export default async function GatewayConversationArchivesPage({
       selectedArtifacts = await getOperatorGatewayConversationArchiveArtifacts(userContext, selectedArchiveId);
     } catch (error) {
       dependencyNotice = buildGatewayDependencyUnavailableNotice(error, {
-        resourceName: "对话存档 artifact",
-        continuation: "存档列表仍可查看，artifact 预览暂不可用。",
+        resourceName: "对话存档归档对象",
+        continuation: "存档列表仍可查看，归档预览暂不可用。",
       });
     }
   }
@@ -164,19 +164,19 @@ export default async function GatewayConversationArchivesPage({
       <NtCard style={{ display: "grid", gap: 16 }}>
         <div style={{ display: "flex", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
           <div>
-            <span className="nt-kicker">AI Gateway / Conversation Archives</span>
+            <span className="nt-kicker">AI 网关 / 对话存档</span>
             <h1 style={{ margin: "6px 0 0", color: "rgba(243,245,247,0.98)" }}>用户级对话存档</h1>
             <p style={{ margin: "8px 0 0", color: "rgba(148,163,184,0.9)" }}>
-              运维全量强制存档视图。这里展示已脱敏的 request / response artifact 索引与 NDJSON export 落点。
+              运维全量强制存档视图。这里展示已脱敏的请求 / 响应归档对象索引与 NDJSON 导出落点。
             </p>
           </div>
           <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
             <NtBadge tone="cyan">ops_forced_full</NtBadge>
-            <NtBadge tone="glass">rows: {filteredArchives.length}</NtBadge>
+            <NtBadge tone="glass">记录：{filteredArchives.length}</NtBadge>
           </div>
         </div>
         <form action="/ops/gateway/conversation-archives" style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-          <input className="nt-input" name="q" placeholder="搜索 request/user/provider/model" defaultValue={q} />
+          <input className="nt-input" name="q" placeholder="搜索请求、用户、服务商或模型" defaultValue={q} />
           <input className="nt-input" name="userId" placeholder="userId" defaultValue={userId} />
           <select className="nt-input" name="status" defaultValue={status}>
             <option value="">全部状态</option>
@@ -211,7 +211,7 @@ export default async function GatewayConversationArchivesPage({
         <NtCard style={{ display: "grid", gap: 14, alignSelf: "start" }}>
           <div style={{ display: "flex", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
             <div>
-              <span className="nt-kicker">Selected Archive</span>
+              <span className="nt-kicker">已选存档</span>
               <h2 style={{ margin: "6px 0 0", color: "rgba(243,245,247,0.98)" }}>
                 {selectedArtifacts?.archive.id ?? "未选择"}
               </h2>
@@ -221,20 +221,20 @@ export default async function GatewayConversationArchivesPage({
           {selectedArtifacts ? (
             <>
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 12 }}>
-                <DetailLine label="Request object" value={selectedArtifacts.archive.requestObjectKey ?? "—"} />
-                <DetailLine label="Response object" value={selectedArtifacts.archive.responseObjectKey ?? "—"} />
-                <DetailLine label="Retention" value={formatDate(selectedArtifacts.archive.retentionExpiresAt)} />
-                <DetailLine label="Export API" value="/v1/internal/gateway/conversation-archives/export" />
+                <DetailLine label="请求对象" value={selectedArtifacts.archive.requestObjectKey ?? "—"} />
+                <DetailLine label="响应对象" value={selectedArtifacts.archive.responseObjectKey ?? "—"} />
+                <DetailLine label="保留期限" value={formatDate(selectedArtifacts.archive.retentionExpiresAt)} />
+                <DetailLine label="导出接口" value="/v1/internal/gateway/conversation-archives/export" />
               </div>
               <NtPanel style={{ display: "grid", gap: 10 }}>
-                <span className="nt-kicker">Artifact Preview</span>
+                <span className="nt-kicker">归档预览</span>
                 <pre style={{ margin: 0, whiteSpace: "pre-wrap", color: "rgba(190,199,217,0.9)" }}>
                   {JSON.stringify(selectedArtifacts.artifacts, null, 2).slice(0, 6000)}
                 </pre>
               </NtPanel>
             </>
           ) : (
-            <span style={{ color: "rgba(148,163,184,0.9)" }}>选择左侧记录查看 artifact。</span>
+            <span style={{ color: "rgba(148,163,184,0.9)" }}>选择左侧记录查看归档对象。</span>
           )}
         </NtCard>
       </div>
