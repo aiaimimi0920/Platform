@@ -16,6 +16,22 @@ const createTicketSchema = z.object({
   description: z.string().min(10),
 });
 
+const editTicketSchema = z
+  .object({
+    title: z.string().min(1).optional(),
+    description: z.string().optional(),
+    priority: z.string().min(1).optional(),
+    labels: z.array(z.string()).optional(),
+  })
+  .refine(
+    (value) =>
+      value.title !== undefined ||
+      value.description !== undefined ||
+      value.priority !== undefined ||
+      value.labels !== undefined,
+    { message: "at least one editable field is required" },
+  );
+
 const commentTicketSchema = z.object({
   body: z.string().min(1),
 });
@@ -89,6 +105,17 @@ export function createTeaRouter(options: TeaRouterOptions = {}): FastifyPluginAs
       async (request) => ({
         ticket: await callTea(() => getClient().getTicket(request.params.ticketId)),
       }),
+    );
+
+    app.patch<{ Params: { ticketId: string }; Body: z.infer<typeof editTicketSchema> }>(
+      "/internal/tea/tickets/:ticketId",
+      { preHandler: withInternalRequest },
+      async (request) => {
+        const payload = parseRequest(editTicketSchema, request.body);
+        return {
+          ticket: await callTea(() => getClient().editTicket(request.params.ticketId, payload)),
+        };
+      },
     );
 
     app.post<{ Params: { ticketId: string }; Body: z.infer<typeof commentTicketSchema> }>(

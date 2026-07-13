@@ -26,6 +26,7 @@ export type TeaTicketDetailControls = {
   lifecycleControls: TeaDetailLifecycleControl[];
   showCommentForm: boolean;
   showRejectForm: boolean;
+  showEditForm: boolean;
 };
 
 const terminalStatuses = new Set(["closed", "cancelled"]);
@@ -64,5 +65,6 @@ export function getTeaTicketDetailControls(ticketId: string, status: string): Te
     lifecycleControls: canMutate ? lifecycleControls : [],
     showCommentForm: canMutate,
     showRejectForm: canMutate,
+    showEditForm: canMutate,
   };
 }

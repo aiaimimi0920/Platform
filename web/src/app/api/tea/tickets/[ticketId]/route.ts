@@ -1,5 +1,5 @@
-import { getTeaTicket, getTeaTicketComments, getTeaTicketEvents } from "@/lib/tea-client";
-import { handleGetTeaTicketRequest } from "@/lib/tea-api-handlers";
+import { editTeaTicket, getTeaTicket, getTeaTicketComments, getTeaTicketEvents } from "@/lib/tea-client";
+import { handleEditTeaTicketRequest, handleGetTeaTicketRequest } from "@/lib/tea-api-handlers";
 import { requirePlatformUserContext } from "@/lib/platform-session";
 
 type RouteContext = {
@@ -14,6 +14,14 @@ export async function GET(_request: Request, context: RouteContext) {
     getTeaTicket,
     getTeaTicketComments,
     getTeaTicketEvents,
+    requireUserContext: requirePlatformUserContext,
+  });
+}
+
+export async function PATCH(request: Request, context: RouteContext) {
+  const { ticketId } = await context.params;
+  return handleEditTeaTicketRequest(ticketId, request, {
+    editTeaTicket,
     requireUserContext: requirePlatformUserContext,
   });
 }

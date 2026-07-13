@@ -15,6 +15,13 @@ export type CreateTeaTicketRequest = {
   description: string;
 };
 
+export type EditTeaTicketRequest = {
+  title?: string;
+  description?: string;
+  priority?: string;
+  labels?: string[];
+};
+
 export type RejectTeaTicketRequest = {
   reason: string;
 };
@@ -82,6 +89,8 @@ export function createTeaClient(config: TeaClientConfig) {
     listTickets: (query?: TeaQuery) => request("/v1/tickets", { query }),
     createTicket: (body: CreateTeaTicketRequest) => request("/v1/tickets", { method: "POST", body }),
     getTicket: (ticketId: string) => request(`/v1/tickets/${encodeURIComponent(ticketId)}`),
+    editTicket: (ticketId: string, body: EditTeaTicketRequest) =>
+      request(`/v1/tickets/${encodeURIComponent(ticketId)}`, { method: "PATCH", body }),
     addComment: (ticketId: string, body: AddTeaTicketCommentRequest) =>
       request(`/v1/tickets/${encodeURIComponent(ticketId)}/comments`, { method: "POST", body }),
     listComments: (ticketId: string) => request(`/v1/tickets/${encodeURIComponent(ticketId)}/comments`),

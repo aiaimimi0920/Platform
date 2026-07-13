@@ -2,6 +2,7 @@ import type { InternalUserContext } from "@neuro/contracts";
 
 import type {
   CreateTeaTicketInput,
+  EditTeaTicketInput,
   RejectTeaTicketInput,
   TeaRunView,
   TeaTicketCommentInput,
@@ -12,6 +13,7 @@ import type {
 } from "./tea-client";
 import {
   parseCreateTeaTicketPayload,
+  parseEditTeaTicketPayload,
   parseTeaCommentPayload,
   parseTeaRejectPayload,
   readJsonObject,
@@ -33,6 +35,15 @@ export type CreateTeaTicketHandlerDeps = {
   createTeaTicket: (
     userContext: InternalUserContext,
     input: CreateTeaTicketInput,
+  ) => Promise<TeaTicketView>;
+  requireUserContext: RequireUserContext;
+};
+
+export type EditTeaTicketHandlerDeps = {
+  editTeaTicket: (
+    userContext: InternalUserContext,
+    ticketId: string,
+    input: EditTeaTicketInput,
   ) => Promise<TeaTicketView>;
   requireUserContext: RequireUserContext;
 };
@@ -169,6 +180,21 @@ export async function handleCreateTeaTicketRequest(
     return teaJson({ ticket }, 201);
   } catch (error) {
     return teaRouteErrorResponse(error, "Tea ticket creation failed");
+  }
+}
+
+export async function handleEditTeaTicketRequest(
+  ticketId: string,
+  request: Request,
+  deps: EditTeaTicketHandlerDeps,
+): Promise<Response> {
+  try {
+    const userContext = await deps.requireUserContext();
+    const payload = parseEditTeaTicketPayload(await readJsonObject(request));
+    const ticket = await deps.editTeaTicket(userContext, ticketId, payload);
+    return teaJson({ ticket });
+  } catch (error) {
+    return teaRouteErrorResponse(error, "Tea ticket edit failed");
   }
 }
 

@@ -1,6 +1,7 @@
 import {
   TeaWebClientError,
   type CreateTeaTicketInput,
+  type EditTeaTicketInput,
   type RejectTeaTicketInput,
   type TeaTicketCommentInput,
 } from "./tea-client";
@@ -42,6 +43,49 @@ export function parseCreateTeaTicketPayload(payload: unknown): CreateTeaTicketIn
   }
 
   return { title, description };
+}
+
+export function parseEditTeaTicketPayload(payload: unknown): EditTeaTicketInput {
+  if (!isRecord(payload)) {
+    throw new TeaRouteInputError("Tea ticket edit payload must be a JSON object.");
+  }
+
+  const edits: EditTeaTicketInput = {};
+
+  if (payload.title !== undefined) {
+    const title = typeof payload.title === "string" ? payload.title.trim() : "";
+    if (title.length < 3) {
+      throw new TeaRouteInputError("Tea ticket title must contain at least 3 characters.");
+    }
+    edits.title = title;
+  }
+
+  if (payload.description !== undefined) {
+    if (typeof payload.description !== "string") {
+      throw new TeaRouteInputError("Tea ticket description must be a string.");
+    }
+    edits.description = payload.description;
+  }
+
+  if (payload.priority !== undefined) {
+    if (typeof payload.priority !== "string") {
+      throw new TeaRouteInputError("Tea ticket priority must be a string.");
+    }
+    edits.priority = payload.priority.trim();
+  }
+
+  if (payload.labels !== undefined) {
+    if (!Array.isArray(payload.labels) || payload.labels.some((label) => typeof label !== "string")) {
+      throw new TeaRouteInputError("Tea ticket labels must be an array of strings.");
+    }
+    edits.labels = (payload.labels as string[]).map((label) => label.trim()).filter(Boolean);
+  }
+
+  if (edits.title === undefined && edits.description === undefined && edits.priority === undefined && edits.labels === undefined) {
+    throw new TeaRouteInputError("Tea ticket edit must change at least one field.");
+  }
+
+  return edits;
 }
 
 export function parseTeaCommentPayload(payload: unknown): TeaTicketCommentInput {

@@ -12,9 +12,10 @@ import {
 } from "@/components/account-home/templates";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
-import { Textarea } from "@/components/ui/input";
+import { Input, Textarea } from "@/components/ui/input";
 import {
   addTeaTicketCommentAction,
+  editTeaTicketAction,
   rejectTeaTicketAction,
   teaTicketLifecycleAction,
 } from "@/lib/tea-actions";
@@ -165,6 +166,15 @@ export default async function TeaTicketPage({ params, searchParams }: TeaTicketP
   const ticketStatus = formatStatus(ticket?.status);
   const detailControls = getTeaTicketDetailControls(ticket?.id || ticketId, ticketStatus);
   const isTerminal = !detailControls.canMutate;
+  // Operator-facing labels only; the daemon owns and preserves system-derived
+  // labels (source:/policy:/context:), so the edit form never shows or sends them.
+  const editableLabels = (ticket?.labels ?? []).filter(
+    (label) =>
+      typeof label === "string" &&
+      !label.startsWith("source:") &&
+      !label.startsWith("policy:") &&
+      !label.startsWith("context:"),
+  );
 
   return (
     <main className="app-page">
@@ -356,6 +366,40 @@ export default async function TeaTicketPage({ params, searchParams }: TeaTicketP
             </div>
 
             <div className="app-account-content-side">
+              {detailControls.showEditForm ? (
+                <AccountHomeSection>
+                  <AccountHomeSectionHead kicker="编辑" title="编辑工单" />
+                  <form action={editTeaTicketAction} className="app-form-grid">
+                    <input name="ticketId" type="hidden" value={ticket.id} />
+                    <input name="redirectTo" type="hidden" value={redirectTo} />
+                    <Input
+                      defaultValue={ticket.title ?? ""}
+                      name="title"
+                      placeholder="工单标题"
+                    />
+                    <Textarea
+                      defaultValue={ticket.description ?? ""}
+                      name="description"
+                      placeholder="工单描述"
+                      rows={4}
+                    />
+                    <Input
+                      defaultValue={ticket.priority ?? ""}
+                      name="priority"
+                      placeholder="优先级，例如 high / normal / low"
+                    />
+                    <Input
+                      defaultValue={editableLabels.join(", ")}
+                      name="labels"
+                      placeholder="逗号分隔的操作标签（系统标签由 Tea 自动保留）"
+                    />
+                    <button className="mg-btn mg-btn--secondary" type="submit">
+                      保存修改
+                    </button>
+                  </form>
+                </AccountHomeSection>
+              ) : null}
+
               {detailControls.showCommentForm ? (
                 <AccountHomeSection>
           <AccountHomeSectionHead kicker="审阅" title="人工评论" />

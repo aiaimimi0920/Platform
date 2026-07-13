@@ -114,6 +114,13 @@ export type CreateTeaTicketInput = {
   description: string;
 };
 
+export type EditTeaTicketInput = {
+  title?: string;
+  description?: string;
+  priority?: string;
+  labels?: string[];
+};
+
 export type TeaTicketCommentInput = {
   body: string;
 };
@@ -140,7 +147,7 @@ export class TeaWebClientError extends Error {
 
 type CoreTeaRequestOptions = {
   body?: unknown;
-  method?: "GET" | "POST" | "PUT";
+  method?: "GET" | "POST" | "PUT" | "PATCH";
   query?: Record<string, string | number | boolean | null | undefined>;
   userContext: InternalUserContext;
 };
@@ -212,6 +219,22 @@ export async function getTeaTicket(
   const response = await coreTeaRequest<{ ticket: TeaTicketView }>(
     `/internal/tea/tickets/${encodeURIComponent(ticketId)}`,
     {
+      userContext,
+    },
+  );
+  return response.ticket;
+}
+
+export async function editTeaTicket(
+  userContext: InternalUserContext,
+  ticketId: string,
+  input: EditTeaTicketInput,
+): Promise<TeaTicketView> {
+  const response = await coreTeaRequest<{ ticket: TeaTicketView }>(
+    `/internal/tea/tickets/${encodeURIComponent(ticketId)}`,
+    {
+      method: "PATCH",
+      body: input,
       userContext,
     },
   );

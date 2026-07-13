@@ -12,6 +12,7 @@ test("active Tea tickets expose canonical decompose, review mutations, stop/retr
   assert.equal(controls.canMutate, true);
   assert.equal(controls.showCommentForm, true);
   assert.equal(controls.showRejectForm, true);
+  assert.equal(controls.showEditForm, true);
   assert.deepEqual(
     controls.lifecycleControls.map((control) => control.action),
     ["decompose", "approve", "run", "stop", "retry", "accept", "close", "cancel"],
@@ -40,6 +41,7 @@ test("terminal Tea tickets keep audit downloads but hide mutating review control
   assert.equal(controls.canMutate, false);
   assert.equal(controls.showCommentForm, false);
   assert.equal(controls.showRejectForm, false);
+  assert.equal(controls.showEditForm, false);
   assert.deepEqual(controls.lifecycleControls, []);
   assert.equal(controls.downloadLinks.length, 2);
 });

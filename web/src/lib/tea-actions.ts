@@ -12,6 +12,7 @@ import {
   closeTeaTicket,
   createTeaTicket,
   decomposeTeaTicket,
+  editTeaTicket,
   planTeaTicket,
   rejectTeaTicket,
   retryTeaTicket,
@@ -22,6 +23,7 @@ import {
 import { requirePlatformUserContext } from "@/lib/platform-session";
 import {
   parseCreateTeaTicketPayload,
+  parseEditTeaTicketPayload,
   parseTeaCommentPayload,
   parseTeaRejectPayload,
 } from "@/lib/tea-route-utils";
@@ -115,6 +117,44 @@ export async function createTeaTicketAction(formData: FormData) {
       throw error;
     }
     target = buildStatusRedirect(redirectTo, "error", toMessage(error, "Tea 工单创建失败。"));
+  }
+
+  redirect(target);
+}
+
+export async function editTeaTicketAction(formData: FormData) {
+  const redirectTo = resolveRedirectPath(formData.get("redirectTo"), "/tea");
+  const ticketId = String(formData.get("ticketId") || "").trim();
+  let target = redirectTo;
+
+  if (!ticketId) {
+    redirect(buildStatusRedirect(redirectTo, "error", "Tea 工单编辑参数无效。"));
+  }
+
+  try {
+    const userContext = await requirePlatformUserContext();
+    // Labels arrive as a single comma/newline-separated field; split and trim.
+    const rawLabels = formData.get("labels");
+    const labels =
+      typeof rawLabels === "string"
+        ? rawLabels
+            .split(/[,\n]/)
+            .map((label) => label.trim())
+            .filter(Boolean)
+        : undefined;
+    const payload = parseEditTeaTicketPayload({
+      title: formData.get("title"),
+      description: formData.get("description"),
+      priority: formData.get("priority"),
+      labels,
+    });
+    await editTeaTicket(userContext, ticketId, payload);
+    target = buildStatusRedirect(redirectTo, "success", "Tea 工单已更新。");
+  } catch (error) {
+    if (isRedirectError(error)) {
+      throw error;
+    }
+    target = buildStatusRedirect(redirectTo, "error", toMessage(error, "Tea 工单更新失败。"));
   }
 
   redirect(target);
