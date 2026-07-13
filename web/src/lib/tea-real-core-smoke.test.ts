@@ -155,6 +155,35 @@ test(
       assert.match(commentId, /^[0-9a-f-]{36}$/);
       assert.equal(comment.comment.body, "Human reviewer comment from Platform Web real smoke.");
 
+      const editResponse = await handleEditTeaTicketRequest(
+        ticketId,
+        new Request(`https://platform.local/api/tea/tickets/${ticketId}`, {
+          body: JSON.stringify({
+            title: "Platform Web Tea real smoke (edited)",
+            priority: "high",
+            labels: ["area:platform-web-smoke"],
+          }),
+          method: "PATCH",
+        }),
+        {
+          editTeaTicket,
+          requireUserContext: async () => userContext,
+        },
+      );
+      const editBody = await editResponse.text();
+      assert.equal(editResponse.status, 200, editBody);
+      const edited = JSON.parse(editBody) as { ticket: JsonRecord };
+      assert.equal(edited.ticket.id, ticketId);
+      assert.equal(edited.ticket.title, "Platform Web Tea real smoke (edited)");
+      assert.equal(edited.ticket.priority, "high");
+      const editedLabels = Array.isArray(edited.ticket.labels)
+        ? (edited.ticket.labels as string[])
+        : [];
+      assert.ok(editedLabels.includes("area:platform-web-smoke"));
+      // System-derived labels must survive an operator edit through the full chain.
+      assert.ok(editedLabels.some((label) => label === "source:human"));
+      assert.ok(editedLabels.some((label) => label.startsWith("policy:")));
+
       const rejectCreateResponse = await handleCreateTeaTicketRequest(
         new Request("https://platform.local/api/tea/tickets", {
           body: JSON.stringify({
