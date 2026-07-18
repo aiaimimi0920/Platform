@@ -175,6 +175,8 @@ export async function createAcceptanceEnvironment({
   runId,
   evidenceDir,
   platformRoot = defaultPlatformRoot,
+  // Tests may inject an isolated runtime root; production callers use the Platform-local default.
+  runtimeRoot,
   allocatePorts = allocateLoopbackPorts,
 } = {}) {
   const safeRunId = validateAcceptanceRunId(runId);
@@ -184,10 +186,13 @@ export async function createAcceptanceEnvironment({
 
   const resolvedPlatformRoot = path.resolve(platformRoot);
   const resolvedEvidenceDir = path.resolve(evidenceDir);
+  const resolvedRuntimeRoot = path.resolve(
+    runtimeRoot || path.join(resolvedPlatformRoot, ".runtime", "acceptance"),
+  );
   const composeFile = path.join(resolvedPlatformRoot, "deploy", "acceptance", "docker-compose.acceptance.yml");
   assertInside(resolvedPlatformRoot, composeFile, "Acceptance Compose file");
 
-  const resourcesDir = path.join(resolvedEvidenceDir, "resources");
+  const resourcesDir = path.join(resolvedRuntimeRoot, safeRunId, "resources");
   const credentialsRoot = path.join(resourcesDir, "credentials");
   const paths = {
     platformRoot: resolvedPlatformRoot,
@@ -198,10 +203,12 @@ export async function createAcceptanceEnvironment({
     ownerFile: path.join(resourcesDir, "owner.json"),
     composeFile,
   };
+  assertInside(resolvedRuntimeRoot, resourcesDir, "Acceptance resources directory");
   const projectName = safeRunId;
   const volumeNames = createVolumeNames(safeRunId);
 
   await mkdir(resolvedEvidenceDir, { recursive: true });
+  await mkdir(path.dirname(resourcesDir), { recursive: true });
   await mkdir(resourcesDir);
   try {
     await Promise.all(
@@ -222,6 +229,7 @@ export async function createAcceptanceEnvironment({
       platformRoot: resolvedPlatformRoot,
       composeFile,
       evidenceDir: resolvedEvidenceDir,
+      runtimeRoot: resolvedRuntimeRoot,
       resourcesDir,
       envFile: paths.envFile,
       credentialsRoot,
@@ -351,6 +359,7 @@ export async function cleanupAcceptanceProject({
   evidenceDir,
   projectName = runId,
   platformRoot = defaultPlatformRoot,
+  runtimeRoot,
   executeCommand = runAcceptanceComposeCommand,
   commandTimeoutMs = 120_000,
 } = {}) {
@@ -362,12 +371,15 @@ export async function cleanupAcceptanceProject({
 
   const resolvedPlatformRoot = path.resolve(platformRoot);
   const resolvedEvidenceDir = path.resolve(evidenceDir);
-  const resourcesDir = path.join(resolvedEvidenceDir, "resources");
+  const resolvedRuntimeRoot = path.resolve(
+    runtimeRoot || path.join(resolvedPlatformRoot, ".runtime", "acceptance"),
+  );
+  const resourcesDir = path.join(resolvedRuntimeRoot, safeRunId, "resources");
   const credentialsRoot = path.join(resourcesDir, "credentials");
   const envFile = path.join(resourcesDir, "acceptance.env");
   const ownerFile = path.join(resourcesDir, "owner.json");
   const composeFile = path.join(resolvedPlatformRoot, "deploy", "acceptance", "docker-compose.acceptance.yml");
-  assertInside(resolvedEvidenceDir, resourcesDir, "Acceptance resources directory");
+  assertInside(resolvedRuntimeRoot, resourcesDir, "Acceptance resources directory");
   assertInside(resolvedPlatformRoot, composeFile, "Acceptance Compose file");
 
   const [ownerContents, environmentContents] = await Promise.all([
@@ -380,6 +392,7 @@ export async function cleanupAcceptanceProject({
   assertOwnerValue(owner, "platformRoot", resolvedPlatformRoot, true);
   assertOwnerValue(owner, "composeFile", composeFile, true);
   assertOwnerValue(owner, "evidenceDir", resolvedEvidenceDir, true);
+  assertOwnerValue(owner, "runtimeRoot", resolvedRuntimeRoot, true);
   assertOwnerValue(owner, "resourcesDir", resourcesDir, true);
   assertOwnerValue(owner, "envFile", envFile, true);
   assertOwnerValue(owner, "credentialsRoot", credentialsRoot, true);
@@ -422,7 +435,7 @@ export async function cleanupAcceptanceProject({
     command: "docker",
     args,
     cwd: resolvedPlatformRoot,
-    env: process.env,
+    env: { ...process.env, ...environment },
     timeoutMs: commandTimeoutMs,
   });
   if (!commandResult || commandResult.exitCode !== 0) {

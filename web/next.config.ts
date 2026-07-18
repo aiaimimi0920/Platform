@@ -1,6 +1,10 @@
 import type { NextConfig } from "next";
 import path from "node:path";
 
+import { assertDevAuthConfiguration } from "./src/lib/dev-auth";
+
+assertDevAuthConfiguration();
+
 const nextDistDir = process.env.NEXT_DIST_DIR?.trim();
 
 const nextConfig: NextConfig = {

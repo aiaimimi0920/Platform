@@ -17,6 +17,25 @@ const acceptanceComposeFile = path.join(
   "acceptance",
   "docker-compose.acceptance.yml",
 );
+const localComposeFile = path.join(platformRoot, "deploy", "docker-compose.local.yml");
+
+function composeServiceBlock(contents, serviceName) {
+  const lines = contents.split(/\r?\n/);
+  const start = lines.findIndex((line) => line === `  ${serviceName}:`);
+  assert.notEqual(start, -1, `missing Compose service: ${serviceName}`);
+  let end = lines.length;
+  for (let index = start + 1; index < lines.length; index += 1) {
+    if (/^  [a-zA-Z0-9][a-zA-Z0-9_-]*:$/.test(lines[index])) {
+      end = index;
+      break;
+    }
+    if (/^[a-zA-Z0-9][a-zA-Z0-9_-]*:$/.test(lines[index])) {
+      end = index;
+      break;
+    }
+  }
+  return lines.slice(start, end).join("\n");
+}
 
 function parseEnvFile(contents) {
   return Object.fromEntries(
@@ -40,6 +59,24 @@ async function createTempRoot(t, prefix) {
   const root = await mkdtemp(path.join(os.tmpdir(), prefix));
   t.after(() => rm(root, { force: true, recursive: true }));
   return root;
+}
+
+function testRuntimeRoot(evidenceDir) {
+  return path.join(path.dirname(path.resolve(evidenceDir)), ".acceptance-runtime");
+}
+
+function createTestAcceptanceEnvironment(options) {
+  return createAcceptanceEnvironment({
+    ...options,
+    runtimeRoot: options.runtimeRoot || testRuntimeRoot(options.evidenceDir),
+  });
+}
+
+function cleanupTestAcceptanceProject(options) {
+  return cleanupAcceptanceProject({
+    ...options,
+    runtimeRoot: options.runtimeRoot || testRuntimeRoot(options.evidenceDir),
+  });
 }
 
 async function startDoubleServer(t, server) {
@@ -69,7 +106,7 @@ test("createAcceptanceEnvironment rejects empty and unsafe run ids", async () =>
   const evidenceDir = path.join(os.tmpdir(), "platform-invalid-run-id");
   for (const runId of ["", "../foreign", "Uppercase", "contains spaces", "a".repeat(64)]) {
     await assert.rejects(
-      createAcceptanceEnvironment({ runId, evidenceDir, platformRoot }),
+      createTestAcceptanceEnvironment({ runId, evidenceDir, platformRoot }),
       /run.?id/i,
     );
   }
@@ -79,7 +116,7 @@ test("createAcceptanceEnvironment creates run-owned resources, secrets, ports, a
   const tempRoot = await createTempRoot(t, "platform-compose-env-");
   const evidenceDir = path.join(tempRoot, "run-owned");
   const allocatedPorts = Array.from({ length: HOST_PORT_VARIABLES.length }, (_, index) => 31000 + index);
-  const environment = await createAcceptanceEnvironment({
+  const environment = await createTestAcceptanceEnvironment({
     runId: "platform-acceptance-owned",
     evidenceDir,
     platformRoot,
@@ -91,8 +128,16 @@ test("createAcceptanceEnvironment creates run-owned resources, secrets, ports, a
 
   assert.equal(environment.projectName, "platform-acceptance-owned");
   assert.equal(environment.paths.evidenceDir, path.resolve(evidenceDir));
-  assert.equal(environment.paths.resourcesDir, path.join(path.resolve(evidenceDir), "resources"));
-  assert.equal(environment.paths.credentialsRoot, path.join(path.resolve(evidenceDir), "resources", "credentials"));
+  const runtimeRoot = testRuntimeRoot(evidenceDir);
+  assert.equal(
+    environment.paths.resourcesDir,
+    path.join(runtimeRoot, environment.runId, "resources"),
+  );
+  assert.equal(
+    environment.paths.credentialsRoot,
+    path.join(runtimeRoot, environment.runId, "resources", "credentials"),
+  );
+  assert.equal(environment.paths.resourcesDir.startsWith(path.resolve(evidenceDir)), false);
   assert.equal(environment.paths.composeFile, acceptanceComposeFile);
   assert.equal(new Set(Object.values(environment.ports)).size, HOST_PORT_VARIABLES.length);
   assert.deepEqual(Object.values(environment.ports), allocatedPorts);
@@ -124,19 +169,20 @@ test("createAcceptanceEnvironment creates run-owned resources, secrets, ports, a
   assert.equal(owner.projectName, environment.projectName);
   assert.equal(owner.platformRoot, platformRoot);
   assert.equal(owner.composeFile, acceptanceComposeFile);
+  assert.equal(owner.runtimeRoot, runtimeRoot);
   assert.equal(owner.resourcesDir, environment.paths.resourcesDir);
   assert.deepEqual(owner.volumeNames, environment.volumeNames);
 });
 
 test("two acceptance environments use different secrets and run-owned volume names", async (t) => {
   const tempRoot = await createTempRoot(t, "platform-compose-unique-");
-  const first = await createAcceptanceEnvironment({
+  const first = await createTestAcceptanceEnvironment({
     runId: "platform-acceptance-first",
     evidenceDir: path.join(tempRoot, "first"),
     platformRoot,
     allocatePorts: async (count) => Array.from({ length: count }, (_, index) => 32000 + index),
   });
-  const second = await createAcceptanceEnvironment({
+  const second = await createTestAcceptanceEnvironment({
     runId: "platform-acceptance-second",
     evidenceDir: path.join(tempRoot, "second"),
     platformRoot,
@@ -154,7 +200,7 @@ test("two acceptance environments use different secrets and run-owned volume nam
 
 test("cleanup rejects a foreign project before invoking Docker", async (t) => {
   const tempRoot = await createTempRoot(t, "platform-compose-foreign-");
-  const environment = await createAcceptanceEnvironment({
+  const environment = await createTestAcceptanceEnvironment({
     runId: "platform-acceptance-owner",
     evidenceDir: path.join(tempRoot, "owner"),
     platformRoot,
@@ -163,7 +209,7 @@ test("cleanup rejects a foreign project before invoking Docker", async (t) => {
   let commandInvoked = false;
 
   await assert.rejects(
-    cleanupAcceptanceProject({
+    cleanupTestAcceptanceProject({
       runId: environment.runId,
       evidenceDir: environment.paths.evidenceDir,
       projectName: "platform-acceptance-foreign",
@@ -202,7 +248,7 @@ test("cleanup rejects tampered owner resource metadata before invoking Docker", 
   ];
 
   for (const [caseIndex, [caseName, mutateOwner]] of cases.entries()) {
-    const environment = await createAcceptanceEnvironment({
+    const environment = await createTestAcceptanceEnvironment({
       runId: `platform-owner-${caseName}`,
       evidenceDir: path.join(tempRoot, caseName),
       platformRoot,
@@ -214,7 +260,7 @@ test("cleanup rejects tampered owner resource metadata before invoking Docker", 
     let commandInvoked = false;
 
     await assert.rejects(
-      cleanupAcceptanceProject({
+      cleanupTestAcceptanceProject({
         runId: environment.runId,
         evidenceDir: environment.paths.evidenceDir,
         platformRoot,
@@ -240,7 +286,7 @@ test("cleanup rejects environment resource metadata that differs from its owner 
   ];
 
   for (const [caseIndex, [caseName, variable, foreignValue]] of cases.entries()) {
-    const environment = await createAcceptanceEnvironment({
+    const environment = await createTestAcceptanceEnvironment({
       runId: `platform-env-${caseName}`,
       evidenceDir: path.join(tempRoot, caseName),
       platformRoot,
@@ -252,7 +298,7 @@ test("cleanup rejects environment resource metadata that differs from its owner 
     let commandInvoked = false;
 
     await assert.rejects(
-      cleanupAcceptanceProject({
+      cleanupTestAcceptanceProject({
         runId: environment.runId,
         evidenceDir: environment.paths.evidenceDir,
         platformRoot,
@@ -272,7 +318,7 @@ test("cleanup removes only owned resources and preserves evidence", async (t) =>
   const tempRoot = await createTempRoot(t, "platform-compose-cleanup-");
   const evidenceDir = path.join(tempRoot, "owned-run");
   const foreignEvidenceDir = path.join(tempRoot, "foreign-run");
-  const environment = await createAcceptanceEnvironment({
+  const environment = await createTestAcceptanceEnvironment({
     runId: "platform-acceptance-cleanup",
     evidenceDir,
     platformRoot,
@@ -284,7 +330,7 @@ test("cleanup removes only owned resources and preserves evidence", async (t) =>
   await writeFile(path.join(tempRoot, "outside-evidence.txt"), "keep\n", "utf8");
 
   let invocation;
-  const result = await cleanupAcceptanceProject({
+  const result = await cleanupTestAcceptanceProject({
     runId: environment.runId,
     evidenceDir,
     platformRoot,
@@ -315,6 +361,37 @@ test("cleanup removes only owned resources and preserves evidence", async (t) =>
   assert.equal(foreignEvidenceDir.startsWith(tempRoot), true);
 });
 
+test("cleanup gives Compose the validated owner environment over conflicting host variables", async (t) => {
+  const tempRoot = await createTempRoot(t, "platform-compose-env-precedence-");
+  const environment = await createTestAcceptanceEnvironment({
+    runId: "platform-acceptance-env-precedence",
+    evidenceDir: path.join(tempRoot, "owned-run"),
+    platformRoot,
+    allocatePorts: async (count) => Array.from({ length: count }, (_, index) => 32600 + index),
+  });
+  const envValues = parseEnvFile(await readFile(environment.paths.envFile, "utf8"));
+  const previous = process.env.POSTGRES_VOLUME_NAME;
+  process.env.POSTGRES_VOLUME_NAME = "foreign-volume-from-host";
+  let composePostgresVolumeName;
+  try {
+    await cleanupTestAcceptanceProject({
+      runId: environment.runId,
+      evidenceDir: environment.paths.evidenceDir,
+      platformRoot,
+      executeCommand: async (input) => {
+        composePostgresVolumeName = input.env.POSTGRES_VOLUME_NAME;
+        return { exitCode: 0 };
+      },
+    });
+  } finally {
+    if (previous === undefined) delete process.env.POSTGRES_VOLUME_NAME;
+    else process.env.POSTGRES_VOLUME_NAME = previous;
+  }
+
+  assert.equal(composePostgresVolumeName, envValues.POSTGRES_VOLUME_NAME);
+  assert.notEqual(composePostgresVolumeName, "foreign-volume-from-host");
+});
+
 test("acceptance Compose uses only Platform contexts, loopback ports, run-owned volumes, and no host credentials", async () => {
   const contents = await readFile(acceptanceComposeFile, "utf8");
   assert.doesNotMatch(contents, /\.\.\/\.\.\/(?:Gateway|Loom|Tea|Hook)/i);
@@ -338,10 +415,73 @@ test("acceptance Compose uses only Platform contexts, loopback ports, run-owned 
 });
 
 test("local Compose parameterizes every published port and binds it to loopback", async () => {
-  const contents = await readFile(path.join(platformRoot, "deploy", "docker-compose.local.yml"), "utf8");
+  const contents = await readFile(localComposeFile, "utf8");
   for (const variable of HOST_PORT_VARIABLES) {
     assert.match(contents, new RegExp(`127\\.0\\.0\\.1:\\$\\{${variable}[^}]*\\}:`));
   }
+  assert.doesNotMatch(contents, /S3_PUBLIC_BASE_URL:\s*["']?http:\/\/localhost:9000\//);
+  assert.match(
+    contents,
+    /S3_PUBLIC_BASE_URL:\s*["']?http:\/\/(?:localhost|127\.0\.0\.1):\$\{MINIO_API_HOST_PORT[^}]*\}\//,
+  );
+  assert.doesNotMatch(contents, /CORE_PUBLIC_BASE_URL:\s*["']?http:\/\/localhost:4000\b/);
+  assert.match(
+    contents,
+    /CORE_PUBLIC_BASE_URL:\s*["']?http:\/\/localhost:\$\{CORE_HOST_PORT[^}]*\}/,
+  );
+});
+
+test("Compose stacks gate application dependencies on real readiness", async () => {
+  for (const composeFile of [acceptanceComposeFile, localComposeFile]) {
+    const contents = await readFile(composeFile, "utf8");
+    assert.doesNotMatch(contents, /condition:\s+service_started/);
+
+    for (const serviceName of ["core", "account-api", "web", "worker", "account-worker", "executor"]) {
+      const service = composeServiceBlock(contents, serviceName);
+      assert.match(service, /healthcheck:/, `${serviceName} must declare a healthcheck in ${composeFile}`);
+      assert.match(service, /\/ready/, `${serviceName} healthcheck must call readiness in ${composeFile}`);
+    }
+
+    const accountApi = composeServiceBlock(contents, "account-api");
+    const web = composeServiceBlock(contents, "web");
+    const worker = composeServiceBlock(contents, "worker");
+    const accountWorker = composeServiceBlock(contents, "account-worker");
+    const executor = composeServiceBlock(contents, "executor");
+    assert.match(accountApi, /core:\s*\n\s+condition:\s+service_healthy/);
+    assert.match(web, /core:\s*\n\s+condition:\s+service_healthy/);
+    assert.match(web, /account-api:\s*\n\s+condition:\s+service_healthy/);
+    assert.match(worker, /core:\s*\n\s+condition:\s+service_healthy/);
+    assert.match(accountWorker, /account-api:\s*\n\s+condition:\s+service_healthy/);
+    assert.match(executor, /core:\s*\n\s+condition:\s+service_healthy/);
+  }
+});
+
+test("local and acceptance Web dev auth run only in explicit development mode", async () => {
+  for (const composeFile of [acceptanceComposeFile, localComposeFile]) {
+    const web = composeServiceBlock(await readFile(composeFile, "utf8"), "web");
+    assert.match(web, /NODE_ENV:\s+["']?development["']?/);
+    assert.match(web, /DEV_AUTH_BYPASS_ENABLED:\s+["']?true["']?/);
+    assert.match(web, /command:\s+\["npm", "run", "dev"/);
+    assert.doesNotMatch(web, /NODE_ENV:\s+["']?production["']?/);
+  }
+
+  const localGateway = composeServiceBlock(await readFile(localComposeFile, "utf8"), "gateway");
+  assert.match(localGateway, /\/readyz/);
+});
+
+test("local workers receive every readiness-critical Core and Gateway dependency", async () => {
+  const contents = await readFile(localComposeFile, "utf8");
+  const worker = composeServiceBlock(contents, "worker");
+  const accountWorker = composeServiceBlock(contents, "account-worker");
+
+  assert.match(worker, /CORE_INTERNAL_URL:\s+http:\/\/core:4000/);
+  assert.match(worker, /INTERNAL_API_TOKEN:\s+local-internal-token/);
+
+  assert.match(accountWorker, /core:\s*\n\s+condition:\s+service_healthy/);
+  assert.match(accountWorker, /gateway:\s*\n\s+condition:\s+service_healthy/);
+  assert.match(accountWorker, /PLATFORM_INTERNAL_URL:\s+http:\/\/core:4000/);
+  assert.match(accountWorker, /AI_GATEWAY_INTERNAL_URL:\s+http:\/\/gateway:4200/);
+  assert.match(accountWorker, /AI_GATEWAY_MANAGEMENT_TOKEN:\s+local-internal-token/);
 });
 
 test("Gateway double proves management to project token to chat runtime boundary", async (t) => {

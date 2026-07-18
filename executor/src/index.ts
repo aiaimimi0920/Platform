@@ -62,16 +62,6 @@ const loopDefinitions = [
     taskKey: "fulfillment-anomalies-escalate",
   },
   {
-    key: "discount-code-history-archive",
-    intervalMs: env.discountCodeHistoryArchiveIntervalMs,
-    taskKey: "discount-code-history-archive",
-  },
-  {
-    key: "discount-code-history-archive-cleanup",
-    intervalMs: env.discountCodeHistoryArchiveCleanupIntervalMs,
-    taskKey: "discount-code-history-archive-cleanup",
-  },
-  {
     key: "arbitration-expire-prepared",
     intervalMs: env.arbitrationExpirePreparedIntervalMs,
     taskKey: "arbitration-expire-prepared",
@@ -124,7 +114,9 @@ async function runLoop(
 }
 
 async function main() {
-  const healthState = createExecutorHealthState(loopDefinitions.map((item) => item.key));
+  const healthState = createExecutorHealthState(
+    loopDefinitions.map(({ key, intervalMs }) => ({ key, intervalMs })),
+  );
   startExecutorHealthServer(env.healthPort, healthState);
   console.log("Executor started.");
 

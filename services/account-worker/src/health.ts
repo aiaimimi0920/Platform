@@ -5,11 +5,46 @@ import type {
   AccountWorkerHealthView,
 } from "@neuro/contracts";
 
-type WorkerHealthState = AccountWorkerHealthView;
+type WorkerHealthState = AccountWorkerHealthView & {
+  readinessFreshnessMs: number;
+  dependencyFailures: Record<string, { lastErrorAt: string; message: string }>;
+};
 
-export function createWorkerHealthState(): WorkerHealthState {
+export type WorkerReadiness = {
+  ready: boolean;
+  reason: "ready" | "never_succeeded" | "last_cycle_failed" | "dependency_failed" | "stale_success";
+  freshnessThresholdMs: number;
+  lastSuccessAgeMs: number | null;
+  failingDependencies: string[];
+};
+
+const DEFAULT_POLL_INTERVAL_MS = 4_000;
+const MIN_READINESS_FRESHNESS_MS = 10_000;
+const READINESS_INTERVAL_MULTIPLIER = 3;
+
+function resolveReadinessFreshnessMs(pollIntervalMs: number): number {
+  return Math.max(MIN_READINESS_FRESHNESS_MS, pollIntervalMs * READINESS_INTERVAL_MULTIPLIER);
+}
+
+function toTimestamp(nowMs: number): string {
+  return new Date(nowMs).toISOString();
+}
+
+function lastSuccessAgeMs(state: WorkerHealthState, nowMs: number): number | null {
+  if (!state.lastSuccessAt) return null;
+  const lastSuccessMs = Date.parse(state.lastSuccessAt);
+  if (!Number.isFinite(lastSuccessMs)) return Number.POSITIVE_INFINITY;
+  return Math.max(0, nowMs - lastSuccessMs);
+}
+
+export function createWorkerHealthState(
+  pollIntervalMs = DEFAULT_POLL_INTERVAL_MS,
+  nowMs = Date.now(),
+): WorkerHealthState {
   return {
-    startedAt: new Date().toISOString(),
+    startedAt: toTimestamp(nowMs),
+    readinessFreshnessMs: resolveReadinessFreshnessMs(pollIntervalMs),
+    dependencyFailures: {},
     lastCycleAt: null,
     lastSuccessAt: null,
     lastErrorAt: null,
@@ -103,8 +138,13 @@ export function createWorkerHealthState(): WorkerHealthState {
   };
 }
 
-export function markWorkerCycle(state: WorkerHealthState, status: "success" | "error", error?: string) {
-  const timestamp = new Date().toISOString();
+export function markWorkerCycle(
+  state: WorkerHealthState,
+  status: "success" | "error",
+  error?: string,
+  nowMs = Date.now(),
+) {
+  const timestamp = toTimestamp(nowMs);
   state.lastCycleAt = timestamp;
   if (status === "success") {
     state.lastSuccessAt = timestamp;
@@ -114,6 +154,88 @@ export function markWorkerCycle(state: WorkerHealthState, status: "success" | "e
 
   state.lastErrorAt = timestamp;
   state.lastErrorMessage = error ?? "unknown worker error";
+}
+
+export function markWorkerDependency(
+  state: WorkerHealthState,
+  dependency: string,
+  status: "success" | "error",
+  error?: string,
+  nowMs = Date.now(),
+) {
+  if (status === "success") {
+    delete state.dependencyFailures[dependency];
+    return;
+  }
+
+  state.dependencyFailures[dependency] = {
+    lastErrorAt: toTimestamp(nowMs),
+    message: error ?? "unknown account worker dependency error",
+  };
+}
+
+const READINESS_STATUS_DEPENDENCIES = [
+  ["outbox-recovery", "lastOutboxRecoveryStatus"],
+  ["product-shadow-sync", "lastProductShadowSyncStatus"],
+  ["gateway-anomaly-sweep", "lastGatewayAnomalySweepStatus"],
+  ["gateway-anomaly-alert-dispatch", "lastGatewayAnomalyAlertDispatchStatus"],
+  ["gateway-anomaly-auto-remediation", "lastGatewayAnomalyAutoRemediationStatus"],
+  ["gateway-remediation-impact-capture", "lastGatewayAnomalyRemediationImpactCaptureStatus"],
+  ["gateway-remediation-effectiveness-snapshot", "lastGatewayAnomalyRemediationEffectivenessSnapshotStatus"],
+  ["gateway-remediation-effectiveness-anomaly-snapshot", "lastGatewayAnomalyRemediationEffectivenessAnomalySnapshotStatus"],
+  ["gateway-rate-limit-hotspot-snapshot", "lastGatewayRateLimitHotspotSnapshotStatus"],
+  ["gateway-rate-limit-hotspot-anomaly-snapshot", "lastGatewayRateLimitHotspotAnomalySnapshotStatus"],
+] as const;
+
+export function evaluateWorkerReadiness(state: WorkerHealthState, nowMs = Date.now()): WorkerReadiness {
+  const successAgeMs = lastSuccessAgeMs(state, nowMs);
+  const statusFailures = READINESS_STATUS_DEPENDENCIES.filter(
+    ([, field]) => state[field] === "error",
+  ).map(([dependency]) => dependency);
+  const failingDependencies = [...new Set([...Object.keys(state.dependencyFailures), ...statusFailures])].sort();
+  if (state.lastErrorMessage !== null) {
+    return {
+      ready: false,
+      reason: "last_cycle_failed",
+      freshnessThresholdMs: state.readinessFreshnessMs,
+      lastSuccessAgeMs: successAgeMs,
+      failingDependencies,
+    };
+  }
+  if (failingDependencies.length > 0) {
+    return {
+      ready: false,
+      reason: "dependency_failed",
+      freshnessThresholdMs: state.readinessFreshnessMs,
+      lastSuccessAgeMs: successAgeMs,
+      failingDependencies,
+    };
+  }
+  if (successAgeMs === null) {
+    return {
+      ready: false,
+      reason: "never_succeeded",
+      freshnessThresholdMs: state.readinessFreshnessMs,
+      lastSuccessAgeMs: null,
+      failingDependencies,
+    };
+  }
+  if (successAgeMs > state.readinessFreshnessMs) {
+    return {
+      ready: false,
+      reason: "stale_success",
+      freshnessThresholdMs: state.readinessFreshnessMs,
+      lastSuccessAgeMs: successAgeMs,
+      failingDependencies,
+    };
+  }
+  return {
+    ready: true,
+    reason: "ready",
+    freshnessThresholdMs: state.readinessFreshnessMs,
+    lastSuccessAgeMs: successAgeMs,
+    failingDependencies,
+  };
 }
 
 export function markOutboxRecovery(
@@ -384,7 +506,7 @@ export function startWorkerHealthServer(port: number, state: WorkerHealthState) 
       return;
     }
 
-    if (request.url === "/health" || request.url === "/ready") {
+    if (request.url === "/health") {
       const payload: AccountWorkerHealthResponse = {
         ok: true,
         service: "account-worker",
@@ -393,6 +515,22 @@ export function startWorkerHealthServer(port: number, state: WorkerHealthState) 
       };
       response.writeHead(200, { "content-type": "application/json" });
       response.end(JSON.stringify(payload));
+      return;
+    }
+
+    if (request.url === "/ready") {
+      const readiness = evaluateWorkerReadiness(state);
+      response.writeHead(readiness.ready ? 200 : 503, { "content-type": "application/json" });
+      response.end(
+        JSON.stringify({
+          ok: readiness.ready,
+          ready: readiness.ready,
+          service: "account-worker",
+          role: "account-outbox-consumer-product-shadow-and-gateway-anomaly-governance",
+          readiness,
+          state,
+        }),
+      );
       return;
     }
 

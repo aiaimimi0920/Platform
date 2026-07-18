@@ -2,6 +2,7 @@ import { env } from "@/env";
 import {
   createWorkerHealthState,
   markRecoveredProcessingEvents,
+  markWorkerDependency,
   markWorkerCycle,
   startWorkerHealthServer,
 } from "@/health";
@@ -42,7 +43,10 @@ async function callCoreInternal(pathname: string, body: Record<string, unknown>)
   return response.text().then((text) => (text.trim() ? text : null));
 }
 
-async function runBackgroundLoops(loopState: BackgroundLoopState) {
+async function runBackgroundLoops(
+  healthState: ReturnType<typeof createWorkerHealthState>,
+  loopState: BackgroundLoopState,
+) {
   if (!env.coreInternalUrl || !env.internalApiToken) {
     return;
   }
@@ -55,8 +59,10 @@ async function runBackgroundLoops(loopState: BackgroundLoopState) {
       await callCoreInternal("/v1/internal/agent-executions/dispatch-pending", {
         limit: env.agentExecutionDispatchLimit,
       });
+      markWorkerDependency(healthState, "core-dispatch", "success");
     } catch (error) {
       console.error("Worker failed to dispatch pending agent executions", error);
+      markWorkerDependency(healthState, "core-dispatch", "error", extractErrorMessage(error));
     }
   }
 
@@ -66,8 +72,10 @@ async function runBackgroundLoops(loopState: BackgroundLoopState) {
       await callCoreInternal("/v1/internal/agent-executions/run-platform-executor", {
         limit: env.platformExecutorLimit,
       });
+      markWorkerDependency(healthState, "core-platform-executor", "success");
     } catch (error) {
       console.error("Worker failed to run platform executor loop", error);
+      markWorkerDependency(healthState, "core-platform-executor", "error", extractErrorMessage(error));
     }
   }
 
@@ -77,8 +85,10 @@ async function runBackgroundLoops(loopState: BackgroundLoopState) {
       await callCoreInternal("/v1/internal/agent-executions/settlements/run", {
         limit: env.agentExecutionSettlementLimit,
       });
+      markWorkerDependency(healthState, "core-settlements", "success");
     } catch (error) {
       console.error("Worker failed to run agent execution settlements", error);
+      markWorkerDependency(healthState, "core-settlements", "error", extractErrorMessage(error));
     }
   }
 
@@ -89,8 +99,10 @@ async function runBackgroundLoops(loopState: BackgroundLoopState) {
         ownerLimit: env.agentMarketplaceSweepOwnerLimit,
         perOwnerLimit: env.agentMarketplaceSweepPerOwnerLimit,
       });
+      markWorkerDependency(healthState, "core-marketplace-sweep", "success");
     } catch (error) {
       console.error("Worker failed to sweep agent marketplace auto proposals", error);
+      markWorkerDependency(healthState, "core-marketplace-sweep", "error", extractErrorMessage(error));
     }
   }
 }
@@ -122,11 +134,11 @@ async function cycle(
     }
   }
 
-  await runBackgroundLoops(loopState);
+  await runBackgroundLoops(healthState, loopState);
 }
 
 async function main() {
-  const healthState = createWorkerHealthState(env.processingLeaseTimeoutMs);
+  const healthState = createWorkerHealthState(env.processingLeaseTimeoutMs, env.pollIntervalMs);
   const loopState: BackgroundLoopState = {
     lastDispatchAt: 0,
     lastSettlementAt: 0,

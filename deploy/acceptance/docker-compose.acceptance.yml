@@ -227,6 +227,12 @@ services:
       PLATFORM_OPERATOR_USER_IDS: acceptance-operator,acceptance-user
     ports:
       - "127.0.0.1:${CORE_HOST_PORT:?CORE_HOST_PORT is required}:4000"
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:4000/ready').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 2s
+      timeout: 5s
+      retries: 60
+      start_period: 10s
 
   account-api:
     build:
@@ -245,7 +251,7 @@ services:
       account-migrate:
         condition: service_completed_successfully
       core:
-        condition: service_started
+        condition: service_healthy
       gateway:
         condition: service_healthy
     environment:
@@ -271,6 +277,12 @@ services:
       ACCOUNT_EMAIL_CONSOLE_EXPOSE_VERIFICATION_CODE: "true"
     ports:
       - "127.0.0.1:${ACCOUNT_API_HOST_PORT:?ACCOUNT_API_HOST_PORT is required}:4000"
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:4000/ready').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 2s
+      timeout: 5s
+      retries: 60
+      start_period: 10s
 
   web:
     build:
@@ -279,12 +291,13 @@ services:
     labels: *acceptance-labels
     depends_on:
       core:
-        condition: service_started
+        condition: service_healthy
       account-api:
-        condition: service_started
+        condition: service_healthy
       gateway:
         condition: service_healthy
     environment:
+      NODE_ENV: development
       PORT: "3000"
       ACCOUNT_INTERNAL_URL: http://account-api:4000
       ACCOUNT_WORKER_INTERNAL_URL: http://account-worker:7303
@@ -304,8 +317,15 @@ services:
       DEV_AUTH_BYPASS_NAME: Acceptance User
       DEV_AUTH_BYPASS_EMAIL: acceptance-user@example.test
       DEV_AUTH_BYPASS_TRUST_LEVEL: "4"
+    command: ["npm", "run", "dev", "--", "--hostname", "0.0.0.0"]
     ports:
       - "127.0.0.1:${WEB_HOST_PORT:?WEB_HOST_PORT is required}:3000"
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/ready').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 2s
+      timeout: 5s
+      retries: 60
+      start_period: 20s
 
   worker:
     build:
@@ -320,7 +340,7 @@ services:
       migrate:
         condition: service_completed_successfully
       core:
-        condition: service_started
+        condition: service_healthy
     environment:
       <<: *database-environment
       CORE_INTERNAL_URL: http://core:4000
@@ -328,6 +348,12 @@ services:
       PLATFORM_OPERATOR_USER_IDS: acceptance-operator,acceptance-user
       WORKER_HEALTH_PORT: "7301"
       WORKER_POLL_INTERVAL_MS: "1000"
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:7301/ready').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 2s
+      timeout: 5s
+      retries: 60
+      start_period: 10s
 
   account-worker:
     build:
@@ -346,7 +372,7 @@ services:
       account-migrate:
         condition: service_completed_successfully
       account-api:
-        condition: service_started
+        condition: service_healthy
     environment:
       <<: [*database-environment, *object-storage-environment]
       ACCOUNT_DATABASE_URL: "${DATABASE_URL:?DATABASE_URL is required}"
@@ -366,6 +392,12 @@ services:
       AI_GATEWAY_RATE_LIMIT_HOTSPOT_ANOMALY_SNAPSHOT_ENABLED: "false"
       WORKER_HEALTH_PORT: "7303"
       WORKER_POLL_INTERVAL_MS: "1000"
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:7303/ready').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 2s
+      timeout: 5s
+      retries: 60
+      start_period: 10s
 
   executor:
     build:
@@ -376,11 +408,17 @@ services:
       migrate:
         condition: service_completed_successfully
       core:
-        condition: service_started
+        condition: service_healthy
     environment:
       CORE_INTERNAL_URL: http://core:4000
       INTERNAL_API_TOKEN: "${INTERNAL_API_TOKEN:?INTERNAL_API_TOKEN is required}"
       EXECUTOR_HEALTH_PORT: "7302"
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:7302/ready').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 2s
+      timeout: 5s
+      retries: 60
+      start_period: 10s
 
 volumes:
   postgres-data:

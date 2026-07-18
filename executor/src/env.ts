@@ -43,10 +43,6 @@ type ExecutorEnv = {
   manualReviewAutoAssignIntervalMs: number;
   manualReviewSyncSlaIntervalMs: number;
   fulfillmentAnomalyEscalationIntervalMs: number;
-  discountCodeHistoryArchiveIntervalMs: number;
-  discountCodeHistoryArchiveLimit: number;
-  discountCodeHistoryArchiveCleanupIntervalMs: number;
-  discountCodeHistoryArchiveCleanupLimit: number;
 };
 
 function requireEnv(name: string): string {
@@ -184,25 +180,5 @@ export const env: ExecutorEnv = {
     process.env.EXECUTOR_FULFILLMENT_ANOMALY_ESCALATION_INTERVAL_MS,
     90000,
     1000,
-  ),
-  discountCodeHistoryArchiveIntervalMs: parseNumber(
-    process.env.EXECUTOR_DISCOUNT_CODE_HISTORY_ARCHIVE_INTERVAL_MS,
-    300000,
-    1000,
-  ),
-  discountCodeHistoryArchiveLimit: parseNumber(
-    process.env.EXECUTOR_DISCOUNT_CODE_HISTORY_ARCHIVE_LIMIT,
-    10,
-    1,
-  ),
-  discountCodeHistoryArchiveCleanupIntervalMs: parseNumber(
-    process.env.EXECUTOR_DISCOUNT_CODE_HISTORY_ARCHIVE_CLEANUP_INTERVAL_MS,
-    600000,
-    1000,
-  ),
-  discountCodeHistoryArchiveCleanupLimit: parseNumber(
-    process.env.EXECUTOR_DISCOUNT_CODE_HISTORY_ARCHIVE_CLEANUP_LIMIT,
-    20,
-    1,
   ),
 };

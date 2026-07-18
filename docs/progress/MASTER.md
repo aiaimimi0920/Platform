@@ -33,7 +33,7 @@
 ## 阶段
 
 - [x] Phase 0: 设计与计划冻结 (5/5 tasks) [details](./phase-0-design-and-plan.md)
-- [ ] Phase 1: 验收基础设施与真实门禁 (2/4 tasks) [details](./phase-1-acceptance-infrastructure.md)
+- [ ] Phase 1: 验收基础设施与真实门禁 (3/4 tasks) [details](./phase-1-acceptance-infrastructure.md)
 - [ ] Phase 2: 重度智能体真实闭环 (0/5 tasks) [details](./phase-2-heavy-chat.md)
 - [ ] Phase 3: 产品真实性与正式入口 (0/4 tasks) [details](./phase-3-product-truthfulness.md)
 - [ ] Phase 4: 核心领域测试与安全可观测性 (0/4 tasks) [details](./phase-4-domain-security-observability.md)
@@ -53,12 +53,12 @@ Phase 0 当前任务：
 ## Current Status
 
 - 当前阶段：Phase 1。
-- 已完成：Phase 0 全部设计任务；`P1-01` acceptance manifest、命令执行器、证据脱敏和 required skip-fail runner；`P1-02` isolated Compose、临时 secret/credential root、Platform doubles 与 owner-aware cleanup。
-- 当前动作：按依赖图推进 `P1-03` Web production Dev Auth guard、Worker/Account Worker/Executor readiness。
+- 已完成：Phase 0 全部设计任务；`P1-01` acceptance manifest、命令执行器、证据脱敏和 required skip-fail runner；`P1-02` isolated Compose、临时 secret/credential root、Platform doubles 与 owner-aware cleanup；`P1-03` production Dev Auth guard、Worker/Account Worker/Executor readiness 与 Compose health gates。
+- 当前动作：按依赖图推进 `P1-04` strict acceptance inventory、历史 debt 基线和 `smoke` bridge。
 - 运行时代码：已进入 Phase 1 实施；严格命令清单与 `smoke` bridge 仍由 `P1-04` 完成。
 
 ## Next Steps
 
-1. 完成 Phase 1 `P1-03` 的独立 RED/GREEN cycle。
-2. 完成 `P1-04` required/external-boundary inventory、历史债务清零和 `smoke` strict bridge。
+1. 完成 Phase 1 `P1-04` required/external-boundary inventory、历史债务清零和 `smoke` strict bridge。
+2. 进入 Phase 2，建立重度智能体服务端持久化与真实 Gateway 闭环。
 3. 每个 task 完成后更新本文件、对应 phase progress 和 evidence manifest，并按依赖图连续实施至 Phase 6。

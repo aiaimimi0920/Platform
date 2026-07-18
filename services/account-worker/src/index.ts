@@ -57,6 +57,7 @@ import {
   markGatewayRateLimitHotspotSnapshotLockSkipped,
   markOutboxRecovery,
   markProductShadowSync,
+  markWorkerDependency,
   markWorkerCycle,
   startWorkerHealthServer,
 } from "@/health";
@@ -145,30 +146,38 @@ async function maybeSyncProductShadow(healthState: ReturnType<typeof createWorke
   }
 }
 
-async function maybeSyncBenefitGrants() {
+async function maybeSyncBenefitGrants(healthState: ReturnType<typeof createWorkerHealthState>) {
   if (Date.now() < nextBenefitGrantSyncAt) {
     return;
   }
 
   try {
     const result = await syncBenefitPurchaseGrants();
+    markWorkerDependency(healthState, "benefit-grant-sync", "success");
     console.log(
       `[account-worker] benefit purchase grant sync completed: synced=${result.syncedCount}, revoked=${result.revokedCount}, assignments=${result.touchedAssignmentCount}`,
     );
   } catch (error) {
     console.error("Account worker benefit purchase grant sync failed", error);
+    markWorkerDependency(
+      healthState,
+      "benefit-grant-sync",
+      "error",
+      extractErrorMessage(error),
+    );
   } finally {
     nextBenefitGrantSyncAt = Date.now() + env.productShadowSyncIntervalMs;
   }
 }
 
-async function maybeSweepCredentialPools() {
+async function maybeSweepCredentialPools(healthState: ReturnType<typeof createWorkerHealthState>) {
   if (Date.now() < nextCredentialPoolSweepAt) {
     return;
   }
 
   try {
     const result = await runCredentialPoolLifecycleSweep();
+    markWorkerDependency(healthState, "credential-pool-sweep", "success");
     if (result.releasedRepairClaims > 0 || result.reactivatedEntries > 0 || result.deletedEntries > 0) {
       console.log(
         `[account-worker] credential pool sweep completed: releasedClaims=${result.releasedRepairClaims}, reactivated=${result.reactivatedEntries}, deleted=${result.deletedEntries}`,
@@ -176,6 +185,12 @@ async function maybeSweepCredentialPools() {
     }
   } catch (error) {
     console.error("Account worker credential pool sweep failed", error);
+    markWorkerDependency(
+      healthState,
+      "credential-pool-sweep",
+      "error",
+      extractErrorMessage(error),
+    );
   } finally {
     nextCredentialPoolSweepAt = Date.now() + env.productShadowSyncIntervalMs;
   }
@@ -953,7 +968,7 @@ async function maybePersistGatewayRateLimitHotspotAnomalySnapshot(
 }
 
 async function main() {
-  const healthState = createWorkerHealthState();
+  const healthState = createWorkerHealthState(env.pollIntervalMs);
   startWorkerHealthServer(env.healthPort, healthState);
   console.log(
     `Account worker started in outbox + product-shadow mode. Poll interval: ${env.pollIntervalMs}ms, shadow sync interval: ${env.productShadowSyncIntervalMs}ms, gateway anomaly sweep: ${
@@ -997,14 +1012,22 @@ async function main() {
     try {
       await cycle(healthState);
       const mailboxOpsDispatchResult = await dispatchMailboxOpsCampaigns();
+      markWorkerDependency(
+        healthState,
+        "mailbox-ops-dispatch",
+        mailboxOpsDispatchResult.failedCampaignCount > 0 ? "error" : "success",
+        mailboxOpsDispatchResult.failedCampaignCount > 0
+          ? `${mailboxOpsDispatchResult.failedCampaignCount} mailbox campaign(s) failed`
+          : undefined,
+      );
       if (mailboxOpsDispatchResult.dueCount > 0) {
         console.log(
           `[account-worker] mailbox ops campaigns dispatched: due=${mailboxOpsDispatchResult.dueCount}, sent=${mailboxOpsDispatchResult.deliveredMessageCount}, failed=${mailboxOpsDispatchResult.failedCampaignCount}`,
         );
       }
       await maybeSyncProductShadow(healthState);
-      await maybeSyncBenefitGrants();
-      await maybeSweepCredentialPools();
+      await maybeSyncBenefitGrants(healthState);
+      await maybeSweepCredentialPools(healthState);
       await maybeSweepGatewayAnomalyPolicies(healthState);
       await maybeDispatchGatewayAnomalyIncidentAlerts(healthState);
       await maybeDispatchGatewayAnomalyAutoRemediation(healthState);

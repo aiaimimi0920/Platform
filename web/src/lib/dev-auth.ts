@@ -4,6 +4,17 @@ function isEnabled(value: string | undefined): boolean {
   return value === "1" || value === "true";
 }
 
+type DevAuthEnvironment = {
+  NODE_ENV?: string;
+  DEV_AUTH_BYPASS_ENABLED?: string;
+};
+
+export function assertDevAuthConfiguration(environment: DevAuthEnvironment = process.env): void {
+  if (environment.NODE_ENV === "production" && isEnabled(environment.DEV_AUTH_BYPASS_ENABLED)) {
+    throw new Error("DEV_AUTH_BYPASS_ENABLED must be disabled when NODE_ENV=production");
+  }
+}
+
 function parseTrustLevel(value: string | undefined): number | null {
   if (!value) return 4;
   const parsed = Number(value);

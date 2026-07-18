@@ -1,4 +1,4 @@
-import type { FastifyPluginAsync } from "fastify";
+import type { FastifyPluginAsync, FastifyRequest } from "fastify";
 import { z } from "zod";
 import type { EventName } from "@neuro/contracts";
 
@@ -34,6 +34,18 @@ const emitAlertsBodySchema = z.object({
   limit: z.number().int().min(1).max(20).optional(),
   minimumAlertLevel: z.number().int().min(1).max(3).optional(),
 });
+
+export function assertOptionalOutboxAlertOperator(
+  request: Pick<FastifyRequest, "headers">,
+): void {
+  const userId = request.headers["x-neuro-user-id"];
+  if (typeof userId !== "string" || userId.length === 0) {
+    return;
+  }
+
+  const providerUserId = request.headers["x-neuro-provider-user-id"];
+  assertPlatformOperator(userId, typeof providerUserId === "string" ? providerUserId : undefined);
+}
 
 export const outboxRouter: FastifyPluginAsync = async (app) => {
   app.get<{ Querystring: z.infer<typeof listOutboxQuerySchema> }>(
@@ -103,8 +115,7 @@ export const outboxRouter: FastifyPluginAsync = async (app) => {
     "/v1/internal/outbox-events/emit-alerts",
     { preHandler: withInternalRequest },
     async (request) => {
-      const { userId, providerUserId } = assertUserContext(request);
-      assertPlatformOperator(userId, providerUserId);
+      assertOptionalOutboxAlertOperator(request);
       const body = emitAlertsBodySchema.parse(request.body ?? {});
       return {
         result: await emitOutboxAlerts(body),

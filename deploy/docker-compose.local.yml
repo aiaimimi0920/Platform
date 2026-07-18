@@ -75,7 +75,7 @@ services:
         condition: service_completed_successfully
     environment:
       PORT: 4000
-      CORE_PUBLIC_BASE_URL: http://localhost:4000
+      CORE_PUBLIC_BASE_URL: http://localhost:${CORE_HOST_PORT:-4028}
       DATABASE_URL: postgres://neuroloom:neuroloom@postgres:5432/neuroloom
       REDIS_URL: redis://valkey:6379
       INTERNAL_API_TOKEN: local-internal-token
@@ -155,7 +155,7 @@ services:
         condition: service_completed_successfully
     environment:
       PORT: 4000
-      CORE_PUBLIC_BASE_URL: http://localhost:4000
+      CORE_PUBLIC_BASE_URL: http://localhost:${CORE_HOST_PORT:-4028}
       DATABASE_URL: postgres://neuroloom:neuroloom@postgres:5432/neuroloom
       REDIS_URL: redis://valkey:6379
       INTERNAL_API_TOKEN: local-internal-token
@@ -176,6 +176,12 @@ services:
       ARBITRATION_EVIDENCE_REMOTE_UPLOAD_STRATEGY: prepared_remote_put
     ports:
       - "127.0.0.1:${CORE_HOST_PORT:-4028}:4000"
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:4000/ready').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 10s
 
   account-api:
     build:
@@ -189,7 +195,7 @@ services:
       valkey:
         condition: service_healthy
       core:
-        condition: service_started
+        condition: service_healthy
       migrate:
         condition: service_completed_successfully
       account-migrate:
@@ -226,6 +232,12 @@ services:
       ARBITRATION_EVIDENCE_REMOTE_UPLOAD_STRATEGY: prepared_remote_put
     ports:
       - "127.0.0.1:${ACCOUNT_API_HOST_PORT:-4128}:4000"
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:4000/ready').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 10s
 
   gateway:
     build:
@@ -277,6 +289,12 @@ services:
       - "127.0.0.1:${GATEWAY_HOST_PORT:-4226}:4200"
     volumes:
       - "${USERPROFILE}/.neuro:/root/.neuro"
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:4200/readyz').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 20s
 
   loom:
     build:
@@ -335,12 +353,13 @@ services:
     mem_limit: 768m
     depends_on:
       core:
-        condition: service_started
+        condition: service_healthy
       account-api:
-        condition: service_started
+        condition: service_healthy
       gateway:
-        condition: service_started
+        condition: service_healthy
     environment:
+      NODE_ENV: development
       PORT: 3000
       ACCOUNT_INTERNAL_URL: http://account-api:4000
       ACCOUNT_WORKER_INTERNAL_URL: http://account-worker:7303
@@ -361,8 +380,15 @@ services:
       DEV_AUTH_BYPASS_NAME: Local Dev
       DEV_AUTH_BYPASS_EMAIL: local-dev@example.test
       DEV_AUTH_BYPASS_TRUST_LEVEL: "4"
+    command: ["npm", "run", "dev", "--", "--hostname", "0.0.0.0"]
     ports:
       - "127.0.0.1:${WEB_HOST_PORT:-3028}:3000"
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/ready').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 20s
 
   worker:
     build:
@@ -376,13 +402,21 @@ services:
       valkey:
         condition: service_healthy
       core:
-        condition: service_started
+        condition: service_healthy
       migrate:
         condition: service_completed_successfully
     environment:
       DATABASE_URL: postgres://neuroloom:neuroloom@postgres:5432/neuroloom
       REDIS_URL: redis://valkey:6379
+      CORE_INTERNAL_URL: http://core:4000
+      INTERNAL_API_TOKEN: local-internal-token
       WORKER_HEALTH_PORT: 7301
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:7301/ready').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 10s
 
   account-worker:
     build:
@@ -396,7 +430,11 @@ services:
       valkey:
         condition: service_healthy
       account-api:
-        condition: service_started
+        condition: service_healthy
+      core:
+        condition: service_healthy
+      gateway:
+        condition: service_healthy
       migrate:
         condition: service_completed_successfully
       account-migrate:
@@ -407,6 +445,9 @@ services:
       REDIS_URL: redis://valkey:6379
       ACCOUNT_REDIS_URL: redis://valkey:6379
       INTERNAL_API_TOKEN: local-internal-token
+      PLATFORM_INTERNAL_URL: http://core:4000
+      AI_GATEWAY_INTERNAL_URL: http://gateway:4200
+      AI_GATEWAY_MANAGEMENT_TOKEN: local-internal-token
       PLATFORM_OPERATOR_USER_IDS: local-operator,local-dev-account
       OAUTH_CLIENT_ID: local-client
       OAUTH_CLIENT_SECRET: local-secret
@@ -419,7 +460,7 @@ services:
       OBJECT_STORAGE_SECRET_ACCESS_KEY: minioadmin
       OBJECT_STORAGE_FORCE_PATH_STYLE: "true"
       OBJECT_STORAGE_SIGNED_URL_TTL_SECONDS: "900"
-      S3_PUBLIC_BASE_URL: http://localhost:9000/neuroloom-dev
+      S3_PUBLIC_BASE_URL: http://localhost:${MINIO_API_HOST_PORT:-9000}/neuroloom-dev
       ARBITRATION_EVIDENCE_REMOTE_UPLOAD_STRATEGY: prepared_remote_put
       PRODUCT_SHADOW_SYNC_INTERVAL_MS: "30000"
       AI_GATEWAY_ANOMALY_SWEEP_ENABLED: "true"
@@ -476,6 +517,12 @@ services:
       AI_GATEWAY_RATE_LIMIT_HOTSPOT_ANOMALY_SNAPSHOT_LOCK_KEY: account-worker:gateway-rate-limit-hotspot-anomaly-snapshot:lock
       AI_GATEWAY_RATE_LIMIT_HOTSPOT_ANOMALY_SNAPSHOT_LOCK_TTL_MS: "120000"
       WORKER_HEALTH_PORT: 7303
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:7303/ready').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 10s
 
   executor:
     build:
@@ -485,17 +532,19 @@ services:
     mem_limit: 512m
     depends_on:
       core:
-        condition: service_started
+        condition: service_healthy
       migrate:
         condition: service_completed_successfully
     environment:
       CORE_INTERNAL_URL: http://core:4000
       INTERNAL_API_TOKEN: local-internal-token
       EXECUTOR_HEALTH_PORT: 7302
-      EXECUTOR_DISCOUNT_CODE_HISTORY_ARCHIVE_INTERVAL_MS: 300000
-      EXECUTOR_DISCOUNT_CODE_HISTORY_ARCHIVE_LIMIT: 10
-      EXECUTOR_DISCOUNT_CODE_HISTORY_ARCHIVE_CLEANUP_INTERVAL_MS: 600000
-      EXECUTOR_DISCOUNT_CODE_HISTORY_ARCHIVE_CLEANUP_LIMIT: 20
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:7302/ready').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 10s
 
 volumes:
   postgres-data:

@@ -6,7 +6,14 @@ import type { NextAuthConfig } from "next-auth";
 import type { LinuxDoUpsertInput } from "@neuro/contracts";
 
 import { upsertLinuxDoUser } from "@/lib/account-client";
-import { getDevAuthBypassLabel, getDevAuthBypassProfile, isDevAuthBypassEnabled } from "@/lib/dev-auth";
+import {
+  assertDevAuthConfiguration,
+  getDevAuthBypassLabel,
+  getDevAuthBypassProfile,
+  isDevAuthBypassEnabled,
+} from "@/lib/dev-auth";
+
+assertDevAuthConfiguration();
 
 function normalizeProfile(profile: Record<string, unknown>): LinuxDoUpsertInput {
   return {

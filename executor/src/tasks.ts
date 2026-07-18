@@ -24,8 +24,6 @@ export type ExecutorTaskKey =
   | "manual-review-auto-assign-sla"
   | "manual-review-sync-sla-anomalies"
   | "fulfillment-anomalies-escalate"
-  | "discount-code-history-archive"
-  | "discount-code-history-archive-cleanup"
   ;
 
 type ExecutorTaskDefinition = {
@@ -130,14 +128,6 @@ const taskDefinitions: Record<ExecutorTaskKey, ExecutorTaskDefinition> = {
   "fulfillment-anomalies-escalate": {
     path: "/v1/internal/items/anomalies/escalate",
     body: () => ({ limit: 200 }),
-  },
-  "discount-code-history-archive": {
-    path: "/v1/internal/discount-code-history/export-archives/run-due",
-    body: () => ({ limit: env.discountCodeHistoryArchiveLimit }),
-  },
-  "discount-code-history-archive-cleanup": {
-    path: "/v1/internal/discount-code-history/export-archives/cleanup",
-    body: () => ({ limit: env.discountCodeHistoryArchiveCleanupLimit }),
   },
 };
 
