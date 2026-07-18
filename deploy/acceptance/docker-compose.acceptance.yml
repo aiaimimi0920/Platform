@@ -1,0 +1,402 @@
+x-acceptance-labels: &acceptance-labels
+  com.neuro.platform.acceptance.run-id: "${PLATFORM_ACCEPTANCE_RUN_ID:?PLATFORM_ACCEPTANCE_RUN_ID is required}"
+  com.neuro.platform.acceptance.owner: "platform"
+
+x-database-environment: &database-environment
+  DATABASE_URL: "${DATABASE_URL:?DATABASE_URL is required}"
+  REDIS_URL: "${REDIS_URL:?REDIS_URL is required}"
+
+x-object-storage-environment: &object-storage-environment
+  OBJECT_STORAGE_DRIVER: s3-compatible
+  OBJECT_STORAGE_BUCKET: "${OBJECT_STORAGE_BUCKET:?OBJECT_STORAGE_BUCKET is required}"
+  OBJECT_STORAGE_REGION: us-east-1
+  OBJECT_STORAGE_ENDPOINT: http://minio:9000
+  OBJECT_STORAGE_ACCESS_KEY_ID: "${MINIO_ROOT_USER:?MINIO_ROOT_USER is required}"
+  OBJECT_STORAGE_SECRET_ACCESS_KEY: "${MINIO_ROOT_PASSWORD:?MINIO_ROOT_PASSWORD is required}"
+  OBJECT_STORAGE_FORCE_PATH_STYLE: "true"
+  OBJECT_STORAGE_SIGNED_URL_TTL_SECONDS: "900"
+  S3_PUBLIC_BASE_URL: "http://127.0.0.1:${MINIO_API_HOST_PORT:?MINIO_API_HOST_PORT is required}/${OBJECT_STORAGE_BUCKET:?OBJECT_STORAGE_BUCKET is required}"
+  ARBITRATION_EVIDENCE_REMOTE_UPLOAD_STRATEGY: prepared_remote_put
+
+services:
+  postgres:
+    image: postgres:16-bookworm@sha256:92620daddcd947f8d5ab5ba66e848702fe443d87fed30c4cea8e389fd78dfc55
+    labels: *acceptance-labels
+    environment:
+      POSTGRES_DB: "${POSTGRES_DB:?POSTGRES_DB is required}"
+      POSTGRES_USER: "${POSTGRES_USER:?POSTGRES_USER is required}"
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}"
+    ports:
+      - "127.0.0.1:${POSTGRES_HOST_PORT:?POSTGRES_HOST_PORT is required}:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 2s
+      timeout: 5s
+      retries: 30
+
+  valkey:
+    image: valkey/valkey:8.1-alpine@sha256:94365b275456ae14621001c03556c732b1d93a0cdeacc317d1bdd52eba680885
+    labels: *acceptance-labels
+    command: ["valkey-server", "--save", "60", "1", "--appendonly", "yes"]
+    ports:
+      - "127.0.0.1:${VALKEY_HOST_PORT:?VALKEY_HOST_PORT is required}:6379"
+    volumes:
+      - valkey-data:/data
+    healthcheck:
+      test: ["CMD", "valkey-cli", "ping"]
+      interval: 2s
+      timeout: 5s
+      retries: 30
+
+  minio:
+    image: minio/minio:RELEASE.2025-07-23T15-54-02Z@sha256:d249d1fb6966de4d8ad26c04754b545205ff15a62e4fd19ebd0f26fa5baacbc0
+    labels: *acceptance-labels
+    command: ["server", "/data", "--console-address", ":9001"]
+    environment:
+      MINIO_ROOT_USER: "${MINIO_ROOT_USER:?MINIO_ROOT_USER is required}"
+      MINIO_ROOT_PASSWORD: "${MINIO_ROOT_PASSWORD:?MINIO_ROOT_PASSWORD is required}"
+    ports:
+      - "127.0.0.1:${MINIO_API_HOST_PORT:?MINIO_API_HOST_PORT is required}:9000"
+      - "127.0.0.1:${MINIO_CONSOLE_HOST_PORT:?MINIO_CONSOLE_HOST_PORT is required}:9001"
+    volumes:
+      - minio-data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://127.0.0.1:9000/minio/health/live"]
+      interval: 2s
+      timeout: 5s
+      retries: 30
+
+  minio-init:
+    image: minio/mc:RELEASE.2025-07-21T05-28-08Z@sha256:fb8f773eac8ef9d6da0486d5dec2f42f219358bcb8de579d1623d518c9ebd4cc
+    labels: *acceptance-labels
+    depends_on:
+      minio:
+        condition: service_healthy
+    environment:
+      MINIO_ROOT_USER: "${MINIO_ROOT_USER:?MINIO_ROOT_USER is required}"
+      MINIO_ROOT_PASSWORD: "${MINIO_ROOT_PASSWORD:?MINIO_ROOT_PASSWORD is required}"
+      OBJECT_STORAGE_BUCKET: "${OBJECT_STORAGE_BUCKET:?OBJECT_STORAGE_BUCKET is required}"
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        mc alias set local http://minio:9000 "$$MINIO_ROOT_USER" "$$MINIO_ROOT_PASSWORD"
+        mc mb --ignore-existing "local/$$OBJECT_STORAGE_BUCKET"
+        mc anonymous set download "local/$$OBJECT_STORAGE_BUCKET"
+
+  migrate:
+    build:
+      context: ../..
+      dockerfile: deploy/docker/core.Dockerfile
+    labels: *acceptance-labels
+    depends_on:
+      postgres:
+        condition: service_healthy
+      valkey:
+        condition: service_healthy
+      minio-init:
+        condition: service_completed_successfully
+    environment:
+      <<: [*database-environment, *object-storage-environment]
+      PORT: "4000"
+      CORE_PUBLIC_BASE_URL: http://core:4000
+      INTERNAL_API_TOKEN: "${INTERNAL_API_TOKEN:?INTERNAL_API_TOKEN is required}"
+      PLATFORM_OPERATOR_USER_IDS: acceptance-operator,acceptance-user
+    command: ["npm", "run", "db:migrate"]
+
+  account-migrate:
+    build:
+      context: ../..
+      dockerfile: deploy/docker/account-api.Dockerfile
+    labels: *acceptance-labels
+    depends_on:
+      postgres:
+        condition: service_healthy
+      valkey:
+        condition: service_healthy
+      minio-init:
+        condition: service_completed_successfully
+      migrate:
+        condition: service_completed_successfully
+    environment:
+      <<: [*database-environment, *object-storage-environment]
+      ACCOUNT_DATABASE_URL: "${DATABASE_URL:?DATABASE_URL is required}"
+      ACCOUNT_REDIS_URL: "${REDIS_URL:?REDIS_URL is required}"
+      PLATFORM_INTERNAL_URL: http://core:4000
+      INTERNAL_API_TOKEN: "${INTERNAL_API_TOKEN:?INTERNAL_API_TOKEN is required}"
+      PLATFORM_OPERATOR_USER_IDS: acceptance-operator,acceptance-user
+    command:
+      - /bin/sh
+      - -c
+      - cd /app && npm run db:migrate --workspace @neuro/ai-gateway-domain && npm run db:migrate --workspace @neuro/account-domain
+
+  gateway:
+    build:
+      context: ./gateway-double
+      dockerfile: Dockerfile
+    labels: *acceptance-labels
+    environment:
+      PORT: "4200"
+      GATEWAY_MANAGEMENT_TOKEN: "${GATEWAY_MANAGEMENT_TOKEN:?GATEWAY_MANAGEMENT_TOKEN is required}"
+      GATEWAY_PROJECT_TOKEN: "${GATEWAY_PROJECT_TOKEN:?GATEWAY_PROJECT_TOKEN is required}"
+      FIXTURE_TIMEOUT_MS: "1500"
+    ports:
+      - "127.0.0.1:${GATEWAY_HOST_PORT:?GATEWAY_HOST_PORT is required}:4200"
+    volumes:
+      - type: bind
+        source: "${ACCEPTANCE_CREDENTIAL_ROOT:?ACCEPTANCE_CREDENTIAL_ROOT is required}"
+        target: /credentials
+        read_only: true
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:4200/ready').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 2s
+      timeout: 5s
+      retries: 30
+
+  loom:
+    build:
+      context: ./loom-double
+      dockerfile: Dockerfile
+    labels: *acceptance-labels
+    environment:
+      PORT: "8765"
+      LOOM_AUTH_TOKEN: "${LOOM_AUTH_TOKEN:?LOOM_AUTH_TOKEN is required}"
+      FIXTURE_TIMEOUT_MS: "1500"
+    ports:
+      - "127.0.0.1:${LOOM_HOST_PORT:?LOOM_HOST_PORT is required}:8765"
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8765/ready').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 2s
+      timeout: 5s
+      retries: 30
+
+  tea:
+    build:
+      context: ./tea-double
+      dockerfile: Dockerfile
+    labels: *acceptance-labels
+    depends_on:
+      loom:
+        condition: service_healthy
+    environment:
+      PORT: "48910"
+      TEA_AUTH_TOKEN: "${TEA_AUTH_TOKEN:?TEA_AUTH_TOKEN is required}"
+      TEA_LOOM_BASE_URL: http://loom:8765
+      TEA_LOOM_AUTH_TOKEN: "${LOOM_AUTH_TOKEN:?LOOM_AUTH_TOKEN is required}"
+      FIXTURE_TIMEOUT_MS: "1500"
+    ports:
+      - "127.0.0.1:${TEA_HOST_PORT:?TEA_HOST_PORT is required}:48910"
+    volumes:
+      - tea-data:/data
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:48910/ready').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 2s
+      timeout: 5s
+      retries: 30
+
+  core:
+    build:
+      context: ../..
+      dockerfile: deploy/docker/core.Dockerfile
+    labels: *acceptance-labels
+    depends_on:
+      postgres:
+        condition: service_healthy
+      valkey:
+        condition: service_healthy
+      minio-init:
+        condition: service_completed_successfully
+      migrate:
+        condition: service_completed_successfully
+      gateway:
+        condition: service_healthy
+      tea:
+        condition: service_healthy
+    environment:
+      <<: [*database-environment, *object-storage-environment]
+      PORT: "4000"
+      CORE_PUBLIC_BASE_URL: http://core:4000
+      INTERNAL_API_TOKEN: "${INTERNAL_API_TOKEN:?INTERNAL_API_TOKEN is required}"
+      AI_GATEWAY_INTERNAL_URL: http://gateway:4200
+      AI_GATEWAY_MANAGEMENT_TOKEN: "${GATEWAY_MANAGEMENT_TOKEN:?GATEWAY_MANAGEMENT_TOKEN is required}"
+      TEA_SERVER_URL: http://tea:48910
+      TEA_AUTH_TOKEN: "${TEA_AUTH_TOKEN:?TEA_AUTH_TOKEN is required}"
+      PLATFORM_ALLOWED_ORIGINS: "http://127.0.0.1:${WEB_HOST_PORT:?WEB_HOST_PORT is required}"
+      PLATFORM_OPERATOR_USER_IDS: acceptance-operator,acceptance-user
+    ports:
+      - "127.0.0.1:${CORE_HOST_PORT:?CORE_HOST_PORT is required}:4000"
+
+  account-api:
+    build:
+      context: ../..
+      dockerfile: deploy/docker/account-api.Dockerfile
+    labels: *acceptance-labels
+    depends_on:
+      postgres:
+        condition: service_healthy
+      valkey:
+        condition: service_healthy
+      minio-init:
+        condition: service_completed_successfully
+      migrate:
+        condition: service_completed_successfully
+      account-migrate:
+        condition: service_completed_successfully
+      core:
+        condition: service_started
+      gateway:
+        condition: service_healthy
+    environment:
+      <<: [*database-environment, *object-storage-environment]
+      PORT: "4000"
+      ACCOUNT_DATABASE_URL: "${DATABASE_URL:?DATABASE_URL is required}"
+      ACCOUNT_REDIS_URL: "${REDIS_URL:?REDIS_URL is required}"
+      PLATFORM_INTERNAL_URL: http://core:4000
+      INTERNAL_API_TOKEN: "${INTERNAL_API_TOKEN:?INTERNAL_API_TOKEN is required}"
+      PLATFORM_ALLOWED_ORIGINS: "http://127.0.0.1:${WEB_HOST_PORT:?WEB_HOST_PORT is required}"
+      BENEFIT_SERVICE_API_KEY_SECRET: "${BENEFIT_SERVICE_API_KEY_SECRET:?BENEFIT_SERVICE_API_KEY_SECRET is required}"
+      AI_GATEWAY_API_KEY_SECRET: "${BENEFIT_SERVICE_API_KEY_SECRET:?BENEFIT_SERVICE_API_KEY_SECRET is required}"
+      AI_GATEWAY_INTERNAL_URL: http://gateway:4200
+      AI_GATEWAY_MANAGEMENT_TOKEN: "${GATEWAY_MANAGEMENT_TOKEN:?GATEWAY_MANAGEMENT_TOKEN is required}"
+      BENEFIT_SERVICE_API_PUBLIC_BASE_URL: "http://127.0.0.1:${GATEWAY_HOST_PORT:?GATEWAY_HOST_PORT is required}"
+      AI_GATEWAY_PUBLIC_BASE_URL: "http://127.0.0.1:${GATEWAY_HOST_PORT:?GATEWAY_HOST_PORT is required}"
+      AI_GATEWAY_COMPATIBILITY_BASE_URL: "http://127.0.0.1:${GATEWAY_HOST_PORT:?GATEWAY_HOST_PORT is required}/v1/new-api"
+      PLATFORM_OPERATOR_USER_IDS: acceptance-operator,acceptance-user
+      OAUTH_CLIENT_ID: "${OAUTH_CLIENT_ID:?OAUTH_CLIENT_ID is required}"
+      OAUTH_CLIENT_SECRET: "${OAUTH_CLIENT_SECRET:?OAUTH_CLIENT_SECRET is required}"
+      NEXTAUTH_SECRET: "${NEXTAUTH_SECRET:?NEXTAUTH_SECRET is required}"
+      ACCOUNT_EMAIL_DELIVERY_MODE: console
+      ACCOUNT_EMAIL_CONSOLE_EXPOSE_VERIFICATION_CODE: "true"
+    ports:
+      - "127.0.0.1:${ACCOUNT_API_HOST_PORT:?ACCOUNT_API_HOST_PORT is required}:4000"
+
+  web:
+    build:
+      context: ../..
+      dockerfile: deploy/docker/web.Dockerfile
+    labels: *acceptance-labels
+    depends_on:
+      core:
+        condition: service_started
+      account-api:
+        condition: service_started
+      gateway:
+        condition: service_healthy
+    environment:
+      PORT: "3000"
+      ACCOUNT_INTERNAL_URL: http://account-api:4000
+      ACCOUNT_WORKER_INTERNAL_URL: http://account-worker:7303
+      AI_GATEWAY_INTERNAL_URL: http://gateway:4200
+      AI_GATEWAY_MANAGEMENT_TOKEN: "${GATEWAY_MANAGEMENT_TOKEN:?GATEWAY_MANAGEMENT_TOKEN is required}"
+      CORE_INTERNAL_URL: http://core:4000
+      INTERNAL_API_TOKEN: "${INTERNAL_API_TOKEN:?INTERNAL_API_TOKEN is required}"
+      PLATFORM_OPERATOR_USER_IDS: acceptance-operator,acceptance-user
+      OAUTH_CLIENT_ID: "${OAUTH_CLIENT_ID:?OAUTH_CLIENT_ID is required}"
+      OAUTH_CLIENT_SECRET: "${OAUTH_CLIENT_SECRET:?OAUTH_CLIENT_SECRET is required}"
+      NEXTAUTH_SECRET: "${NEXTAUTH_SECRET:?NEXTAUTH_SECRET is required}"
+      NEXTAUTH_URL: "http://127.0.0.1:${WEB_HOST_PORT:?WEB_HOST_PORT is required}"
+      NEXT_PUBLIC_APP_URL: "http://127.0.0.1:${WEB_HOST_PORT:?WEB_HOST_PORT is required}"
+      DEV_AUTH_BYPASS_ENABLED: "true"
+      DEV_AUTH_BYPASS_PROVIDER_USER_ID: acceptance-user
+      DEV_AUTH_BYPASS_USERNAME: acceptance-user
+      DEV_AUTH_BYPASS_NAME: Acceptance User
+      DEV_AUTH_BYPASS_EMAIL: acceptance-user@example.test
+      DEV_AUTH_BYPASS_TRUST_LEVEL: "4"
+    ports:
+      - "127.0.0.1:${WEB_HOST_PORT:?WEB_HOST_PORT is required}:3000"
+
+  worker:
+    build:
+      context: ../..
+      dockerfile: deploy/docker/worker.Dockerfile
+    labels: *acceptance-labels
+    depends_on:
+      postgres:
+        condition: service_healthy
+      valkey:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+      core:
+        condition: service_started
+    environment:
+      <<: *database-environment
+      CORE_INTERNAL_URL: http://core:4000
+      INTERNAL_API_TOKEN: "${INTERNAL_API_TOKEN:?INTERNAL_API_TOKEN is required}"
+      PLATFORM_OPERATOR_USER_IDS: acceptance-operator,acceptance-user
+      WORKER_HEALTH_PORT: "7301"
+      WORKER_POLL_INTERVAL_MS: "1000"
+
+  account-worker:
+    build:
+      context: ../..
+      dockerfile: deploy/docker/account-worker.Dockerfile
+    labels: *acceptance-labels
+    depends_on:
+      postgres:
+        condition: service_healthy
+      valkey:
+        condition: service_healthy
+      minio-init:
+        condition: service_completed_successfully
+      migrate:
+        condition: service_completed_successfully
+      account-migrate:
+        condition: service_completed_successfully
+      account-api:
+        condition: service_started
+    environment:
+      <<: [*database-environment, *object-storage-environment]
+      ACCOUNT_DATABASE_URL: "${DATABASE_URL:?DATABASE_URL is required}"
+      ACCOUNT_REDIS_URL: "${REDIS_URL:?REDIS_URL is required}"
+      PLATFORM_INTERNAL_URL: http://core:4000
+      INTERNAL_API_TOKEN: "${INTERNAL_API_TOKEN:?INTERNAL_API_TOKEN is required}"
+      PLATFORM_OPERATOR_USER_IDS: acceptance-operator,acceptance-user
+      ACCOUNT_EMAIL_DELIVERY_MODE: console
+      PRODUCT_SHADOW_SYNC_INTERVAL_MS: "30000"
+      AI_GATEWAY_ANOMALY_SWEEP_ENABLED: "false"
+      AI_GATEWAY_ANOMALY_ALERT_DISPATCH_ENABLED: "false"
+      AI_GATEWAY_ANOMALY_AUTO_REMEDIATION_ENABLED: "false"
+      AI_GATEWAY_ANOMALY_REMEDIATION_IMPACT_CAPTURE_ENABLED: "false"
+      AI_GATEWAY_ANOMALY_REMEDIATION_EFFECTIVENESS_SNAPSHOT_ENABLED: "false"
+      AI_GATEWAY_ANOMALY_REMEDIATION_EFFECTIVENESS_ANOMALY_SNAPSHOT_ENABLED: "false"
+      AI_GATEWAY_RATE_LIMIT_HOTSPOT_SNAPSHOT_ENABLED: "false"
+      AI_GATEWAY_RATE_LIMIT_HOTSPOT_ANOMALY_SNAPSHOT_ENABLED: "false"
+      WORKER_HEALTH_PORT: "7303"
+      WORKER_POLL_INTERVAL_MS: "1000"
+
+  executor:
+    build:
+      context: ../..
+      dockerfile: deploy/docker/executor.Dockerfile
+    labels: *acceptance-labels
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      core:
+        condition: service_started
+    environment:
+      CORE_INTERNAL_URL: http://core:4000
+      INTERNAL_API_TOKEN: "${INTERNAL_API_TOKEN:?INTERNAL_API_TOKEN is required}"
+      EXECUTOR_HEALTH_PORT: "7302"
+
+volumes:
+  postgres-data:
+    name: "${POSTGRES_VOLUME_NAME:?POSTGRES_VOLUME_NAME is required}"
+    labels: *acceptance-labels
+  valkey-data:
+    name: "${VALKEY_VOLUME_NAME:?VALKEY_VOLUME_NAME is required}"
+    labels: *acceptance-labels
+  minio-data:
+    name: "${MINIO_VOLUME_NAME:?MINIO_VOLUME_NAME is required}"
+    labels: *acceptance-labels
+  tea-data:
+    name: "${TEA_VOLUME_NAME:?TEA_VOLUME_NAME is required}"
+    labels: *acceptance-labels
+
+networks:
+  default:
+    name: "${ACCEPTANCE_NETWORK_NAME:?ACCEPTANCE_NETWORK_NAME is required}"
+    labels: *acceptance-labels

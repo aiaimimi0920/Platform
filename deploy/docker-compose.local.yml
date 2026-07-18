@@ -8,7 +8,7 @@ services:
       POSTGRES_USER: neuroloom
       POSTGRES_PASSWORD: neuroloom
     ports:
-      - "5432:5432"
+      - "127.0.0.1:${POSTGRES_HOST_PORT:-5432}:5432"
     volumes:
       - postgres-data:/var/lib/postgresql/data
     healthcheck:
@@ -23,7 +23,7 @@ services:
     mem_limit: 256m
     command: ["valkey-server", "--save", "60", "1", "--appendonly", "yes"]
     ports:
-      - "6379:6379"
+      - "127.0.0.1:${VALKEY_HOST_PORT:-6379}:6379"
     volumes:
       - valkey-data:/data
     healthcheck:
@@ -41,8 +41,8 @@ services:
       MINIO_ROOT_USER: minioadmin
       MINIO_ROOT_PASSWORD: minioadmin
     ports:
-      - "9000:9000"
-      - "9001:9001"
+      - "127.0.0.1:${MINIO_API_HOST_PORT:-9000}:9000"
+      - "127.0.0.1:${MINIO_CONSOLE_HOST_PORT:-9001}:9001"
     volumes:
       - minio-data:/data
     healthcheck:
@@ -93,7 +93,7 @@ services:
       OBJECT_STORAGE_SECRET_ACCESS_KEY: minioadmin
       OBJECT_STORAGE_FORCE_PATH_STYLE: "true"
       OBJECT_STORAGE_SIGNED_URL_TTL_SECONDS: "900"
-      S3_PUBLIC_BASE_URL: http://localhost:9000/neuroloom-dev
+      S3_PUBLIC_BASE_URL: http://localhost:${MINIO_API_HOST_PORT:-9000}/neuroloom-dev
       ARBITRATION_EVIDENCE_REMOTE_UPLOAD_STRATEGY: prepared_remote_put
     command: ["npm", "run", "db:migrate"]
 
@@ -129,7 +129,7 @@ services:
       OBJECT_STORAGE_SECRET_ACCESS_KEY: minioadmin
       OBJECT_STORAGE_FORCE_PATH_STYLE: "true"
       OBJECT_STORAGE_SIGNED_URL_TTL_SECONDS: "900"
-      S3_PUBLIC_BASE_URL: http://localhost:9000/neuroloom-dev
+      S3_PUBLIC_BASE_URL: http://localhost:${MINIO_API_HOST_PORT:-9000}/neuroloom-dev
       ARBITRATION_EVIDENCE_REMOTE_UPLOAD_STRATEGY: prepared_remote_put
     command:
       [
@@ -172,10 +172,10 @@ services:
       OBJECT_STORAGE_SECRET_ACCESS_KEY: minioadmin
       OBJECT_STORAGE_FORCE_PATH_STYLE: "true"
       OBJECT_STORAGE_SIGNED_URL_TTL_SECONDS: "900"
-      S3_PUBLIC_BASE_URL: http://localhost:9000/neuroloom-dev
+      S3_PUBLIC_BASE_URL: http://localhost:${MINIO_API_HOST_PORT:-9000}/neuroloom-dev
       ARBITRATION_EVIDENCE_REMOTE_UPLOAD_STRATEGY: prepared_remote_put
     ports:
-      - "4028:4000"
+      - "127.0.0.1:${CORE_HOST_PORT:-4028}:4000"
 
   account-api:
     build:
@@ -207,9 +207,9 @@ services:
       AI_GATEWAY_API_KEY_SECRET: local-benefit-api-secret
       AI_GATEWAY_INTERNAL_URL: http://gateway:4200
       AI_GATEWAY_MANAGEMENT_TOKEN: local-internal-token
-      BENEFIT_SERVICE_API_PUBLIC_BASE_URL: http://localhost:4226
-      AI_GATEWAY_PUBLIC_BASE_URL: http://localhost:4226
-      AI_GATEWAY_COMPATIBILITY_BASE_URL: http://localhost:4226/v1/new-api
+      BENEFIT_SERVICE_API_PUBLIC_BASE_URL: http://localhost:${GATEWAY_HOST_PORT:-4226}
+      AI_GATEWAY_PUBLIC_BASE_URL: http://localhost:${GATEWAY_HOST_PORT:-4226}
+      AI_GATEWAY_COMPATIBILITY_BASE_URL: http://localhost:${GATEWAY_HOST_PORT:-4226}/v1/new-api
       PLATFORM_OPERATOR_USER_IDS: local-operator,local-dev-account
       OAUTH_CLIENT_ID: local-client
       OAUTH_CLIENT_SECRET: local-secret
@@ -222,10 +222,10 @@ services:
       OBJECT_STORAGE_SECRET_ACCESS_KEY: minioadmin
       OBJECT_STORAGE_FORCE_PATH_STYLE: "true"
       OBJECT_STORAGE_SIGNED_URL_TTL_SECONDS: "900"
-      S3_PUBLIC_BASE_URL: http://localhost:9000/neuroloom-dev
+      S3_PUBLIC_BASE_URL: http://localhost:${MINIO_API_HOST_PORT:-9000}/neuroloom-dev
       ARBITRATION_EVIDENCE_REMOTE_UPLOAD_STRATEGY: prepared_remote_put
     ports:
-      - "4128:4000"
+      - "127.0.0.1:${ACCOUNT_API_HOST_PORT:-4128}:4000"
 
   gateway:
     build:
@@ -258,9 +258,9 @@ services:
       OBJECT_STORAGE_ACCESS_KEY_ID: minioadmin
       OBJECT_STORAGE_SECRET_ACCESS_KEY: minioadmin
       OBJECT_STORAGE_FORCE_PATH_STYLE: "true"
-      S3_PUBLIC_BASE_URL: http://localhost:9000/neuroloom-dev
-      AI_GATEWAY_PUBLIC_BASE_URL: http://localhost:4226
-      AI_GATEWAY_COMPATIBILITY_BASE_URL: http://localhost:4226/v1/new-api
+      S3_PUBLIC_BASE_URL: http://localhost:${MINIO_API_HOST_PORT:-9000}/neuroloom-dev
+      AI_GATEWAY_PUBLIC_BASE_URL: http://localhost:${GATEWAY_HOST_PORT:-4226}
+      AI_GATEWAY_COMPATIBILITY_BASE_URL: http://localhost:${GATEWAY_HOST_PORT:-4226}/v1/new-api
       GATEWAY_BROWSER_EXECUTOR_BASE_URL: ${GATEWAY_BROWSER_EXECUTOR_BASE_URL:-}
       GATEWAY_BROWSER_EXECUTOR_BEARER_TOKEN: ${GATEWAY_BROWSER_EXECUTOR_BEARER_TOKEN:-local-browser-executor-token}
       UDIO_BROWSER_HEADLESS: "true"
@@ -274,7 +274,7 @@ services:
       GATEWAY_PROVIDER_CREDENTIAL_FOLDER_SYNC_DELETE_MISSING: ${GATEWAY_PROVIDER_CREDENTIAL_FOLDER_SYNC_DELETE_MISSING:-false}
       RUST_LOG: info
     ports:
-      - "4226:4200"
+      - "127.0.0.1:${GATEWAY_HOST_PORT:-4226}:4200"
     volumes:
       - "${USERPROFILE}/.neuro:/root/.neuro"
 
@@ -289,7 +289,7 @@ services:
       LOOM_DAEMON_PORT: 8765
       LOOM_DAEMON_TOKEN: ${TEA_LOOM_AUTH_TOKEN:-local-internal-token}
     ports:
-      - "${LOOM_HOST_PORT:-48766}:8765"
+      - "127.0.0.1:${LOOM_HOST_PORT:-48766}:8765"
     healthcheck:
       test:
         [
@@ -323,7 +323,7 @@ services:
       loom:
         condition: service_healthy
     ports:
-      - "${TEA_HOST_PORT:-48910}:48910"
+      - "127.0.0.1:${TEA_HOST_PORT:-48910}:48910"
     volumes:
       - tea-data:/data
 
@@ -362,7 +362,7 @@ services:
       DEV_AUTH_BYPASS_EMAIL: local-dev@example.test
       DEV_AUTH_BYPASS_TRUST_LEVEL: "4"
     ports:
-      - "${WEB_HOST_PORT:-3028}:3000"
+      - "127.0.0.1:${WEB_HOST_PORT:-3028}:3000"
 
   worker:
     build:
