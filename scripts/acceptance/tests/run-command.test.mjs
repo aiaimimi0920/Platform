@@ -31,7 +31,7 @@ test("runAcceptanceCommand captures a passing command and redacts output", async
   assert.equal((await readFile(evidence.stdoutPath, "utf8")).includes("hidden-value"), false);
 });
 
-test("runAcceptanceCommand redacts cookie headers and raw bearer tokens from persisted evidence", async () => {
+test("runAcceptanceCommand redacts cookie fields and raw bearer tokens from persisted evidence", async () => {
   const evidenceDir = await mkdtemp(path.join(os.tmpdir(), "platform-command-redaction-"));
   const evidencePath = path.join(evidenceDir, "command.json");
   const result = await runAcceptanceCommand({
@@ -40,7 +40,7 @@ test("runAcceptanceCommand redacts cookie headers and raw bearer tokens from per
     command: process.execPath,
     args: [
       "-e",
-      "console.log('Cookie: sid=persisted-cookie-sid; csrf=persisted-cookie-csrf; theme=persisted-cookie-theme'); console.error('Bearer persisted-bearer-token')",
+      "console.log('request cookie = sid=persisted-cookie-sid; csrf=persisted-cookie-csrf; theme=persisted-cookie-theme'); console.error('Bearer persisted-bearer-token')",
     ],
     cwd: process.cwd(),
     evidencePath,

@@ -97,7 +97,7 @@ test("required external-blocked results do not count as an acceptance pass", () 
   assert.match(result.manifest.failureReasons.join("\n"), /externalBlocked/i);
 });
 
-test("normalizes nonzero passed or skipped results to failed", () => {
+test("requires a zero exit code for passed results and fails nonzero skipped results", () => {
   const manifest = createAcceptanceManifest({
     runId: "run-manifest-nonzero-pass",
     evidenceDir: "C:/evidence",
@@ -118,12 +118,21 @@ test("normalizes nonzero passed or skipped results to failed", () => {
     args: ["false-skip.mjs"],
     exitCode: 9,
   });
+  const recordedMissingExit = recordSuiteResult(manifest, {
+    id: "missing-exit-pass",
+    layer: "required",
+    status: "passed",
+    command: "node",
+    args: ["missing-exit-pass.mjs"],
+    exitCode: null,
+  });
 
   const result = finalizeAcceptanceManifest(manifest);
   assert.equal(recorded.status, "failed");
   assert.equal(recordedSkip.status, "failed");
+  assert.equal(recordedMissingExit.status, "failed");
   assert.equal(manifest.suites.required.passed, 0);
-  assert.equal(manifest.suites.required.failed, 2);
+  assert.equal(manifest.suites.required.failed, 3);
   assert.equal(manifest.suites.required.skipped, 0);
   assert.equal(result.exitCode, 1);
   assert.equal(result.manifest.status, "failed");
@@ -176,6 +185,7 @@ test("redacts credentials from evidence text", () => {
   const input = [
     'token=secret-token cookie=session-cookie apiKey=secret-key code=123456 key=secret access_token=access-secret client_secret=client-secret "token":"quoted-token" Authorization: Bearer bearer-secret',
     "Cookie: sid=multi-cookie-sid; csrf=multi-cookie-csrf; theme=multi-cookie-theme",
+    "request cookie = sid=equals-cookie-sid; csrf=equals-cookie-csrf; theme=equals-cookie-theme",
     "upstream rejected raw Bearer raw-bearer-secret",
   ].join("\n");
   const output = redactText(input);
@@ -191,6 +201,9 @@ test("redacts credentials from evidence text", () => {
   assert.equal(output.includes("multi-cookie-sid"), false);
   assert.equal(output.includes("multi-cookie-csrf"), false);
   assert.equal(output.includes("multi-cookie-theme"), false);
+  assert.equal(output.includes("equals-cookie-sid"), false);
+  assert.equal(output.includes("equals-cookie-csrf"), false);
+  assert.equal(output.includes("equals-cookie-theme"), false);
   assert.equal(output.includes("raw-bearer-secret"), false);
   assert.match(output, /Cookie\s*[:=]\s*\[REDACTED\]/i);
   assert.match(output, /Bearer \[REDACTED\]/i);

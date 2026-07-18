@@ -25,7 +25,7 @@ function normalizeLayer(layer) {
 export function redactText(value) {
   if (typeof value !== "string" || value.length === 0) return value ?? "";
   return value
-    .replace(/\b(Set-Cookie|Cookie)\b\s*:\s*[^\r\n]*/gi, (_match, header) => `${header}: [REDACTED]`)
+    .replace(/\b(Set-Cookie|Cookie)\b\s*[:=]\s*[^\r\n]*/gi, (_match, header) => `${header}: [REDACTED]`)
     .replace(/\bAuthorization\b\s*[:=]\s*Bearer\s+[^\s,;]+/gi, "Authorization: Bearer [REDACTED]")
     .replace(/\bBearer\s+[^\s,;]+/gi, "Bearer [REDACTED]")
     .replace(
@@ -84,10 +84,11 @@ export function recordSuiteResult(manifest, result) {
   const layer = normalizeLayer(result.layer);
   const counters = manifest.suites[layer];
   const exitCode = Number.isInteger(result.exitCode) ? result.exitCode : null;
-  const status =
-    exitCode !== null && exitCode !== 0 && result.status !== "external-blocked"
-      ? "failed"
-      : result.status;
+  const mustFail =
+    result.status === "passed"
+      ? exitCode !== 0
+      : exitCode !== null && exitCode !== 0 && result.status !== "external-blocked";
+  const status = mustFail ? "failed" : result.status;
   counters.discovered += 1;
 
   if (status === "passed" || status === "failed" || status === "external-blocked") {
