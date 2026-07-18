@@ -20,12 +20,45 @@ test("runAcceptanceCommand captures a passing command and redacts output", async
 
   assert.equal(result.status, "passed");
   assert.equal(result.exitCode, 0);
+  assert.equal(Number.isFinite(result.durationMs), true);
+  assert.equal(result.durationMs >= 0, true);
   const evidence = JSON.parse(await readFile(evidencePath, "utf8"));
   assert.equal(evidence.id, "command-pass");
+  assert.equal(evidence.durationMs, result.durationMs);
   assert.equal(evidence.stdout.includes("hidden-value"), false);
   assert.equal(evidence.stdoutPath.endsWith("command.json.stdout.log"), true);
   assert.equal(evidence.stderrPath.endsWith("command.json.stderr.log"), true);
   assert.equal((await readFile(evidence.stdoutPath, "utf8")).includes("hidden-value"), false);
+});
+
+test("runAcceptanceCommand redacts cookie headers and raw bearer tokens from persisted evidence", async () => {
+  const evidenceDir = await mkdtemp(path.join(os.tmpdir(), "platform-command-redaction-"));
+  const evidencePath = path.join(evidenceDir, "command.json");
+  const result = await runAcceptanceCommand({
+    id: "command-redaction",
+    layer: "required",
+    command: process.execPath,
+    args: [
+      "-e",
+      "console.log('Cookie: sid=persisted-cookie-sid; csrf=persisted-cookie-csrf; theme=persisted-cookie-theme'); console.error('Bearer persisted-bearer-token')",
+    ],
+    cwd: process.cwd(),
+    evidencePath,
+  });
+
+  const persisted = [
+    await readFile(evidencePath, "utf8"),
+    await readFile(result.stdoutPath, "utf8"),
+    await readFile(result.stderrPath, "utf8"),
+  ].join("\n");
+  for (const canary of [
+    "persisted-cookie-sid",
+    "persisted-cookie-csrf",
+    "persisted-cookie-theme",
+    "persisted-bearer-token",
+  ]) {
+    assert.equal(persisted.includes(canary), false, `${canary} leaked into persisted evidence`);
+  }
 });
 
 test("runAcceptanceCommand reports a nonzero command as failed", async () => {

@@ -25,7 +25,9 @@ function normalizeLayer(layer) {
 export function redactText(value) {
   if (typeof value !== "string" || value.length === 0) return value ?? "";
   return value
+    .replace(/\b(Set-Cookie|Cookie)\b\s*:\s*[^\r\n]*/gi, (_match, header) => `${header}: [REDACTED]`)
     .replace(/\bAuthorization\b\s*[:=]\s*Bearer\s+[^\s,;]+/gi, "Authorization: Bearer [REDACTED]")
+    .replace(/\bBearer\s+[^\s,;]+/gi, "Bearer [REDACTED]")
     .replace(
       /(["']?)(access[-_]?token|refresh[-_]?token|id[-_]?token|session[-_]?token|client[-_]?secret|token|cookie|api[-_]?key|authorization|secret|key|code)\1\s*[:=]\s*(?:"[^"]*"|'[^']*'|[^\s,;}]+)/gi,
       (_match, _quote, key) => `${key}=[REDACTED]`,
@@ -81,7 +83,11 @@ export function createAcceptanceManifest({ runId, evidenceDir, git = null, start
 export function recordSuiteResult(manifest, result) {
   const layer = normalizeLayer(result.layer);
   const counters = manifest.suites[layer];
-  const status = result.status;
+  const exitCode = Number.isInteger(result.exitCode) ? result.exitCode : null;
+  const status =
+    exitCode !== null && exitCode !== 0 && result.status !== "external-blocked"
+      ? "failed"
+      : result.status;
   counters.discovered += 1;
 
   if (status === "passed" || status === "failed" || status === "external-blocked") {
@@ -100,7 +106,7 @@ export function recordSuiteResult(manifest, result) {
     status,
     command: redactText(String(result.command ?? "")),
     args: Array.isArray(result.args) ? redactArgs(result.args) : [],
-    exitCode: Number.isInteger(result.exitCode) ? result.exitCode : null,
+    exitCode,
     evidencePath: result.evidencePath ? path.resolve(String(result.evidencePath)) : null,
     stdoutPath: result.stdoutPath ? path.resolve(String(result.stdoutPath)) : null,
     stderrPath: result.stderrPath ? path.resolve(String(result.stderrPath)) : null,
