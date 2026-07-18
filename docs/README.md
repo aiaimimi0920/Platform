@@ -43,7 +43,10 @@
 11. `docs/30-product/账户与产品总基线.md`
 12. `docs/40-engineering/开发流程与文档更新机制.md`
 13. `docs/40-engineering/Platform产品完成与验收基线.md`
-14. `docs/50-history/README.md`
+14. `docs/superpowers/plans/2026-07-18-platform-product-completion.md`
+15. `docs/plan/task-breakdown.md`
+16. `docs/progress/MASTER.md`
+17. `docs/50-history/README.md`
 
 ---
 
@@ -57,6 +60,9 @@ docs/
   20-ai-gateway/
   30-product/
   40-engineering/
+  plan/
+  progress/
+  superpowers/plans/
   50-history/
 ```
 
