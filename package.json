@@ -17,6 +17,9 @@
   "scripts": {
     "test": "npm run build --workspace @neuro/contracts && npm run test:unit",
     "smoke": "npm run test && node --test scripts/smoke.mjs",
+    "smoke:quick": "npm run test && node --test scripts/smoke.mjs",
+    "acceptance:ci": "node scripts/acceptance/cli.mjs --mode ci",
+    "acceptance:live": "node scripts/acceptance/cli.mjs --mode live",
     "build": "npm run build -ws --if-present",
     "pretypecheck": "npm run build --workspace @neuro/contracts",
     "typecheck": "npm run typecheck -ws --if-present",

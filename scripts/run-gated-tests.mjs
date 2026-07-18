@@ -21,6 +21,12 @@ if (!command) {
 }
 
 if (process.env[flagEnv] !== "1") {
+  if (process.env.PLATFORM_ACCEPTANCE_MODE === "required") {
+    console.error(
+      `Skipping gated tests is forbidden in required acceptance mode; set ${flagEnv}=1.`,
+    );
+    process.exit(1);
+  }
   console.log(
     `Skipping gated tests: set ${flagEnv}=1 to run this integration layer.`,
   );
