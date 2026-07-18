@@ -42,7 +42,8 @@
 10. `docs/30-product/README.md`
 11. `docs/30-product/账户与产品总基线.md`
 12. `docs/40-engineering/开发流程与文档更新机制.md`
-13. `docs/50-history/README.md`
+13. `docs/40-engineering/Platform产品完成与验收基线.md`
+14. `docs/50-history/README.md`
 
 ---
 
@@ -95,6 +96,7 @@ docs/
 - 开发流程
 - 文档更新机制
 - 工程协作与历史收口规范
+- Platform 产品完成定义、验收门禁与 release 签收标准
 
 ### 50-history
 

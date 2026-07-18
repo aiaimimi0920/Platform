@@ -115,7 +115,23 @@
 
 ---
 
-## 5. 当前正式结论
+## 5. Platform 产品完成进度族
+
+当前执行跟踪：
+
+- `../progress/MASTER.md`
+
+当前 canonical 落点：
+
+- `docs/40-engineering/Platform产品完成与验收基线.md`
+
+当前状态：
+
+- `Phase 0 设计审阅中`
+
+---
+
+## 6. 当前正式结论
 
 旧 `progress/` 当前全部迁入本目录的历史进度语义中。
 

@@ -146,7 +146,25 @@
 
 ---
 
-## 8. 当前正式结论
+## 8. Platform 产品完成审计主题族
+
+当前文件：
+
+- `analysis/platform-product-completion/project-overview.md`
+- `analysis/platform-product-completion/module-inventory.md`
+- `analysis/platform-product-completion/risk-assessment.md`
+
+当前 canonical 落点：
+
+- `docs/40-engineering/Platform产品完成与验收基线.md`
+
+当前状态：
+
+- `活跃施工前审计 + candidate canonical 设计待用户确认`
+
+---
+
+## 9. 当前正式结论
 
 旧 `analysis/` 当前全部迁入本目录的历史归档语义中。
 
