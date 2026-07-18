@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -115,6 +115,32 @@ test("runAcceptanceCli rejects duplicate run manifests without overwriting evide
   assert.equal(await readFile(manifestPath, "utf8"), original);
 });
 
+test("runAcceptanceCli preserves legacy existing-manifest detection without an owner claim", async (t) => {
+  const evidenceDir = await mkdtemp(path.join(os.tmpdir(), "platform-cli-existing-manifest-"));
+  const runId = uniqueRunId("run-cli-existing-manifest");
+  cleanupClaimAfterTest(t, runId);
+  const manifestPath = path.join(evidenceDir, "acceptance-manifest.json");
+  const original = '{"legacy":true}\n';
+  await writeFile(manifestPath, original, "utf8");
+
+  await assert.rejects(
+    runAcceptanceCli([
+      "--mode",
+      "ci",
+      "--run-id",
+      runId,
+      "--evidence-dir",
+      evidenceDir,
+    ]),
+    /manifest already exists/i,
+  );
+  assert.equal(await readFile(manifestPath, "utf8"), original);
+  await assert.rejects(
+    readFile(path.join(evidenceDir, ".acceptance-owner.json"), "utf8"),
+    { code: "ENOENT" },
+  );
+});
+
 test("runAcceptanceCli atomically claims a run across different evidence directories", async (t) => {
   const firstEvidenceDir = await mkdtemp(path.join(os.tmpdir(), "platform-cli-concurrent-a-"));
   const secondEvidenceDir = await mkdtemp(path.join(os.tmpdir(), "platform-cli-concurrent-b-"));
@@ -149,6 +175,44 @@ test("runAcceptanceCli atomically claims a run across different evidence directo
   );
   const fulfilled = outcomes.find((outcome) => outcome.status === "fulfilled");
   assert.equal(JSON.parse(await readFile(fulfilled.value.manifestPath, "utf8")).runId, runId);
+});
+
+test("runAcceptanceCli atomically claims an evidence directory across different run ids", async (t) => {
+  const evidenceDir = await mkdtemp(path.join(os.tmpdir(), "platform-cli-shared-evidence-"));
+  const firstRunId = uniqueRunId("run-cli-shared-a");
+  const secondRunId = uniqueRunId("run-cli-shared-b");
+  cleanupClaimAfterTest(t, firstRunId);
+  cleanupClaimAfterTest(t, secondRunId);
+  const argvFor = (runId) => [
+    "--mode",
+    "ci",
+    "--run-id",
+    runId,
+    "--evidence-dir",
+    evidenceDir,
+  ];
+
+  const outcomes = await Promise.allSettled([
+    runAcceptanceCli(argvFor(firstRunId)),
+    runAcceptanceCli(argvFor(secondRunId)),
+  ]);
+
+  assert.equal(outcomes.filter((outcome) => outcome.status === "fulfilled").length, 1);
+  assert.equal(outcomes.filter((outcome) => outcome.status === "rejected").length, 1);
+  assert.match(
+    String(outcomes.find((outcome) => outcome.status === "rejected").reason),
+    /evidence.*already.*claimed|already.*owned|reuse/i,
+  );
+
+  const fulfilled = outcomes.find((outcome) => outcome.status === "fulfilled");
+  const manifest = JSON.parse(await readFile(fulfilled.value.manifestPath, "utf8"));
+  const owner = JSON.parse(
+    await readFile(path.join(evidenceDir, ".acceptance-owner.json"), "utf8"),
+  );
+  assert.equal(manifest.runId, fulfilled.value.options.runId);
+  assert.equal(owner.runId, fulfilled.value.options.runId);
+  assert.equal(owner.evidenceDir, path.resolve(evidenceDir));
+  assert.equal(owner.manifestPath, fulfilled.value.manifestPath);
 });
 
 test("direct CLI execution returns its manifest failure exit code", async (t) => {

@@ -1,4 +1,4 @@
-import { access, mkdir, open } from "node:fs/promises";
+import { mkdir, open, rm } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -11,6 +11,7 @@ import {
 
 const acceptanceRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../.runtime/acceptance");
 const acceptanceClaimRoot = path.join(acceptanceRoot, ".claims");
+const evidenceOwnerFileName = ".acceptance-owner.json";
 
 function nextRunId() {
   const suffix = `${Date.now()}-${process.pid}-${Math.random().toString(16).slice(2, 10)}`;
@@ -36,31 +37,77 @@ export function parseAcceptanceArgs(argv = process.argv.slice(2)) {
   };
 }
 
-async function claimAcceptanceRun({ evidenceDir, manifestPath, runId }) {
-  await mkdir(acceptanceClaimRoot, { recursive: true });
-  const claimPath = path.join(acceptanceClaimRoot, `${runId}.json`);
+async function manifestExists(manifestPath) {
+  let manifest;
+  try {
+    manifest = await open(manifestPath, "r");
+  } catch (error) {
+    if (error && typeof error === "object" && error.code === "ENOENT") return false;
+    throw error;
+  }
+  try {
+    return true;
+  } finally {
+    await manifest.close();
+  }
+}
+
+async function writeExclusiveClaim(claimPath, payload, duplicateMessage) {
   let claim;
   try {
     claim = await open(claimPath, "wx");
   } catch (error) {
     if (error && typeof error === "object" && error.code === "EEXIST") {
-      throw new Error(`Acceptance run is already claimed: ${runId}`);
+      throw new Error(duplicateMessage);
     }
     throw error;
   }
   try {
-    await claim.writeFile(`${JSON.stringify({ evidenceDir, manifestPath, runId })}\n`, "utf8");
-  } finally {
-    await claim.close();
-  }
-
-  try {
-    await access(manifestPath);
+    await claim.writeFile(`${JSON.stringify(payload)}\n`, "utf8");
   } catch (error) {
-    if (error && typeof error === "object" && error.code === "ENOENT") return;
+    await claim.close().catch(() => {});
+    await rm(claimPath, { force: true }).catch(() => {});
     throw error;
   }
-  throw new Error(`Acceptance run manifest already exists: ${manifestPath}`);
+  await claim.close();
+}
+
+async function claimAcceptanceRun({ evidenceDir, manifestPath, runId }) {
+  await Promise.all([
+    mkdir(acceptanceClaimRoot, { recursive: true }),
+    mkdir(evidenceDir, { recursive: true }),
+  ]);
+  if (await manifestExists(manifestPath)) {
+    throw new Error(`Acceptance run manifest already exists: ${manifestPath}`);
+  }
+
+  const claimPayload = { evidenceDir, manifestPath, runId };
+  const claimPath = path.join(acceptanceClaimRoot, `${runId}.json`);
+  await writeExclusiveClaim(
+    claimPath,
+    claimPayload,
+    `Acceptance run is already claimed: ${runId}`,
+  );
+
+  const ownerPath = path.join(evidenceDir, evidenceOwnerFileName);
+  try {
+    await writeExclusiveClaim(
+      ownerPath,
+      claimPayload,
+      `Acceptance evidence directory is already claimed: ${evidenceDir}`,
+    );
+  } catch (error) {
+    await rm(claimPath, { force: true }).catch(() => {});
+    throw error;
+  }
+
+  if (await manifestExists(manifestPath)) {
+    await Promise.all([
+      rm(ownerPath, { force: true }).catch(() => {}),
+      rm(claimPath, { force: true }).catch(() => {}),
+    ]);
+    throw new Error(`Acceptance run manifest already exists: ${manifestPath}`);
+  }
 }
 
 export async function runAcceptanceCli(argv = process.argv.slice(2)) {

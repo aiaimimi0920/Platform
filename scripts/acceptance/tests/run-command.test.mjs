@@ -153,6 +153,39 @@ test("runAcceptanceCommand classifies native Node TAP and Vitest skips", async (
   }
 });
 
+test("runAcceptanceCommand classifies native Node TAP and Vitest todo output as skipped", async (t) => {
+  for (const fixture of [
+    {
+      name: "Node TAP directive",
+      output: "ok 1 - incomplete integration # TODO fixture pending",
+    },
+    {
+      name: "Node TAP summary",
+      output: "# tests 4\n# pass 3\n# todo 1",
+    },
+    {
+      name: "Vitest summary",
+      output: "\u001b[33m Test Files  1 passed (1)\u001b[39m\n Tests  1 todo (1)",
+    },
+  ]) {
+    await t.test(fixture.name, async () => {
+      const evidenceDir = await mkdtemp(path.join(os.tmpdir(), "platform-command-native-todo-"));
+      const result = await runAcceptanceCommand({
+        id: `native-todo-${fixture.name}`,
+        layer: "required",
+        command: process.execPath,
+        args: ["-e", `console.log(${JSON.stringify(fixture.output)})`],
+        cwd: process.cwd(),
+        evidencePath: path.join(evidenceDir, "command.json"),
+      });
+
+      assert.equal(result.status, "skipped");
+      assert.equal(result.exitCode, 0);
+      assert.match(result.skipReason, /TODO|todo 1/i);
+    });
+  }
+});
+
 test("runAcceptanceCommand classifies real Node and Vitest runner skips", async (t) => {
   for (const fixture of [
     {
@@ -195,7 +228,50 @@ test("runAcceptanceCommand classifies real Node and Vitest runner skips", async 
   }
 });
 
-test("runAcceptanceCommand does not classify zero skipped tests as skipped", async () => {
+test("runAcceptanceCommand classifies real Node and Vitest runner todo results as skipped", async (t) => {
+  for (const fixture of [
+    {
+      name: "Node test runner",
+      args: ["--test", path.resolve("scripts/acceptance/tests/fixtures/native-node-todo.test.mjs")],
+    },
+    {
+      name: "Vitest runner",
+      args: [
+        path.resolve("node_modules/vitest/vitest.mjs"),
+        "run",
+        path.resolve("scripts/acceptance/tests/fixtures/native-vitest-todo.test.mjs"),
+        "--reporter=default",
+        "--color=false",
+      ],
+    },
+  ]) {
+    await t.test(fixture.name, async () => {
+      const evidenceDir = await mkdtemp(path.join(os.tmpdir(), "platform-command-real-todo-"));
+      const env = { ...process.env };
+      delete env.NODE_TEST_CONTEXT;
+      const result = await runAcceptanceCommand({
+        id: `real-todo-${fixture.name}`,
+        layer: "required",
+        command: process.execPath,
+        args: fixture.args,
+        cwd: process.cwd(),
+        env,
+        evidencePath: path.join(evidenceDir, "command.json"),
+      });
+
+      assert.equal(result.exitCode, 0);
+      assert.equal(
+        result.status,
+        "skipped",
+        await readFile(result.stdoutPath, "utf8"),
+      );
+      assert.equal(result.skipReason.length > 0, true);
+      assert.match(await readFile(result.stdoutPath, "utf8"), /todo/i);
+    });
+  }
+});
+
+test("runAcceptanceCommand does not classify zero skipped or todo tests as skipped", async () => {
   const evidenceDir = await mkdtemp(path.join(os.tmpdir(), "platform-command-zero-skip-"));
   const result = await runAcceptanceCommand({
     id: "zero-skip",
@@ -203,7 +279,7 @@ test("runAcceptanceCommand does not classify zero skipped tests as skipped", asy
     command: process.execPath,
     args: [
       "-e",
-      "console.log('ordinary log mentioning # SKIP is not a TAP directive\\n# tests 4\\n# pass 4\\n# skipped 0')",
+      "console.log('ordinary log mentioning # SKIP and # TODO is not a TAP directive\\n# tests 4\\n# pass 4\\n# skipped 0\\n# todo 0\\n Tests  4 passed | 0 todo (4)')",
     ],
     cwd: process.cwd(),
     evidencePath: path.join(evidenceDir, "command.json"),
@@ -211,6 +287,46 @@ test("runAcceptanceCommand does not classify zero skipped tests as skipped", asy
 
   assert.equal(result.status, "passed");
   assert.equal(result.skipReason, null);
+});
+
+test("runAcceptanceCommand detects a late todo after bounded evidence is truncated", async () => {
+  const evidenceDir = await mkdtemp(path.join(os.tmpdir(), "platform-command-late-todo-"));
+  const result = await runAcceptanceCommand({
+    id: "late-native-todo",
+    layer: "required",
+    command: process.execPath,
+    args: [
+      "-e",
+      "process.stdout.write('x'.repeat(4096) + '\\nok 1 - incomplete integration # TODO late fixture\\n# todo 1\\n')",
+    ],
+    cwd: process.cwd(),
+    maxOutputBytes: 64,
+    evidencePath: path.join(evidenceDir, "command.json"),
+  });
+
+  assert.equal(result.outputTruncated, true);
+  assert.equal(result.status, "skipped");
+  assert.match(result.skipReason, /TODO|todo 1/i);
+});
+
+test("runAcceptanceCommand retains a middle todo followed by a large trailing log", async () => {
+  const evidenceDir = await mkdtemp(path.join(os.tmpdir(), "platform-command-middle-todo-"));
+  const result = await runAcceptanceCommand({
+    id: "middle-native-todo",
+    layer: "required",
+    command: process.execPath,
+    args: [
+      "-e",
+      "process.stdout.write('x'.repeat(4096) + '\\nok 1 - incomplete integration # TODO middle fixture\\n' + 'y'.repeat(20000))",
+    ],
+    cwd: process.cwd(),
+    maxOutputBytes: 64,
+    evidencePath: path.join(evidenceDir, "command.json"),
+  });
+
+  assert.equal(result.outputTruncated, true);
+  assert.equal(result.status, "skipped");
+  assert.match(result.skipReason, /TODO middle fixture/i);
 });
 
 test("runAcceptanceCommand detects a late native skip after bounded evidence is truncated", async () => {

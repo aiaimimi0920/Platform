@@ -50,8 +50,11 @@ function detectSkipReason(output) {
   for (const pattern of [
     /Skipping gated tests(?::[^\r\n]*)?/i,
     /^\s*ok\s+\d+\b[^\r\n]*#\s*SKIP\b[^\r\n]*$/im,
+    /^\s*(?:not\s+)?ok\s+\d+\b[^\r\n]*#\s*TODO\b[^\r\n]*$/im,
     /^\s*#\s*skipped\s+[1-9]\d*\b.*$/im,
+    /^\s*#\s*todo\s+[1-9]\d*\b.*$/im,
     /^\s*(?:Test Files|Tests)\s+[^\r\n]*\b[1-9]\d*\s+skipped\b[^\r\n]*\(\d+\)\s*$/im,
+    /^\s*(?:Test Files|Tests)\s+[^\r\n]*\b[1-9]\d*\s+todo\b[^\r\n]*\(\d+\)\s*$/im,
   ]) {
     const match = normalized.match(pattern);
     if (match) return match[0].trim();
