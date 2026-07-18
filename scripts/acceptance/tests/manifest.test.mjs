@@ -59,10 +59,25 @@ test("manifest records suite counters and writes an atomic machine-readable file
   assert.deepEqual(temporaryFiles, []);
 });
 
+test("atomic manifest writes use collision-free temporary paths under concurrency", async () => {
+  const evidenceDir = await mkdtemp(path.join(os.tmpdir(), "platform-atomic-concurrency-"));
+  const outputPath = path.join(evidenceDir, "latest.json");
+  const outcomes = await Promise.allSettled(
+    Array.from({ length: 64 }, (_, index) => writeManifestAtomic(outputPath, { index })),
+  );
+  const persisted = JSON.parse(await readFile(outputPath, "utf8"));
+  const temporaryFiles = (await readdir(evidenceDir)).filter((entry) => entry.endsWith(".tmp"));
+
+  assert.equal(outcomes.filter((outcome) => outcome.status === "fulfilled").length, 64);
+  assert.equal(Number.isInteger(persisted.index), true);
+  assert.equal(persisted.index >= 0 && persisted.index < 64, true);
+  assert.deepEqual(temporaryFiles, []);
+});
+
 test("required skipped or undiscovered suites make the manifest fail", () => {
   const manifest = createAcceptanceManifest({
     runId: "run-manifest-2",
-    evidenceDir: "C:/evidence",
+    evidenceDir: path.join(os.tmpdir(), "platform-evidence"),
   });
   recordSuiteResult(manifest, {
     id: "integration",
@@ -82,7 +97,10 @@ test("required skipped or undiscovered suites make the manifest fail", () => {
 });
 
 test("required external-blocked results do not count as an acceptance pass", () => {
-  const manifest = createAcceptanceManifest({ runId: "run-manifest-3", evidenceDir: "C:/evidence" });
+  const manifest = createAcceptanceManifest({
+    runId: "run-manifest-3",
+    evidenceDir: path.join(os.tmpdir(), "platform-evidence"),
+  });
   recordSuiteResult(manifest, {
     id: "gateway-contract",
     layer: "externalBoundary",
@@ -100,7 +118,7 @@ test("required external-blocked results do not count as an acceptance pass", () 
 test("requires a zero exit code for passed results and fails nonzero skipped results", () => {
   const manifest = createAcceptanceManifest({
     runId: "run-manifest-nonzero-pass",
-    evidenceDir: "C:/evidence",
+    evidenceDir: path.join(os.tmpdir(), "platform-evidence"),
   });
   const recorded = recordSuiteResult(manifest, {
     id: "false-pass",
@@ -141,7 +159,7 @@ test("requires a zero exit code for passed results and fails nonzero skipped res
 test("records conditional-live counters separately", () => {
   const manifest = createAcceptanceManifest({
     runId: "run-manifest-conditional-live",
-    evidenceDir: "C:/evidence",
+    evidenceDir: path.join(os.tmpdir(), "platform-evidence"),
   });
   recordSuiteResult(manifest, {
     id: "linuxdo-live",
@@ -181,12 +199,101 @@ test("records conditional-live counters separately", () => {
   assert.equal(manifest.suites.externalBoundary.discovered, 0);
 });
 
+test("rejects unsafe run ids", () => {
+  for (const runId of [
+    "../escape",
+    "nested/run",
+    "nested\\run",
+    "UPPER",
+    "run id",
+    ".",
+    "-leading",
+    "con",
+    "nul",
+    "com1",
+  ]) {
+    assert.throws(
+      () => createAcceptanceManifest({ runId, evidenceDir: path.join(os.tmpdir(), "evidence") }),
+      /run.?id/i,
+    );
+  }
+});
+
+test("rejects invalid or duplicate suite metadata without partial mutation", () => {
+  const manifest = createAcceptanceManifest({
+    runId: "run-manifest-validation",
+    evidenceDir: path.join(os.tmpdir(), "evidence"),
+  });
+  recordSuiteResult(manifest, {
+    id: "unit",
+    layer: "required",
+    status: "passed",
+    command: "node",
+    args: ["--test"],
+    exitCode: 0,
+  });
+  const snapshot = structuredClone(manifest);
+
+  for (const invalidResult of [
+    {
+      id: "unit",
+      layer: "externalBoundary",
+      status: "passed",
+      command: "node",
+      exitCode: 0,
+    },
+    {
+      id: "unknown-status",
+      layer: "required",
+      status: "green",
+      command: "node",
+      exitCode: 0,
+    },
+    {
+      id: "   ",
+      layer: "required",
+      status: "failed",
+      command: "node",
+      exitCode: 1,
+    },
+  ]) {
+    assert.throws(() => recordSuiteResult(manifest, invalidResult), /suite|status|id|duplicate/i);
+    assert.deepEqual(manifest, snapshot);
+  }
+
+  const explosiveArg = {
+    toString() {
+      throw new Error("argument normalization exploded");
+    },
+  };
+  assert.throws(
+    () =>
+      recordSuiteResult(manifest, {
+        id: "normalization-error",
+        layer: "required",
+        status: "failed",
+        command: "node",
+        args: [explosiveArg],
+        exitCode: 1,
+      }),
+    /normalization exploded/i,
+  );
+  assert.deepEqual(manifest, snapshot);
+});
+
 test("redacts credentials from evidence text", () => {
   const input = [
     'token=secret-token cookie=session-cookie apiKey=secret-key code=123456 key=secret access_token=access-secret client_secret=client-secret "token":"quoted-token" Authorization: Bearer bearer-secret',
     "Cookie: sid=multi-cookie-sid; csrf=multi-cookie-csrf; theme=multi-cookie-theme",
     "request cookie = sid=equals-cookie-sid; csrf=equals-cookie-csrf; theme=equals-cookie-theme",
     "upstream rejected raw Bearer raw-bearer-secret",
+    "Authorization: Basic basic-authorization-secret",
+    "DATABASE_URL=postgres://db-user:url-userinfo-secret@db.internal/platform",
+    "UPSTREAM_URL=https://url-user-only@api.internal/path",
+    'password=field-password-secret credential=field-credential-secret "credentials":"json-credentials-secret"',
+    '{"password":"json-password-secret","credential":"json-credential-secret"}',
+    'credentials={"username":"public","secretAccessKey":"credential-object-secret"}',
+    'credentials={\n  "username":"public",\n  "secretAccessKey":"multiline-credential-secret"\n}',
   ].join("\n");
   const output = redactText(input);
   assert.equal(output.includes("secret-token"), false);
@@ -205,24 +312,64 @@ test("redacts credentials from evidence text", () => {
   assert.equal(output.includes("equals-cookie-csrf"), false);
   assert.equal(output.includes("equals-cookie-theme"), false);
   assert.equal(output.includes("raw-bearer-secret"), false);
+  assert.equal(output.includes("basic-authorization-secret"), false);
+  assert.equal(output.includes("db-user"), false);
+  assert.equal(output.includes("url-userinfo-secret"), false);
+  assert.equal(output.includes("url-user-only"), false);
+  assert.equal(output.includes("field-password-secret"), false);
+  assert.equal(output.includes("field-credential-secret"), false);
+  assert.equal(output.includes("json-credentials-secret"), false);
+  assert.equal(output.includes("json-password-secret"), false);
+  assert.equal(output.includes("json-credential-secret"), false);
+  assert.equal(output.includes("credential-object-secret"), false);
+  assert.equal(output.includes("multiline-credential-secret"), false);
   assert.match(output, /Cookie\s*[:=]\s*\[REDACTED\]/i);
-  assert.match(output, /Bearer \[REDACTED\]/i);
+  assert.match(output, /Authorization\s*[:=]\s*\[REDACTED\]/i);
+  assert.match(output, /postgres:\/\/\[REDACTED\]@db\.internal\/platform/i);
   assert.match(output, /\[REDACTED\]/);
 });
 
 test("redacts values following credential-like CLI flags", () => {
-  assert.deepEqual(redactArgs(["--api-key", "secret-key", "--mode", "ci"]), [
+  assert.deepEqual(redactArgs([
+    "--api-key",
+    "secret-key",
+    "--password",
+    "cli-password-secret",
+    "--credential",
+    "cli-credential-secret",
+    "--db-password",
+    "namespaced-password-secret",
+    "--service-credential",
+    "namespaced-credential-secret",
+    "--db-password=inline-password-secret",
+    "--dsn",
+    "postgres://cli-user:cli-url-secret@db.internal/platform",
+    "--mode",
+    "ci",
+  ]), [
     "--api-key",
     "[REDACTED]",
+    "--password",
+    "[REDACTED]",
+    "--credential",
+    "[REDACTED]",
+    "--db-password",
+    "[REDACTED]",
+    "--service-credential",
+    "[REDACTED]",
+    "--db-password=[REDACTED]",
+    "--dsn",
+    "postgres://[REDACTED]@db.internal/platform",
     "--mode",
     "ci",
   ]);
 });
 
 test("recordSuiteResult preserves separate stdout and stderr evidence paths", () => {
+  const evidenceDir = path.resolve(os.tmpdir(), "platform-evidence-paths");
   const manifest = createAcceptanceManifest({
     runId: "run-manifest-evidence-paths",
-    evidenceDir: "C:/evidence",
+    evidenceDir,
   });
   const result = recordSuiteResult(manifest, {
     id: "unit",
@@ -231,13 +378,13 @@ test("recordSuiteResult preserves separate stdout and stderr evidence paths", ()
     command: "node",
     args: ["--test"],
     exitCode: 0,
-    evidencePath: "C:/evidence/unit.json",
-    stdoutPath: "C:/evidence/unit.json.stdout.log",
-    stderrPath: "C:/evidence/unit.json.stderr.log",
+    evidencePath: path.join(evidenceDir, "unit.json"),
+    stdoutPath: path.join(evidenceDir, "unit.json.stdout.log"),
+    stderrPath: path.join(evidenceDir, "unit.json.stderr.log"),
   });
 
-  assert.equal(result.stdoutPath, "C:\\evidence\\unit.json.stdout.log");
-  assert.equal(result.stderrPath, "C:\\evidence\\unit.json.stderr.log");
+  assert.equal(result.stdoutPath, path.resolve(evidenceDir, "unit.json.stdout.log"));
+  assert.equal(result.stderrPath, path.resolve(evidenceDir, "unit.json.stderr.log"));
   assert.equal(manifest.results[0].stdoutPath, result.stdoutPath);
   assert.equal(manifest.results[0].stderrPath, result.stderrPath);
 });

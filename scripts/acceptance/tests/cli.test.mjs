@@ -1,35 +1,91 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdtemp, readFile } from "node:fs/promises";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 
 import { parseAcceptanceArgs, runAcceptanceCli } from "../cli.mjs";
 
+const claimRoot = path.resolve(".runtime/acceptance/.claims");
+let runSequence = 0;
+
+function uniqueRunId(prefix) {
+  runSequence += 1;
+  return `${prefix}-${process.pid}-${Date.now()}-${runSequence}`;
+}
+
+function cleanupClaimAfterTest(t, runId) {
+  t.after(() => rm(path.join(claimRoot, `${runId}.json`), { force: true }));
+}
+
 test("parseAcceptanceArgs supports explicit run and evidence paths", () => {
+  const evidenceDir = path.join(os.tmpdir(), "evidence", "cli");
   const parsed = parseAcceptanceArgs([
     "--mode",
     "ci",
     "--run-id",
     "run-cli-1",
     "--evidence-dir",
-    "C:/evidence/cli",
+    evidenceDir,
   ]);
   assert.deepEqual(parsed, {
     mode: "ci",
     runId: "run-cli-1",
-    evidenceDir: path.resolve("C:/evidence/cli"),
+    evidenceDir: path.resolve(evidenceDir),
   });
 });
 
-test("runAcceptanceCli writes a failed manifest until suites are registered", async () => {
+test("parseAcceptanceArgs rejects traversal and non-Compose run ids", () => {
+  for (const runId of [
+    "../escape",
+    "..\\escape",
+    "nested/run",
+    "nested\\run",
+    "UPPER",
+    "run id",
+    ".",
+    "-leading",
+    "con",
+    "nul",
+    "com1",
+    "a".repeat(64),
+  ]) {
+    assert.throws(
+      () =>
+        parseAcceptanceArgs([
+          "--mode",
+          "ci",
+          "--run-id",
+          runId,
+          "--evidence-dir",
+          path.join(os.tmpdir(), "explicit-evidence"),
+        ]),
+      /run.?id/i,
+    );
+  }
+
+  const parsed = parseAcceptanceArgs([
+    "--mode",
+    "ci",
+    "--run-id",
+    "safe_run-01",
+    "--evidence-dir",
+    path.join(os.tmpdir(), "explicit-evidence"),
+  ]);
+  assert.equal(parsed.runId, "safe_run-01");
+  assert.equal(parsed.evidenceDir, path.resolve(os.tmpdir(), "explicit-evidence"));
+});
+
+test("runAcceptanceCli writes a failed manifest until suites are registered", async (t) => {
   const evidenceDir = await mkdtemp(path.join(os.tmpdir(), "platform-cli-"));
+  const runId = uniqueRunId("run-cli-empty");
+  cleanupClaimAfterTest(t, runId);
   const result = await runAcceptanceCli([
     "--mode",
     "ci",
     "--run-id",
-    "run-cli-2",
+    runId,
     "--evidence-dir",
     evidenceDir,
   ]);
@@ -39,8 +95,66 @@ test("runAcceptanceCli writes a failed manifest until suites are registered", as
   assert.match(manifest.failureReasons.join("\n"), /no required suites/i);
 });
 
-test("direct CLI execution returns its manifest failure exit code", async () => {
+test("runAcceptanceCli rejects duplicate run manifests without overwriting evidence", async (t) => {
+  const evidenceDir = await mkdtemp(path.join(os.tmpdir(), "platform-cli-duplicate-"));
+  const runId = uniqueRunId("run-cli-duplicate");
+  cleanupClaimAfterTest(t, runId);
+  const argv = [
+    "--mode",
+    "ci",
+    "--run-id",
+    runId,
+    "--evidence-dir",
+    evidenceDir,
+  ];
+  await runAcceptanceCli(argv);
+  const manifestPath = path.join(evidenceDir, "acceptance-manifest.json");
+  const original = await readFile(manifestPath, "utf8");
+
+  await assert.rejects(runAcceptanceCli(argv), /already exists|duplicate|reuse/i);
+  assert.equal(await readFile(manifestPath, "utf8"), original);
+});
+
+test("runAcceptanceCli atomically claims a run across different evidence directories", async (t) => {
+  const firstEvidenceDir = await mkdtemp(path.join(os.tmpdir(), "platform-cli-concurrent-a-"));
+  const secondEvidenceDir = await mkdtemp(path.join(os.tmpdir(), "platform-cli-concurrent-b-"));
+  const runId = uniqueRunId("run-cli-concurrent");
+  cleanupClaimAfterTest(t, runId);
+  const firstArgv = [
+    "--mode",
+    "ci",
+    "--run-id",
+    runId,
+    "--evidence-dir",
+    firstEvidenceDir,
+  ];
+  const secondArgv = [
+    "--mode",
+    "ci",
+    "--run-id",
+    runId,
+    "--evidence-dir",
+    secondEvidenceDir,
+  ];
+  const outcomes = await Promise.allSettled([
+    runAcceptanceCli(firstArgv),
+    runAcceptanceCli(secondArgv),
+  ]);
+
+  assert.equal(outcomes.filter((outcome) => outcome.status === "fulfilled").length, 1);
+  assert.equal(outcomes.filter((outcome) => outcome.status === "rejected").length, 1);
+  assert.match(
+    String(outcomes.find((outcome) => outcome.status === "rejected").reason),
+    /already exists|duplicate|claimed|reuse/i,
+  );
+  const fulfilled = outcomes.find((outcome) => outcome.status === "fulfilled");
+  assert.equal(JSON.parse(await readFile(fulfilled.value.manifestPath, "utf8")).runId, runId);
+});
+
+test("direct CLI execution returns its manifest failure exit code", async (t) => {
   const evidenceDir = await mkdtemp(path.join(os.tmpdir(), "platform-cli-process-"));
+  const runId = uniqueRunId("run-cli-process");
+  cleanupClaimAfterTest(t, runId);
   const result = spawnSync(
     process.execPath,
     [
@@ -48,7 +162,7 @@ test("direct CLI execution returns its manifest failure exit code", async () => 
       "--mode",
       "ci",
       "--run-id",
-      "run-cli-process",
+      runId,
       "--evidence-dir",
       evidenceDir,
     ],

@@ -9,7 +9,7 @@ Acceptance: `npm run acceptance:ci` exits nonzero for any required skip/failure 
 
 ## P1-01 Evidence
 
-- `node --test scripts/acceptance/tests/*.test.mjs`: `18/18` passed, including colon/equals multi-cookie and raw Bearer redaction plus missing/nonzero-exit false-pass rejection.
+- `node --test scripts/acceptance/tests/*.test.mjs`: `37/37` passed, including real Node/Vitest skip detection, bounded timeout tree cleanup, global run claims, concurrent atomic evidence writes, portable paths, credential redaction, and false-pass rejection.
 - required-mode gated command: exit `1` with `Skipping gated tests is forbidden`.
 - `npm run smoke:quick`: passed; existing Tea real smoke remains explicitly skipped in the quick baseline.
 - `npm run acceptance:ci`: exit `1` with a failed manifest because the complete required/external-boundary inventory is intentionally deferred to `P1-04`.
