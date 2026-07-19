@@ -4,6 +4,7 @@ export * from "./benefits";
 export * from "./credential-pools";
 export * from "./personal-missions";
 export * from "./honor-projects";
+export * from "./heavy-chat";
 
 export const featureModuleKeys = [
   "identity",

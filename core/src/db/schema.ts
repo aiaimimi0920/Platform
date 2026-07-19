@@ -10,5 +10,6 @@ export * from "@/modules/reputation/schema";
 export * from "@/modules/redemption-mailbox-marketplace/schema";
 export * from "@/modules/task-hub/schema";
 export * from "@/modules/wallet-ledger/schema";
+export * from "@/modules/heavy-chat/schema";
 export * from "@/platform/feature-modules/schema";
 export * from "@/platform/outbox/schema";

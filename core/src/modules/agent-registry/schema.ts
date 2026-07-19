@@ -39,6 +39,7 @@ export const agents = pgTable(
   },
   (table) => ({
     ownerNameUnique: uniqueIndex("agents_owner_name_idx").on(table.ownerUserId, table.name),
+    ownerIdUnique: uniqueIndex("agents_owner_id_idx").on(table.ownerUserId, table.id),
   }),
 );
 

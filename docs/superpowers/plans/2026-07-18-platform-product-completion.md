@@ -181,12 +181,12 @@ web/src/features/account-heavy-agent-chat/adapter.ts
 - Create: `core/src/modules/heavy-chat/repository.ts`
 - Create: `core/src/modules/heavy-chat/repository.test.ts`
 
-- [ ] Write repository tests for user ownership, default Mimi slot idempotency, slot limit, project/thread/message ordering, favorite/project binding, and message status transitions.
-- [ ] Run the focused test against the integration database; expect missing tables/module failure.
-- [ ] Define contract types for slots, projects, threads, messages, references, actions, and `pending|streaming|complete|failed`.
-- [ ] Add SQL tables with foreign keys, owner-scoped unique indexes, idempotency keys, and timestamps.
-- [ ] Implement repository methods using transactions and owner predicates on every read/write.
-- [ ] Run migration on the isolated PostgreSQL fixture and require all repository tests to pass.
+- [x] Write repository tests for user ownership, default Mimi slot idempotency, slot limit, project/thread/message ordering, favorite/project binding, and message status transitions.
+- [x] Run the focused test against the integration database; expect missing tables/module failure.
+- [x] Define contract types for slots, projects, threads, messages, references, actions, and `pending|streaming|complete|failed`.
+- [x] Add SQL tables with foreign keys, owner-scoped unique indexes, idempotency keys, and timestamps.
+- [x] Implement repository methods using transactions and owner predicates on every read/write.
+- [x] Run migration on the isolated PostgreSQL fixture and require all repository tests to pass.
 - [ ] Commit `feat(platform): add heavy chat persistence model`.
 
 ### Task P2-02: Heavy-Chat Service And Managed-Heavy Agent
