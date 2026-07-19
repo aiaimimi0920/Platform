@@ -7,6 +7,15 @@ export type ProviderCreatePayloadArgs = {
   defaultPayloadPatch?: Record<string, unknown>;
 };
 
+export type ProviderCreatePayload = {
+  adapter: string;
+  accountLabel: string;
+  apiKey: string;
+  baseUrl: string;
+  defaultModel: string | null;
+  [key: string]: unknown;
+};
+
 function resolveAuthHeaderName(authMode: string | null) {
   switch (authMode) {
     case "bearer":
@@ -22,7 +31,7 @@ function resolveAuthHeaderName(authMode: string | null) {
   }
 }
 
-export function buildProviderPayload(args: ProviderCreatePayloadArgs) {
+export function buildProviderPayload(args: ProviderCreatePayloadArgs): ProviderCreatePayload {
   const authHeaderName = resolveAuthHeaderName(args.authMode);
   const authToken = "";
   const common = {
