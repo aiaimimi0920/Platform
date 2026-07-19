@@ -187,7 +187,7 @@ web/src/features/account-heavy-agent-chat/adapter.ts
 - [x] Add SQL tables with foreign keys, owner-scoped unique indexes, idempotency keys, and timestamps.
 - [x] Implement repository methods using transactions and owner predicates on every read/write.
 - [x] Run migration on the isolated PostgreSQL fixture and require all repository tests to pass.
-- [ ] Commit `feat(platform): add heavy chat persistence model`.
+- [x] Commit `feat(platform): add heavy chat persistence model` (`e5bb268`).
 
 ### Task P2-02: Heavy-Chat Service And Managed-Heavy Agent
 
