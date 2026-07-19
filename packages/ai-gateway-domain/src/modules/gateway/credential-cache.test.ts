@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { describe, it, beforeEach, mock } from "node:test";
+import { describe, it, before, beforeEach, mock } from "node:test";
 
 import type {
   GatewayCredentialEntry,
@@ -115,11 +115,22 @@ function createRedisMock() {
   return redisMock;
 }
 
+function resetRedisMock(redisMock: ReturnType<typeof createRedisMock>): void {
+  redisMock._store.clear();
+  redisMock._sets.clear();
+  redisMock._ttls.clear();
+  redisMock.get.mock.resetCalls();
+  redisMock.mget.mock.resetCalls();
+  redisMock.smembers.mock.resetCalls();
+  redisMock.srem.mock.resetCalls();
+  redisMock.pipeline.mock.resetCalls();
+}
+
 // ---------------------------------------------------------------------------
 // Module loader with mocked Redis
 // ---------------------------------------------------------------------------
 
-let redisMock: ReturnType<typeof createRedisMock>;
+const redisMock = createRedisMock();
 
 let getGatewayCredential: (id: string) => Promise<GatewayCredentialEntry | null>;
 let setGatewayCredential: (entry: GatewayCredentialEntry) => Promise<void>;
@@ -133,11 +144,9 @@ let resolveGatewayCredentialForRequest: (args: {
   preferredCredentialId?: string;
 }) => Promise<GatewayCredentialEntry | null>;
 
-// We dynamically import the module after registering the Redis mock.
-// node:test's `mock.module` is used for ESM mocking.
-beforeEach(async () => {
-  redisMock = createRedisMock();
-
+// Register the ESM mock once; node:test does not permit re-mocking the same
+// module on every test. Each test resets the in-memory state instead.
+before(async () => {
   mock.module("@/db/redis", {
     namedExports: { redis: redisMock },
   });
@@ -149,6 +158,10 @@ beforeEach(async () => {
   listGatewayCredentialsByProject = mod.listGatewayCredentialsByProject;
   listGatewayCredentialsByUser = mod.listGatewayCredentialsByUser;
   resolveGatewayCredentialForRequest = mod.resolveGatewayCredentialForRequest;
+});
+
+beforeEach(() => {
+  resetRedisMock(redisMock);
 });
 
 // ---------------------------------------------------------------------------

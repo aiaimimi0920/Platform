@@ -69,6 +69,37 @@ describe("Thinking Filter", () => {
       const final = finalizeThinkingFilter(state);
       expect(final).toBe("After");
     });
+
+    it("should filter adjacent thinking blocks consistently across chunk boundaries", () => {
+      const input = "<thinking>x</thinking>\n\n<tool_use><thinking>y</thinking>";
+      const filter = (chunks: string[]) => {
+        const state = createThinkingFilterState();
+        let output = "";
+        for (const chunk of chunks) {
+          output += processThinkingChunk(state, chunk);
+        }
+        return output + finalizeThinkingFilter(state);
+      };
+
+      expect(filter([input])).toBe("<tool_use>");
+      expect(filter([...input])).toBe("<tool_use>");
+    });
+
+    it("should filter later blocks when a split end tag finishes in the final chunk", () => {
+      const state = createThinkingFilterState();
+      const chunks = [
+        "A <thinking>x<",
+        "/thinking>\n\nB <thinking>y</thinking>\n\nC",
+      ];
+
+      let output = "";
+      for (const chunk of chunks) {
+        output += processThinkingChunk(state, chunk);
+      }
+      output += finalizeThinkingFilter(state);
+
+      expect(output).toBe("A B C");
+    });
   });
 
   describe("Quoted tag handling", () => {

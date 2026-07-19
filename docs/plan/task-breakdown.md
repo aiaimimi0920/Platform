@@ -19,8 +19,8 @@
 | P3-04 | slot controls | P1 | P2-02,P3-01 | E | functional heavy controls | component/API tests |
 | P4-01 | economy invariants | P1 | P1-04 | H | identity/wallet/commerce/task tests | DB integration |
 | P4-02 | governance/executor | P1 | P1-04 | I | agent/mailbox/governance/executor tests | workspace tests |
-| P4-03 | integration/OAuth | P1 | P1-02,P1-03 | H | required fixture/contract | manifest |
-| P4-04 | observability | P1 | P3-01,P4-03 | I | correlation/redaction | redaction scan |
+| P4-03 | integration/OAuth | P1 | P1-02,P1-03,P4-01 | H | required fixture/contract | manifest |
+| P4-04 | observability | P1 | P3-01,P3-02,P4-02,P4-03 | I | correlation/redaction | redaction scan |
 | P5-01 | K8s | P0 | P4-03,P4-04 | J | first-deploy manifests | kustomize output |
 | P5-02 | OpenTofu | P1 | P5-01 | J | portable infra validation | tofu validate |
 | P5-03 | release build | P0 | P1-04,P5-01 | K | complete release bundle | release manifest |

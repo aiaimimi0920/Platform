@@ -30,8 +30,6 @@ const QUOTE_CHARS = new Set([
   "}", // right brace
   ";", // semicolon
   ":", // colon
-  "<", // less than (for nested tags)
-  ">", // greater than (for nested tags)
   ",", // comma
   ".", // period
   "?", // question mark
@@ -48,131 +46,70 @@ function isQuoteChar(text: string, pos: number): boolean {
   return QUOTE_CHARS.has(text[pos]);
 }
 
-/**
- * Find the next occurrence of a thinking tag (start or end)
- *
- * @param text - Text to search
- * @param startPos - Position to start searching from
- * @param tag - Tag to search for ("<thinking>" or "</thinking>")
- * @returns Position of the tag, or -1 if not found
- */
-function findThinkingTag(text: string, startPos: number, tag: string): number {
-  let searchPos = startPos;
+const THINKING_START_TAG = "<thinking>";
+const THINKING_END_TAG = "</thinking>";
 
+/** Return the first unquoted occurrence of a tag in a buffer. */
+function findUnquotedTag(text: string, tag: string, startPos = 0): number {
+  let searchPos = startPos;
   while (true) {
     const pos = text.indexOf(tag, searchPos);
     if (pos === -1) {
       return -1;
     }
 
-    // Check if tag is quoted (has quote char before or after)
     const hasQuoteBefore = pos > 0 && isQuoteChar(text, pos - 1);
     const hasQuoteAfter = isQuoteChar(text, pos + tag.length);
-
-    if (hasQuoteBefore || hasQuoteAfter) {
-      // Tag is quoted, skip it
-      searchPos = pos + 1;
-      continue;
-    }
-
-    return pos;
-  }
-}
-
-/**
- * Find the real thinking end tag (not quoted, followed by double newline or at buffer end)
- *
- * @param buffer - Text buffer to search
- * @returns Position of the real end tag, or -1 if not found
- */
-function findRealThinkingEndTag(buffer: string): number {
-  const tag = "</thinking>";
-  let searchPos = 0;
-
-  while (true) {
-    const pos = findThinkingTag(buffer, searchPos, tag);
-    if (pos === -1) {
-      return -1;
-    }
-
-    const afterPos = pos + tag.length;
-    const afterContent = buffer.slice(afterPos);
-
-    // Real thinking end tag is followed by double newline
-    if (afterContent.startsWith("\n\n")) {
+    if (!hasQuoteBefore && !hasQuoteAfter) {
       return pos;
     }
 
-    // Continue searching
     searchPos = pos + 1;
   }
 }
 
 /**
- * Find the real thinking end tag at buffer end (allows only whitespace after tag)
- *
- * Used for "boundary events" where thinking ends immediately before tool_use or stream end.
- *
- * @param buffer - Text buffer to search
- * @returns Position of the real end tag at buffer end, or -1 if not found
+ * Find a suffix which may become a complete tag when the next chunk arrives.
+ * Include a preceding quote character so a quoted tag split across chunks is
+ * still classified correctly after the buffer is appended.
  */
-function findRealThinkingEndTagAtBufferEnd(buffer: string): number {
-  const tag = "</thinking>";
-  let searchPos = 0;
-
-  while (true) {
-    const pos = findThinkingTag(buffer, searchPos, tag);
-    if (pos === -1) {
-      return -1;
+function findPotentialTagSuffix(text: string, tag: string): number {
+  const firstCandidate = Math.max(0, text.length - tag.length + 1);
+  for (let pos = firstCandidate; pos < text.length; pos += 1) {
+    const suffix = text.slice(pos);
+    if (tag.startsWith(suffix) && suffix.length < tag.length) {
+      return pos > 0 && isQuoteChar(text, pos - 1) ? pos - 1 : pos;
     }
-
-    const afterPos = pos + tag.length;
-    const afterContent = buffer.slice(afterPos);
-
-    // Only whitespace after tag = real end tag at buffer end
-    if (afterContent.trim() === "") {
-      return pos;
-    }
-
-    // Continue searching
-    searchPos = pos + 1;
   }
+  return -1;
 }
 
 /**
- * Find the real thinking start tag (not quoted)
- *
- * @param buffer - Text buffer to search
- * @returns Position of the real start tag, or -1 if not found
+ * Remove whitespace which belongs to the transport boundary after a thinking
+ * block. Horizontal spacing before ordinary prose remains untouched, while
+ * newline-delimited boundaries (including tool events) are collapsed.
  */
-function findRealThinkingStartTag(buffer: string): number {
-  return findThinkingTag(buffer, 0, "<thinking>");
-}
-
-/**
- * Find the nearest valid UTF-8 character boundary at or before target position
- *
- * UTF-8 characters can be 1-4 bytes. Cutting at an arbitrary byte position
- * can split a multi-byte character, causing errors.
- *
- * @param text - Text to search
- * @param target - Target position
- * @returns Nearest valid character boundary
- */
-function findCharBoundary(text: string, target: number): number {
-  if (target >= text.length) {
-    return text.length;
-  }
-  if (target === 0) {
-    return 0;
+function consumeBoundaryWhitespace(text: string): { text: string; consumed: boolean } {
+  if (text.length === 0) {
+    return { text, consumed: false };
   }
 
-  // Search backwards for valid character boundary
-  let pos = target;
-  while (pos > 0 && !text.substring(0, pos + 1).endsWith(text[pos])) {
-    pos -= 1;
+  const leadingWhitespace = text.match(/^[\t\r\n ]*/)?.[0] ?? "";
+  if (leadingWhitespace.length === 0) {
+    return { text, consumed: false };
   }
-  return pos;
+
+  if (/\r?\n/.test(leadingWhitespace)) {
+    return { text: text.slice(leadingWhitespace.length), consumed: true };
+  }
+
+  // A chunk containing only spaces may be a boundary split. Keep it pending
+  // so the next chunk can tell whether it precedes a real newline/tool event.
+  if (leadingWhitespace.length === text.length) {
+    return { text, consumed: false };
+  }
+
+  return { text, consumed: false };
 }
 
 /**
@@ -182,6 +119,8 @@ export type ThinkingFilterState = {
   buffer: string; // Accumulated text buffer
   inThinking: boolean; // Currently inside <thinking> block
   thinkingContent: string; // Accumulated thinking content
+  suppressBoundaryWhitespace: boolean; // Drop newline-delimited spacing after a closed block
+  endTagSplitAcrossChunks: boolean; // Defer post-tag text until finalize for split end tags
 };
 
 /**
@@ -192,6 +131,8 @@ export function createThinkingFilterState(): ThinkingFilterState {
     buffer: "",
     inThinking: false,
     thinkingContent: "",
+    suppressBoundaryWhitespace: false,
+    endTagSplitAcrossChunks: false,
   };
 }
 
@@ -203,60 +144,74 @@ export function createThinkingFilterState(): ThinkingFilterState {
  * @returns Filtered text to emit (thinking blocks removed)
  */
 export function processThinkingChunk(state: ThinkingFilterState, chunk: string): string {
-  // Add chunk to buffer
   state.buffer += chunk;
 
   let output = "";
 
   while (true) {
     if (!state.inThinking) {
-      // Look for thinking start tag
-      const startPos = findRealThinkingStartTag(state.buffer);
+      if (state.suppressBoundaryWhitespace) {
+        const boundary = consumeBoundaryWhitespace(state.buffer);
+        if (boundary.consumed) {
+          state.buffer = boundary.text;
+        } else if (state.buffer.trim() === "") {
+          // Wait for a non-whitespace chunk before deciding whether the
+          // pending spaces belong to ordinary prose.
+          break;
+        } else {
+          state.suppressBoundaryWhitespace = false;
+        }
+      }
+
+      const startPos = findUnquotedTag(state.buffer, THINKING_START_TAG);
 
       if (startPos === -1) {
-        // No start tag found, emit all buffer content
-        output += state.buffer;
-        state.buffer = "";
+        const partialPos = findPotentialTagSuffix(state.buffer, THINKING_START_TAG);
+        if (partialPos === -1) {
+          output += state.buffer;
+          state.buffer = "";
+        } else if (partialPos > 0) {
+          output += state.buffer.slice(0, partialPos);
+          state.buffer = state.buffer.slice(partialPos);
+        }
         break;
       }
 
-      // Found start tag, emit content before it
       const beforeStart = state.buffer.slice(0, startPos);
       output += beforeStart;
 
-      // Enter thinking mode
       state.inThinking = true;
       state.thinkingContent = "";
-      state.buffer = state.buffer.slice(startPos + "<thinking>".length);
+      state.suppressBoundaryWhitespace = false;
+      state.buffer = state.buffer.slice(startPos + THINKING_START_TAG.length);
     } else {
-      // Inside thinking block, look for end tag
-      let endPos = findRealThinkingEndTag(state.buffer);
+      const endPos = findUnquotedTag(state.buffer, THINKING_END_TAG);
 
       if (endPos === -1) {
-        // Try finding end tag at buffer end (boundary event)
-        endPos = findRealThinkingEndTagAtBufferEnd(state.buffer);
-      }
-
-      if (endPos === -1) {
-        // No end tag found yet, accumulate thinking content
-        state.thinkingContent += state.buffer;
-        state.buffer = "";
+        const partialPos = findPotentialTagSuffix(state.buffer, THINKING_END_TAG);
+        if (partialPos === -1) {
+          state.thinkingContent += state.buffer;
+          state.buffer = "";
+        } else if (partialPos > 0) {
+          state.thinkingContent += state.buffer.slice(0, partialPos);
+          state.buffer = state.buffer.slice(partialPos);
+          state.endTagSplitAcrossChunks = true;
+        } else {
+          state.endTagSplitAcrossChunks = true;
+        }
         break;
       }
 
-      // Found end tag, skip thinking content
+      const deferRemainder = state.endTagSplitAcrossChunks;
+      state.endTagSplitAcrossChunks = false;
       state.thinkingContent += state.buffer.slice(0, endPos);
-
-      // Exit thinking mode
       state.inThinking = false;
-
-      // Skip the end tag and continue processing
-      const afterEndTag = endPos + "</thinking>".length;
+      state.suppressBoundaryWhitespace = true;
+      const afterEndTag = endPos + THINKING_END_TAG.length;
       state.buffer = state.buffer.slice(afterEndTag);
 
-      // If followed by double newline, skip it too
-      if (state.buffer.startsWith("\n\n")) {
-        state.buffer = state.buffer.slice(2);
+      if (deferRemainder) {
+        break;
       }
     }
   }
@@ -271,14 +226,28 @@ export function processThinkingChunk(state: ThinkingFilterState, chunk: string):
  * @returns Any remaining filtered text to emit
  */
 export function finalizeThinkingFilter(state: ThinkingFilterState): string {
-  // If still in thinking mode, the thinking block was incomplete
-  // Emit the buffer as-is (don't filter incomplete blocks)
-  if (state.inThinking) {
-    return "<thinking>" + state.thinkingContent + state.buffer;
+  let output = "";
+  if (!state.inThinking && state.buffer.length > 0) {
+    output = processThinkingChunk(state, "");
   }
 
-  // Emit any remaining buffer content
-  return state.buffer;
+  if (state.inThinking) {
+    const remaining = THINKING_START_TAG + state.thinkingContent + state.buffer;
+    state.buffer = "";
+    return output + remaining;
+  }
+
+  if (state.suppressBoundaryWhitespace && state.buffer.trim() === "") {
+    state.buffer = "";
+    return output;
+  }
+
+  const boundary = state.suppressBoundaryWhitespace
+    ? consumeBoundaryWhitespace(state.buffer)
+    : { text: state.buffer, consumed: false };
+  state.suppressBoundaryWhitespace = false;
+  state.buffer = "";
+  return output + boundary.text;
 }
 
 /**

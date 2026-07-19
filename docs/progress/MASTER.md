@@ -33,7 +33,7 @@
 ## 阶段
 
 - [x] Phase 0: 设计与计划冻结 (5/5 tasks) [details](./phase-0-design-and-plan.md)
-- [ ] Phase 1: 验收基础设施与真实门禁 (3/4 tasks) [details](./phase-1-acceptance-infrastructure.md)
+- [x] Phase 1: 验收基础设施与真实门禁 (4/4 tasks) [details](./phase-1-acceptance-infrastructure.md)
 - [ ] Phase 2: 重度智能体真实闭环 (0/5 tasks) [details](./phase-2-heavy-chat.md)
 - [ ] Phase 3: 产品真实性与正式入口 (0/4 tasks) [details](./phase-3-product-truthfulness.md)
 - [ ] Phase 4: 核心领域测试与安全可观测性 (0/4 tasks) [details](./phase-4-domain-security-observability.md)
@@ -52,13 +52,15 @@ Phase 0 当前任务：
 
 ## Current Status
 
-- 当前阶段：Phase 1。
-- 已完成：Phase 0 全部设计任务；`P1-01` acceptance manifest、命令执行器、证据脱敏和 required skip-fail runner；`P1-02` isolated Compose、临时 secret/credential root、Platform doubles 与 owner-aware cleanup；`P1-03` production Dev Auth guard、Worker/Account Worker/Executor readiness 与 Compose health gates。
-- 当前动作：按依赖图推进 `P1-04` strict acceptance inventory、历史 debt 基线和 `smoke` bridge。
-- 运行时代码：已进入 Phase 1 实施；严格命令清单与 `smoke` bridge 仍由 `P1-04` 完成。
+- 当前阶段：Phase 2（Phase 1 验收基础设施已完成，产品本身尚未完成）。
+- 已完成：Phase 0 全部设计任务；`P1-01` acceptance manifest、命令执行器、证据脱敏和 required skip-fail runner；`P1-02` isolated Compose、临时 secret/credential root、Platform doubles 与 owner-aware cleanup；`P1-03` production Dev Auth guard、Worker/Account Worker/Executor readiness 与 Compose health gates；`P1-04` strict acceptance inventory、debt 修复、`smoke` bridge 和 external-boundary harness。
+- `P1-04` 最终真实运行记录于 `.runtime/acceptance/platform-acceptance-p104-runtime2/acceptance-manifest.json`：required `14 discovered / 14 executed / 9 passed / 5 failed / 0 skipped`；external-boundary `4 discovered / 4 executed / 3 passed / 0 failed / 1 not-applicable`。required 失败为 integration gate 未获授权以及尚未实现的 Owner、Visitor、Operator、dependency-error 浏览器套件，未被静默标记为 skip。
+- 同一 run 的 Compose render/startup 均成功，服务均 healthy，owner cleanup receipt 已保留；cleanup 后本次验收的容器、网络、volume 均为 `0`。这些是基础设施证据，不是产品验收通过证据。
+- 当前动作：按依赖图进入 `P2-01`，建立重度智能体服务端持久化与真实 Gateway 闭环。
+- 产品状态：`Platform 产品未完成`。Phase 2-6 和完整 release 尚未完成；required 门禁仍有 5 项失败，不能给出产品可验收或 release 完成结论。
 
 ## Next Steps
 
-1. 完成 Phase 1 `P1-04` required/external-boundary inventory、历史债务清零和 `smoke` strict bridge。
-2. 进入 Phase 2，建立重度智能体服务端持久化与真实 Gateway 闭环。
-3. 每个 task 完成后更新本文件、对应 phase progress 和 evidence manifest，并按依赖图连续实施至 Phase 6。
+1. 完成 `P2-01` contracts、migration、repository，并以真实测试锁定 owner 隔离、slot、thread 和 message 不变量。
+2. 按 `P2-01 -> P2-02 -> P2-03 -> P2-04 -> P2-05` 连续建立重度智能体真实闭环，再处理 Phase 3-6 的产品真实性、领域覆盖、部署、浏览器和 release 门禁。
+3. 每个 task 完成后更新本文件、对应 phase progress 和 evidence manifest；只有所有 required/external-boundary 门禁与最终 release smoke 满足 canonical 条件，才能改变产品状态。

@@ -8,12 +8,9 @@ import { HttpError } from "../../platform/errors";
 
 type JsonRecord = Record<string, unknown>;
 
-const enabled = process.env.TEA_PLATFORM_REAL_SMOKE === "1";
-
 describe("Platform Tea real daemon smoke", () => {
   it(
     "proxies a full ticket lifecycle through Platform Core to a real tea-daemon",
-    { skip: enabled ? false : "set TEA_PLATFORM_REAL_SMOKE=1 and use scripts/smoke-platform-tea-real.ps1" },
     async () => {
       const teaServerUrl = requireEnv("TEA_SERVER_URL");
       const teaAuthToken = requireEnv("TEA_AUTH_TOKEN");

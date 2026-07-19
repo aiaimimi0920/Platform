@@ -3,16 +3,18 @@
 - [x] `P1-01` manifest、命令执行器和 required skip-fail runner。
 - [x] `P1-02` isolated Compose、临时 secret/credential root、Platform doubles、owner cleanup。
 - [x] `P1-03` Web production Dev Auth guard、Worker/Account Worker/Executor readiness。
-- [ ] `P1-04` `smoke` strict bridge、debt 9 项清零、required/external-boundary manifest。
+- [x] `P1-04` `smoke` strict bridge、debt 修复、required/external-boundary manifest。
 
 Acceptance: `npm run acceptance:ci` exits nonzero for any required skip/failure and records `acceptance-manifest.json`.
+
+Phase 1 的基础设施任务已全部完成（`4/4`），但这不等于 Platform 产品完成。P1-04 的最终 required manifest 仍有内部失败，后续 Phase 2-6 和 release 任务必须继续执行。
 
 ## P1-01 Evidence
 
 - `node --test scripts/acceptance/tests/*.test.mjs`: `48/48` passed, including real Node/Vitest skip and todo detection, bounded timeout tree cleanup, global run/evidence claims, concurrent atomic evidence writes, portable paths, credential redaction, and false-pass rejection.
 - required-mode gated command: exit `1` with `Skipping gated tests is forbidden`.
 - `npm run smoke:quick`: passed; existing Tea real smoke remains explicitly skipped in the quick baseline.
-- `npm run acceptance:ci`: exit `1` with a failed manifest because the complete required/external-boundary inventory is intentionally deferred to `P1-04`.
+- P1-01 historical snapshot: `npm run acceptance:ci` exited `1` with a failed manifest because the complete required/external-boundary inventory was intentionally deferred to `P1-04`; the final P1-04 run is recorded below.
 
 ## P1-02 Evidence
 
@@ -35,3 +37,13 @@ Acceptance: `npm run acceptance:ci` exits nonzero for any required skip/failure 
 - Isolated runtime `platform-acceptance-p103-runtime2`：11 个服务全部 healthy；Web、Core、Account API、Gateway、Loom、Tea 的 `/ready` 均 `200`；Worker、Account Worker、Executor 容器内 `/health` 与 `/ready` 均 `200`；Executor 20 个常驻调度 loop 均有 `lastSuccessAt`，`failingLoops=[]`，日志无 `401/404/error`；另有 2 个 CLI/CronJob task，不计入常驻 loop。
 - Production guard probe：使用最新 Web 镜像运行 `NODE_ENV=production` 与 `DEV_AUTH_BYPASS_ENABLED=true`，容器退出码 `1`，错误为 `DEV_AUTH_BYPASS_ENABLED must be disabled when NODE_ENV=production`。
 - Runtime 期间发现并修复两项真实缺口：Outbox alert 机器任务错误要求用户上下文；Executor 中两个没有 Core 路由实现的 discount archive loop 已删除，并由回归测试锁定。
+
+## P1-04 Evidence
+
+- acceptance unit tests：`node --test scripts/acceptance/tests/*.test.mjs`，`90/90` passed；`npm run smoke:quick`、`npm run test:debt` 和受影响 workspace 验证通过。
+- debt 修复结果：原 9 项失败均已清零；`npm run test:vitest:debt --workspace @neuro/ai-gateway-domain` 为 `55/55` passed；`npm run test:node-mock:debt --workspace @neuro/ai-gateway-domain` 为 `56/56` passed。P1-04 开始前的 `44 passed / 9 failed / 53 total` 已作为历史 RED 起始基线保留，不再代表当前结果。
+- required/external-boundary inventory 固定为 `14 + 4` 项。最终真实 run 为 `.runtime/acceptance/platform-acceptance-p104-runtime2/acceptance-manifest.json`：required `14 discovered / 14 executed / 9 passed / 5 failed / 0 skipped`；external-boundary `4 discovered / 4 executed / 3 passed / 0 failed / 1 not-applicable`。
+- required 的 5 个失败是：`integration-required` 在 required 模式拒绝 gated skip（需要 `AI_GATEWAY_INTEGRATION_TESTS=1`），以及 `browser-owner`、`browser-visitor`、`browser-operator`、`browser-errors` 尚未实现。它们均以非零失败留在 manifest 中，没有被伪装成通过或跳过。
+- external-boundary 的 Gateway、Loom、Tea contract probes 通过；Hook source/dependency inventory 证明当前没有 Platform-owned runtime hook 调用点，因此记录为 `not-applicable`，不是 `passed`。
+- Compose render/startup 均为 exit `0`；startup project 的服务均报告 healthy，`compose/startup/compose-cleanup.json` 与 `compose/render/compose-cleanup.json` 保留 owner cleanup receipt。cleanup 后本次 run 的容器、网络、volume 均为 `0`，临时 `resources/` 已清理。
+- P1-04 收口结论：Phase 1 acceptance infrastructure 可复现且门禁诚实，但 manifest overall 为 failed；当前 canonical 产品状态仍为 `Platform 产品未完成`，不得据此生成或宣称完整 release。

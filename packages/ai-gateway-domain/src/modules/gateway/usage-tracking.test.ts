@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { describe, it, beforeEach, mock } from "node:test";
+import { describe, it, before, beforeEach, mock } from "node:test";
 
 import type {
   GatewayUsageReport,
@@ -52,11 +52,21 @@ function createRedisMock() {
   return redisMock;
 }
 
+function resetRedisMock(redisMock: ReturnType<typeof createRedisMock>): void {
+  redisMock._store.clear();
+  redisMock._lists.clear();
+  redisMock.get.mock.resetCalls();
+  redisMock.set.mock.resetCalls();
+  redisMock.decrby.mock.resetCalls();
+  redisMock.rpush.mock.resetCalls();
+  redisMock.lpop.mock.resetCalls();
+}
+
 // ---------------------------------------------------------------------------
 // Module loader with mocked Redis
 // ---------------------------------------------------------------------------
 
-let redisMock: ReturnType<typeof createRedisMock>;
+const redisMock = createRedisMock();
 
 let parseUpstreamUsage: (responseBody: unknown, provider: string) => {
   promptTokens: number;
@@ -80,9 +90,9 @@ let initGatewayQuota: (args: {
 let enqueueGatewayUsageReport: (report: GatewayUsageReport) => Promise<void>;
 let dequeueGatewayUsageReports: (batchSize: number) => Promise<GatewayUsageReport[]>;
 
-beforeEach(async () => {
-  redisMock = createRedisMock();
-
+// Register the ESM mock once; node:test rejects repeated registrations for the
+// same specifier. Reset only the in-memory state between individual tests.
+before(async () => {
   mock.module("@/db/redis", {
     namedExports: { redis: redisMock },
   });
@@ -95,6 +105,10 @@ beforeEach(async () => {
   initGatewayQuota = mod.initGatewayQuota;
   enqueueGatewayUsageReport = mod.enqueueGatewayUsageReport;
   dequeueGatewayUsageReports = mod.dequeueGatewayUsageReports;
+});
+
+beforeEach(() => {
+  resetRedisMock(redisMock);
 });
 
 // ---------------------------------------------------------------------------

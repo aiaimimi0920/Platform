@@ -98,9 +98,17 @@ function normalizeResultStatus(status) {
   return status;
 }
 
-export function redactText(value) {
+export function redactText(value, sensitiveValues = []) {
   if (typeof value !== "string" || value.length === 0) return value ?? "";
-  return value
+  const values = Array.isArray(sensitiveValues)
+    ? [...new Set(sensitiveValues.filter((item) => typeof item === "string" && item.length > 0))]
+        .sort((left, right) => right.length - left.length)
+    : [];
+  const valueRedacted = values.reduce(
+    (current, secret) => current.replaceAll(secret, "[REDACTED]"),
+    value,
+  );
+  return valueRedacted
     .replace(/\b(Set-Cookie|Cookie)\b\s*[:=]\s*[^\r\n]*/gi, (_match, header) => `${header}: [REDACTED]`)
     .replace(
       /(["']Authorization["']\s*:\s*)(?:"[^"]*"|'[^']*')/gi,
@@ -135,6 +143,8 @@ const SENSITIVE_ARGUMENT_COMPONENTS = new Set([
   "pwd",
   "secret",
   "token",
+  "jwt",
+  "jws",
 ]);
 
 function parseCredentialArgument(value) {
@@ -144,13 +154,37 @@ function parseCredentialArgument(value) {
     .split(/[-_.]+/)
     .some((component) => SENSITIVE_ARGUMENT_COMPONENTS.has(component.toLowerCase()));
   if (!sensitive) return null;
+  const separator = value.indexOf("=");
   return {
     inline: value.includes("="),
     prefix: `${match[1]}${match[2]}`,
+    value: value.includes("=") ? value.slice(separator + 1) : null,
   };
 }
 
-export function redactArgs(args) {
+export function collectSensitiveArgumentValues(args) {
+  const values = [];
+  let collectNext = false;
+  for (const item of args) {
+    const value = String(item);
+    if (collectNext) {
+      if (value) values.push(value);
+      collectNext = false;
+      continue;
+    }
+
+    const credentialArgument = parseCredentialArgument(value);
+    if (!credentialArgument) continue;
+    if (credentialArgument.inline) {
+      if (credentialArgument.value) values.push(credentialArgument.value);
+    } else {
+      collectNext = true;
+    }
+  }
+  return values;
+}
+
+export function redactArgs(args, sensitiveValues = []) {
   const redacted = [];
   let redactNext = false;
   for (const item of args) {
@@ -165,7 +199,7 @@ export function redactArgs(args) {
       );
       redactNext = !credentialArgument.inline;
     } else {
-      redacted.push(redactText(value));
+      redacted.push(redactText(value, sensitiveValues));
     }
   }
   return redacted;
@@ -199,6 +233,18 @@ export function recordSuiteResult(manifest, result) {
   const id = normalizeResultId(manifest, result.id);
   const layer = normalizeLayer(result.layer);
   const reportedStatus = normalizeResultStatus(result.status);
+  if (reportedStatus === "external-blocked" || reportedStatus === "not-applicable") {
+    if (typeof result.evidencePath !== "string" || !result.evidencePath.trim()) {
+      throw new TypeError(
+        `${reportedStatus} acceptance results require an evidence path`,
+      );
+    }
+    if (typeof result.skipReason !== "string" || !result.skipReason.trim()) {
+      throw new TypeError(
+        `${reportedStatus} acceptance results require an explicit skip reason`,
+      );
+    }
+  }
   const counters = manifest.suites[layer];
   const exitCode = Number.isInteger(result.exitCode) ? result.exitCode : null;
   const mustFail =
@@ -226,7 +272,12 @@ export function recordSuiteResult(manifest, result) {
   };
 
   counters.discovered += 1;
-  if (status === "passed" || status === "failed" || status === "external-blocked") {
+  if (
+    status === "passed" ||
+    status === "failed" ||
+    status === "external-blocked" ||
+    status === "not-applicable"
+  ) {
     counters.executed += 1;
   }
   if (status === "passed") counters.passed += 1;
@@ -245,6 +296,9 @@ function collectLayerFailures(layerName, counters) {
   if (counters.skipped > 0) reasons.push(`${layerName} has ${counters.skipped} skipped suite(s)`);
   if (counters.externalBlocked > 0) {
     reasons.push(`${layerName} has ${counters.externalBlocked} externalBlocked suite(s)`);
+  }
+  if (layerName === "required" && counters.notApplicable > 0) {
+    reasons.push(`${layerName} has ${counters.notApplicable} not-applicable suite(s)`);
   }
   if (counters.executed < counters.discovered) {
     reasons.push(`${layerName} executed ${counters.executed} of ${counters.discovered} discovered suite(s)`);

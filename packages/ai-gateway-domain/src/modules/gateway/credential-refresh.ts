@@ -148,6 +148,10 @@ export class CredentialRefresherRegistry {
  */
 export const credentialRefresherRegistry = new CredentialRefresherRegistry();
 
+function isCredentialRefresherRegistry(value: unknown): value is CredentialRefresherRegistry {
+  return value instanceof CredentialRefresherRegistry;
+}
+
 /**
  * Helper function to check if a credential needs refresh
  *
@@ -158,8 +162,9 @@ export const credentialRefresherRegistry = new CredentialRefresherRegistry();
 export function checkCredentialExpiration(
   providerType: string,
   credential: unknown,
+  registry: CredentialRefresherRegistry = credentialRefresherRegistry,
 ): CredentialExpirationStatus | null {
-  const refresher = credentialRefresherRegistry.get(providerType);
+  const refresher = registry.get(providerType);
   if (!refresher) {
     return null;
   }
@@ -175,12 +180,28 @@ export function checkCredentialExpiration(
  * @param config - Optional provider-specific configuration
  * @returns Refresh result or error if no refresher found
  */
-export async function refreshCredential(
+export function refreshCredential(
+  providerType: string,
+  credential: unknown,
+  registry: CredentialRefresherRegistry,
+): Promise<CredentialRefreshResult>;
+export function refreshCredential(
   providerType: string,
   credential: unknown,
   config?: unknown,
+  registry?: CredentialRefresherRegistry,
+): Promise<CredentialRefreshResult>;
+export async function refreshCredential(
+  providerType: string,
+  credential: unknown,
+  configOrRegistry?: unknown,
+  registry?: CredentialRefresherRegistry,
 ): Promise<CredentialRefreshResult> {
-  const refresher = credentialRefresherRegistry.get(providerType);
+  const selectedRegistry = isCredentialRefresherRegistry(configOrRegistry)
+    ? configOrRegistry
+    : (registry ?? credentialRefresherRegistry);
+  const config = isCredentialRefresherRegistry(configOrRegistry) ? undefined : configOrRegistry;
+  const refresher = selectedRegistry.get(providerType);
   if (!refresher) {
     return {
       success: false,

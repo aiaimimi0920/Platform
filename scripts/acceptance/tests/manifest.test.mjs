@@ -108,11 +108,192 @@ test("required external-blocked results do not count as an acceptance pass", () 
     command: "node",
     args: ["boundary.mjs"],
     exitCode: 1,
+    evidencePath: path.join(os.tmpdir(), "platform-evidence", "gateway-contract.json"),
     skipReason: "external test endpoint unavailable",
   });
   const result = finalizeAcceptanceManifest(manifest, { requiredLayers: ["externalBoundary"] });
   assert.equal(result.exitCode, 1);
   assert.match(result.manifest.failureReasons.join("\n"), /externalBlocked/i);
+});
+
+test("not-applicable is an executed classification while required skipped and not-run still fail", () => {
+  const manifest = createAcceptanceManifest({
+    runId: "run-manifest-classifications",
+    evidenceDir: path.join(os.tmpdir(), "platform-evidence"),
+  });
+
+  recordSuiteResult(manifest, {
+    id: "hook-inventory",
+    layer: "externalBoundary",
+    status: "not-applicable",
+    command: "node",
+    args: ["hook-inventory.mjs"],
+    exitCode: 0,
+    evidencePath: path.join(manifest.evidenceDir, "hook-inventory.json"),
+    skipReason: "Source inventory found no Platform-owned Hook call point",
+  });
+  assert.equal(manifest.suites.externalBoundary.executed, 1);
+  assert.equal(
+    finalizeAcceptanceManifest(manifest, { requiredLayers: ["externalBoundary"] }).exitCode,
+    0,
+  );
+
+  const skipped = createAcceptanceManifest({
+    runId: "run-manifest-skipped-required",
+    evidenceDir: path.join(os.tmpdir(), "platform-evidence"),
+  });
+  recordSuiteResult(skipped, {
+    id: "required-skip",
+    layer: "required",
+    status: "skipped",
+    command: "node",
+    args: [],
+    exitCode: 0,
+    evidencePath: path.join(skipped.evidenceDir, "required-skip.json"),
+    skipReason: "fixture unavailable",
+  });
+  assert.equal(finalizeAcceptanceManifest(skipped, { requiredLayers: ["required"] }).exitCode, 1);
+
+  const notRun = createAcceptanceManifest({
+    runId: "run-manifest-not-run-external",
+    evidenceDir: path.join(os.tmpdir(), "platform-evidence"),
+  });
+  recordSuiteResult(notRun, {
+    id: "external-not-run",
+    layer: "externalBoundary",
+    status: "not-run",
+    command: "node",
+    args: [],
+    exitCode: null,
+    evidencePath: path.join(notRun.evidenceDir, "external-not-run.json"),
+    skipReason: "probe was not invoked",
+  });
+  assert.equal(
+    finalizeAcceptanceManifest(notRun, { requiredLayers: ["externalBoundary"] }).exitCode,
+    1,
+  );
+});
+
+test("required not-applicable results fail finalization while external-boundary ones may pass", () => {
+  const required = createAcceptanceManifest({
+    runId: "run-manifest-required-not-applicable",
+    evidenceDir: path.join(os.tmpdir(), "platform-evidence"),
+  });
+  recordSuiteResult(required, {
+    id: "required-inventory",
+    layer: "required",
+    status: "not-applicable",
+    command: "source-inventory",
+    args: [],
+    exitCode: 0,
+    evidencePath: path.join(required.evidenceDir, "required-inventory.json"),
+    skipReason: "Required inventory has no applicable implementation",
+  });
+
+  const requiredResult = finalizeAcceptanceManifest(required, { requiredLayers: ["required"] });
+  assert.equal(requiredResult.exitCode, 1);
+  assert.match(requiredResult.manifest.failureReasons.join("\n"), /not.?applicable/i);
+
+  const external = createAcceptanceManifest({
+    runId: "run-manifest-external-not-applicable",
+    evidenceDir: path.join(os.tmpdir(), "platform-evidence"),
+  });
+  recordSuiteResult(external, {
+    id: "external-hook-inventory",
+    layer: "externalBoundary",
+    status: "not-applicable",
+    command: "source-inventory",
+    args: [],
+    exitCode: 0,
+    evidencePath: path.join(external.evidenceDir, "external-hook-inventory.json"),
+    skipReason: "Source inventory has no Platform-owned Hook call point",
+  });
+  assert.equal(
+    finalizeAcceptanceManifest(external, { requiredLayers: ["externalBoundary"] }).exitCode,
+    0,
+  );
+});
+
+test("every not-applicable result requires evidence metadata and an explicit reason", () => {
+  for (const layer of ["required", "externalBoundary", "conditionalLive"]) {
+    const manifest = createAcceptanceManifest({
+      runId: `run-manifest-not-applicable-${layer.toLowerCase()}`,
+      evidenceDir: path.join(os.tmpdir(), "platform-evidence"),
+    });
+
+    assert.throws(
+      () =>
+        recordSuiteResult(manifest, {
+          id: `${layer}-missing-evidence`,
+          layer,
+          status: "not-applicable",
+          command: "source-inventory",
+          args: [],
+          exitCode: 0,
+          skipReason: "No applicable implementation",
+        }),
+      /evidence/i,
+    );
+    assert.throws(
+      () =>
+        recordSuiteResult(manifest, {
+          id: `${layer}-missing-reason`,
+          layer,
+          status: "not-applicable",
+          command: "source-inventory",
+          args: [],
+          exitCode: 0,
+          evidencePath: path.join(manifest.evidenceDir, `${layer}-missing-reason.json`),
+        }),
+      /reason|skip/i,
+    );
+  }
+});
+
+test("external-blocked requires explicit blocker evidence metadata", () => {
+  const manifest = createAcceptanceManifest({
+    runId: "run-manifest-blocker-evidence",
+    evidenceDir: path.join(os.tmpdir(), "platform-evidence"),
+  });
+
+  assert.throws(
+    () =>
+      recordSuiteResult(manifest, {
+        id: "missing-evidence",
+        layer: "conditionalLive",
+        status: "external-blocked",
+        command: "environment-preflight",
+        args: [],
+        exitCode: 1,
+        skipReason: "Missing live acceptance environment: TOKEN",
+      }),
+    /evidence/i,
+  );
+  assert.throws(
+    () =>
+      recordSuiteResult(manifest, {
+        id: "missing-reason",
+        layer: "conditionalLive",
+        status: "external-blocked",
+        command: "environment-preflight",
+        args: [],
+        exitCode: 1,
+        evidencePath: path.join(manifest.evidenceDir, "missing-reason.json"),
+      }),
+    /reason|blocker/i,
+  );
+
+  const recorded = recordSuiteResult(manifest, {
+    id: "valid-blocker",
+    layer: "conditionalLive",
+    status: "external-blocked",
+    command: "environment-preflight",
+    args: [],
+    exitCode: 1,
+    evidencePath: path.join(manifest.evidenceDir, "valid-blocker.json"),
+    skipReason: "Missing live acceptance environment: TOKEN",
+  });
+  assert.equal(recorded.status, "external-blocked");
 });
 
 test("requires a zero exit code for passed results and fails nonzero skipped results", () => {
@@ -168,6 +349,8 @@ test("records conditional-live counters separately", () => {
     command: "node",
     args: ["linuxdo-live.mjs"],
     exitCode: 1,
+    evidencePath: path.join(manifest.evidenceDir, "linuxdo-live.json"),
+    skipReason: "external preflight blocked",
   });
   recordSuiteResult(manifest, {
     id: "tea-live",
@@ -176,6 +359,8 @@ test("records conditional-live counters separately", () => {
     command: "node",
     args: ["tea-live.mjs"],
     exitCode: null,
+    evidencePath: path.join(manifest.evidenceDir, "tea-live.json"),
+    skipReason: "The conditional-live Tea probe is not applicable in this fixture",
   });
   recordSuiteResult(manifest, {
     id: "gateway-live",
@@ -188,7 +373,7 @@ test("records conditional-live counters separately", () => {
 
   assert.deepEqual(manifest.suites.conditionalLive, {
     discovered: 3,
-    executed: 2,
+    executed: 3,
     passed: 1,
     failed: 0,
     skipped: 0,

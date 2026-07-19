@@ -252,7 +252,7 @@ describe("Helper functions", () => {
         expiresAt: new Date(Date.now() + 4 * 60 * 1000),
       };
 
-      const status = checkCredentialExpiration("mock", credential);
+      const status = checkCredentialExpiration("mock", credential, registry);
 
       expect(status).not.toBeNull();
       expect(status?.isExpired).toBe(true);
@@ -263,7 +263,7 @@ describe("Helper functions", () => {
         expiresAt: new Date(Date.now() + 4 * 60 * 1000),
       };
 
-      const status = checkCredentialExpiration("unknown", credential);
+      const status = checkCredentialExpiration("unknown", credential, registry);
 
       expect(status).toBeNull();
     });
@@ -275,7 +275,7 @@ describe("Helper functions", () => {
         refreshToken: "valid-refresh-token",
       };
 
-      const result = await refreshCredential("mock", credential);
+      const result = await refreshCredential("mock", credential, registry);
 
       expect(result.success).toBe(true);
     });
@@ -285,7 +285,7 @@ describe("Helper functions", () => {
         refreshToken: "short",
       };
 
-      const result = await refreshCredential("mock", credential);
+      const result = await refreshCredential("mock", credential, registry);
 
       expect(result.success).toBe(false);
       if (!result.success) {
@@ -299,7 +299,7 @@ describe("Helper functions", () => {
         refreshToken: "valid-refresh-token",
       };
 
-      const result = await refreshCredential("unknown", credential);
+      const result = await refreshCredential("unknown", credential, registry);
 
       expect(result.success).toBe(false);
       if (!result.success) {

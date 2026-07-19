@@ -89,6 +89,218 @@ test("runAcceptanceCommand redacts cookie fields and raw bearer tokens from pers
   }
 });
 
+test("runAcceptanceCommand redacts every sensitive environment value without hiding ordinary values", async () => {
+  const evidenceDir = await mkdtemp(path.join(os.tmpdir(), "platform-command-env-redaction-"));
+  const evidencePath = path.join(evidenceDir, "command.json");
+  const secretCanary = "opaque-canary-7f38c93b";
+  const shortSecret = "abc1234";
+  const ordinaryValue = "fixture";
+  const postgresSecret = "pg-secret-123";
+  const authSecret = "auth-canary-482";
+  const jwtSecret = "jwt-canary-613";
+  const jwsSecret = "jws-canary-614";
+  const identityToken = "identity-token-canary-615";
+  const trimmedEnvSecret = "trimmed-env-canary-617";
+  const trimmedJsonSecret = "trimmed-json-canary-618";
+  const dockerAuthCanary = "docker-auth-canary-219";
+  const dockerRegistryToken = "docker-registry-token-canary-616";
+  const dockerUsername = "ordinary-registry-user";
+  const dockerMode = "on";
+  const dockerAuthConfig = JSON.stringify({
+    auths: {
+      "registry.example": {
+        auth: dockerAuthCanary,
+        proxyAuth: `  ${trimmedJsonSecret}  `,
+        registryToken: dockerRegistryToken,
+        username: dockerUsername,
+      },
+    },
+    mode: dockerMode,
+  });
+  const credentialPath = path.join(evidenceDir, "credentials.json");
+  const ordinaryPath = path.join(evidenceDir, "ordinary-output.json");
+  const env = {
+    ...process.env,
+    INTERNAL_API_TOKEN: secretCanary,
+    SHORT_TOKEN: shortSecret,
+    ORDINARY_LABEL: ordinaryValue,
+    ORDINARY_OUTPUT_PATH: ordinaryPath,
+    PGPASSWORD: postgresSecret,
+    AUTH: authSecret,
+    CI_JOB_JWT: jwtSecret,
+    CI_JOB_JWS: jwsSecret,
+    IDENTITY_TOKEN: identityToken,
+    TRIMMED_TOKEN: `  ${trimmedEnvSecret}  `,
+    DOCKER_AUTH_CONFIG: dockerAuthConfig,
+    SERVICE_CREDENTIALS: credentialPath,
+  };
+  const result = await runAcceptanceCommand({
+    id: "command-env-redaction",
+    layer: "required",
+    command: process.execPath,
+    args: [
+      "-e",
+      [
+        "console.log(process.env.INTERNAL_API_TOKEN)",
+        "console.error(process.env.INTERNAL_API_TOKEN)",
+        "console.log(process.env.SHORT_TOKEN)",
+        "console.log(process.env.ORDINARY_LABEL)",
+        "console.log(process.env.ORDINARY_OUTPUT_PATH)",
+        "console.log(process.env.PGPASSWORD)",
+        "console.log(process.env.AUTH)",
+        "console.log(process.env.CI_JOB_JWT)",
+        "console.log(process.env.CI_JOB_JWS)",
+        "console.log(process.env.IDENTITY_TOKEN)",
+        "console.log(process.env.TRIMMED_TOKEN.trim())",
+        "console.log(process.env.DOCKER_AUTH_CONFIG)",
+        "console.log(JSON.parse(process.env.DOCKER_AUTH_CONFIG).auths['registry.example'].auth)",
+        "console.log(JSON.parse(process.env.DOCKER_AUTH_CONFIG).auths['registry.example'].proxyAuth.trim())",
+        "console.log(JSON.parse(process.env.DOCKER_AUTH_CONFIG).auths['registry.example'].registryToken)",
+        "console.log(JSON.parse(process.env.DOCKER_AUTH_CONFIG).auths['registry.example'].username)",
+        "console.log(JSON.parse(process.env.DOCKER_AUTH_CONFIG).mode)",
+        "console.log(process.env.SERVICE_CREDENTIALS)",
+        "console.log('Skipping gated tests: ' + process.env.INTERNAL_API_TOKEN)",
+      ].join(";"),
+    ],
+    cwd: process.cwd(),
+    env,
+    evidencePath,
+  });
+
+  const persisted = [
+    JSON.stringify(result),
+    await readFile(evidencePath, "utf8"),
+    await readFile(result.stdoutPath, "utf8"),
+    await readFile(result.stderrPath, "utf8"),
+  ].join("\n");
+  assert.equal(result.status, "skipped");
+  assert.equal(persisted.includes(secretCanary), false, "opaque environment secret leaked");
+  assert.equal(persisted.includes(shortSecret), false, "short environment secret leaked");
+  assert.equal(persisted.includes(postgresSecret), false, "PGPASSWORD leaked");
+  assert.equal(persisted.includes(authSecret), false, "AUTH leaked");
+  assert.equal(persisted.includes(jwtSecret), false, "CI_JOB_JWT leaked");
+  assert.equal(persisted.includes(jwsSecret), false, "CI_JOB_JWS leaked");
+  assert.equal(persisted.includes(identityToken), false, "IDENTITY_TOKEN leaked");
+  assert.equal(persisted.includes(trimmedEnvSecret), false, "trimmed environment token leaked");
+  assert.equal(persisted.includes(trimmedJsonSecret), false, "trimmed JSON auth leaf leaked");
+  assert.equal(persisted.includes(dockerAuthCanary), false, "DOCKER_AUTH_CONFIG leaked");
+  assert.equal(persisted.includes(dockerRegistryToken), false, "nested registry token leaked");
+  assert.equal(persisted.includes(credentialPath), false, "sensitive credential path leaked");
+  assert.equal(persisted.includes(ordinaryValue), true, "ordinary value was over-redacted");
+  assert.equal(persisted.includes(ordinaryPath), true, "ordinary path was over-redacted");
+  assert.equal(persisted.includes(dockerUsername), true, "nested username was over-redacted");
+  assert.equal(persisted.includes(dockerMode), true, "short nested mode was over-redacted");
+});
+
+test("runAcceptanceCommand redacts credentials parsed from URL environment values", async () => {
+  const evidenceDir = await mkdtemp(path.join(os.tmpdir(), "platform-command-url-credentials-"));
+  const evidencePath = path.join(evidenceDir, "command.json");
+  const username = "url-review-user-719";
+  const password = "url-review-password-720";
+  const databaseUrl = `postgres://${username}:${password}@db.example/platform?sslmode=require`;
+  const result = await runAcceptanceCommand({
+    id: "command-url-credentials",
+    layer: "required",
+    command: process.execPath,
+    args: [
+      "-e",
+      "const value = new URL(process.env.DATABASE_URL); console.error(value.username); console.error(value.password); console.log(value.hostname)",
+    ],
+    cwd: process.cwd(),
+    env: { ...process.env, DATABASE_URL: databaseUrl },
+    evidencePath,
+  });
+
+  const persisted = [
+    await readFile(evidencePath, "utf8"),
+    await readFile(result.stdoutPath, "utf8"),
+    await readFile(result.stderrPath, "utf8"),
+  ].join("\n");
+  assert.equal(persisted.includes(username), false, "parsed URL username leaked");
+  assert.equal(persisted.includes(password), false, "parsed URL password leaked");
+  assert.equal(persisted.includes("db.example"), true, "ordinary URL hostname was over-redacted");
+});
+
+test("runAcceptanceCommand redacts base64 variants of sensitive environment values", async () => {
+  const evidenceDir = await mkdtemp(path.join(os.tmpdir(), "platform-command-base64-secret-"));
+  const evidencePath = path.join(evidenceDir, "command.json");
+  const secret = "base64-review-canary-721";
+  const base64 = Buffer.from(secret, "utf8").toString("base64");
+  const base64url = Buffer.from(secret, "utf8").toString("base64url");
+  const result = await runAcceptanceCommand({
+    id: "command-base64-secret",
+    layer: "required",
+    command: process.execPath,
+    args: [
+      "-e",
+      "const value = Buffer.from(process.env.API_TOKEN); console.log(value.toString('base64')); console.error(value.toString('base64url'))",
+    ],
+    cwd: process.cwd(),
+    env: { ...process.env, API_TOKEN: secret },
+    evidencePath,
+  });
+
+  const persisted = [
+    await readFile(evidencePath, "utf8"),
+    await readFile(result.stdoutPath, "utf8"),
+    await readFile(result.stderrPath, "utf8"),
+  ].join("\n");
+  assert.equal(persisted.includes(base64), false, "base64 environment secret leaked");
+  assert.equal(persisted.includes(base64url), false, "base64url environment secret leaked");
+});
+
+test("runAcceptanceCommand redacts credential argument values echoed without their flag", async () => {
+  const evidenceDir = await mkdtemp(path.join(os.tmpdir(), "platform-command-argv-secret-"));
+  const evidencePath = path.join(evidenceDir, "command.json");
+  const secret = "argv-review-canary-722";
+  const result = await runAcceptanceCommand({
+    id: "command-argv-secret",
+    layer: "required",
+    command: process.execPath,
+    args: ["-e", "console.error(process.argv[2])", "--", "--token", secret],
+    cwd: process.cwd(),
+    env: process.env,
+    evidencePath,
+  });
+
+  const persisted = [
+    JSON.stringify(result),
+    await readFile(evidencePath, "utf8"),
+    await readFile(result.stderrPath, "utf8"),
+  ].join("\n");
+  assert.equal(result.status, "passed");
+  assert.equal(persisted.includes(secret), false, "credential argv value leaked");
+  assert.equal(result.args.at(-1), "[REDACTED]");
+});
+
+test("runAcceptanceCommand redacts plural sensitive JSON array leaves", async () => {
+  const evidenceDir = await mkdtemp(path.join(os.tmpdir(), "platform-command-json-array-secret-"));
+  const evidencePath = path.join(evidenceDir, "command.json");
+  const secret = "json-array-final-canary-736";
+  const result = await runAcceptanceCommand({
+    id: "command-json-array-secret",
+    layer: "required",
+    command: process.execPath,
+    args: [
+      "-e",
+      "console.log(JSON.parse(process.env.SERVICE_CREDENTIALS).tokens[0])",
+    ],
+    cwd: process.cwd(),
+    env: {
+      ...process.env,
+      SERVICE_CREDENTIALS: JSON.stringify({ tokens: [secret] }),
+    },
+    evidencePath,
+  });
+
+  const persisted = [
+    await readFile(evidencePath, "utf8"),
+    await readFile(result.stdoutPath, "utf8"),
+    await readFile(result.stderrPath, "utf8"),
+  ].join("\n");
+  assert.equal(persisted.includes(secret), false, "plural JSON token leaf leaked");
+});
+
 test("runAcceptanceCommand reports a nonzero command as failed", async () => {
   const evidenceDir = await mkdtemp(path.join(os.tmpdir(), "platform-command-"));
   const result = await runAcceptanceCommand({

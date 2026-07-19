@@ -159,13 +159,13 @@ web/src/features/account-heavy-agent-chat/adapter.ts
 - Modify: `packages/ai-gateway-domain/src/modules/gateway/thinking-filter.ts`
 - Test: existing three debt test files and Node module-mock debt files
 
-- [ ] Write a failing orchestration test proving `acceptance:ci` records every required suite and fails on one skipped or absent result.
-- [ ] Implement the required command inventory: unit, Vitest, debt, integration, typecheck, build, Compose render/startup, browser suite, and external-boundary contract probes.
-- [ ] Run each debt file separately and preserve the current nine expected failures as RED evidence.
-- [ ] Fix credential round-robin state, refresher registry behavior, and streaming thinking-tag boundary handling without weakening assertions.
-- [ ] Run `npm run test:vitest:debt --workspace @neuro/ai-gateway-domain` and `npm run test:node-mock:debt --workspace @neuro/ai-gateway-domain`; require zero failures.
-- [ ] Change `smoke` to call `acceptance:ci`; preserve the previous command as `smoke:quick`.
-- [ ] Verify `npm run smoke:quick`, `npm run test:debt`, and the acceptance orchestration unit tests pass.
+- [x] Write a failing orchestration test proving `acceptance:ci` records every required suite and fails on one skipped or absent result.
+- [x] Implement the required command inventory: unit, Vitest, debt, integration, typecheck, build, Compose render/startup, browser suite, and external-boundary contract probes.
+- [x] Run each debt file separately and preserve the current nine expected failures as RED evidence.
+- [x] Fix credential round-robin state, refresher registry behavior, and streaming thinking-tag boundary handling without weakening assertions.
+- [x] Run `npm run test:vitest:debt --workspace @neuro/ai-gateway-domain` and `npm run test:node-mock:debt --workspace @neuro/ai-gateway-domain`; require zero failures.
+- [x] Change `smoke` to call `acceptance:ci`; preserve the previous command as `smoke:quick`.
+- [x] Verify `npm run smoke:quick`, `npm run test:debt`, and the acceptance orchestration unit tests pass.
 - [ ] Commit `test(platform): make acceptance gates truthful`.
 
 ## Phase 2: Real Heavy-Agent Chat

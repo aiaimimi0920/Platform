@@ -3,7 +3,11 @@ import { randomUUID } from "node:crypto";
 import { mkdir, rename, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 
-import { redactArgs, redactText } from "./manifest.mjs";
+import {
+  collectSensitiveArgumentValues,
+  redactArgs,
+  redactText,
+} from "./manifest.mjs";
 
 export const DEFAULT_COMMAND_TIMEOUT_MS = 15 * 60 * 1000;
 
@@ -16,6 +20,42 @@ const SKIP_PROBE_MAX_BYTES = 16 * 1024;
 const TASKKILL_TIMEOUT_MS = 3_000;
 const atomicWriteQueues = new Map();
 const TRANSIENT_RENAME_ERROR_CODES = new Set(["EACCES", "EBUSY", "EPERM"]);
+const SENSITIVE_ENV_COMPONENTS = new Set([
+  "authorization",
+  "cookie",
+  "credential",
+  "credentials",
+  "password",
+  "passwd",
+  "pwd",
+  "secret",
+  "token",
+  "jwt",
+  "jws",
+]);
+const SENSITIVE_JSON_FIELD_NAMES = new Set([
+  "auth",
+  "authorization",
+  "token",
+  "accesstoken",
+  "refreshtoken",
+  "idtoken",
+  "sessiontoken",
+  "identitytoken",
+  "bearertoken",
+  "secret",
+  "clientsecret",
+  "password",
+  "passwd",
+  "pwd",
+  "apikey",
+  "accesskey",
+  "privatekey",
+  "signingkey",
+  "encryptionkey",
+]);
+const MIN_NESTED_SECRET_LENGTH = 4;
+const MAX_ENCODED_SECRET_BYTES = 64 * 1024;
 
 async function renameWithRetry(sourcePath, destinationPath) {
   for (let attempt = 0; ; attempt += 1) {
@@ -72,8 +112,152 @@ function appendOutputTail(current, chunk, maxBytes = SKIP_PROBE_MAX_BYTES) {
   return next.subarray(next.length - maxBytes).toString("utf8");
 }
 
-function redactAndBoundText(value, maxBytes) {
-  const partialUserinfoRedacted = redactText(value).replace(
+function isSensitiveEnvironmentKey(name) {
+  const components = String(name)
+    .split(/[^a-z0-9]+/i)
+    .filter(Boolean)
+    .map((component) => component.toLowerCase());
+  const compactName = components.join("");
+  if (
+    /(?:password|passwd|pwd|token|secret|credentials?|authorization|cookie|authconfig|auth)$/.test(
+      compactName,
+    ) || compactName === "dockerconfigjson"
+  ) {
+    return true;
+  }
+  if (components.some((component) => SENSITIVE_ENV_COMPONENTS.has(component))) return true;
+  return (
+    (components.includes("api") && components.includes("key")) ||
+    (components.includes("access") && components.includes("key")) ||
+    (components.includes("private") && components.includes("key")) ||
+    (components.includes("signing") && components.includes("key")) ||
+    (components.includes("encryption") && components.includes("key"))
+  );
+}
+
+function isSensitiveJsonField(name) {
+  const normalized = String(name).replace(/[^a-z0-9]/gi, "").toLowerCase();
+  const singular = normalized
+    .replace(/tokens$/, "token")
+    .replace(/jwts$/, "jwt")
+    .replace(/jwss$/, "jws")
+    .replace(/secrets$/, "secret")
+    .replace(/passwords$/, "password")
+    .replace(/credentials$/, "credential")
+    .replace(/auths$/, "auth")
+    .replace(/keys$/, "key");
+  if (SENSITIVE_JSON_FIELD_NAMES.has(normalized) || SENSITIVE_JSON_FIELD_NAMES.has(singular)) return true;
+  if (/(?:token|jwt|jws|secret|password|passwd|pwd|authorization)$/.test(normalized)) {
+    return true;
+  }
+  if (normalized.endsWith("auth") && normalized !== "oauth") return true;
+  return /(?:api|access|private|signing|encryption)key$/.test(singular);
+}
+
+function addSensitiveValue(values, value, minimumLength = 1) {
+  if (typeof value !== "string") return;
+  const trimmed = value.trim();
+  if (trimmed.length < minimumLength) return;
+  values.push(value);
+  if (trimmed !== value) values.push(trimmed);
+}
+
+function decodeUrlComponent(value) {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value;
+  }
+}
+
+function collectUrlSensitiveValues(rawValue, values) {
+  const value = rawValue.trim();
+  if (!/^[a-z][a-z0-9+.-]*:\/\//i.test(value)) return;
+  let url;
+  try {
+    url = new URL(value);
+  } catch {
+    return;
+  }
+
+  for (const component of [url.username, url.password]) {
+    addSensitiveValue(values, component, MIN_NESTED_SECRET_LENGTH);
+    addSensitiveValue(values, decodeUrlComponent(component), MIN_NESTED_SECRET_LENGTH);
+  }
+  for (const [name, component] of url.searchParams) {
+    if (!isSensitiveJsonField(name)) continue;
+    addSensitiveValue(values, component, MIN_NESTED_SECRET_LENGTH);
+    addSensitiveValue(values, decodeUrlComponent(component), MIN_NESTED_SECRET_LENGTH);
+  }
+}
+
+function expandSensitiveValueVariants(values) {
+  const expanded = [...values];
+  for (const value of values) {
+    const trimmed = value.trim();
+    const bytes = Buffer.from(trimmed, "utf8");
+    if (
+      trimmed.length < MIN_NESTED_SECRET_LENGTH ||
+      bytes.length === 0 ||
+      bytes.length > MAX_ENCODED_SECRET_BYTES
+    ) {
+      continue;
+    }
+    expanded.push(bytes.toString("base64"), bytes.toString("base64url"));
+  }
+  return [...new Set(expanded.filter(Boolean))].sort((left, right) => right.length - left.length);
+}
+
+function collectNestedSensitiveJsonValues(value, fieldName, values) {
+  if (typeof value === "string") {
+    if (isSensitiveJsonField(fieldName)) {
+      addSensitiveValue(values, value, MIN_NESTED_SECRET_LENGTH);
+    }
+    return;
+  }
+
+  if (Array.isArray(value)) {
+    for (const entry of value) collectNestedSensitiveJsonValues(entry, fieldName, values);
+    return;
+  }
+
+  if (!value || typeof value !== "object") return;
+  for (const [key, entry] of Object.entries(value)) {
+    collectNestedSensitiveJsonValues(entry, key, values);
+  }
+}
+
+function collectSensitiveEnvironmentValues(env) {
+  if (!env || typeof env !== "object") return [];
+  const values = [];
+  for (const [name, rawValue] of Object.entries(env)) {
+    if (typeof rawValue !== "string") continue;
+    const value = rawValue.trim();
+    if (!value) continue;
+    collectUrlSensitiveValues(rawValue, values);
+    if (!isSensitiveEnvironmentKey(name)) continue;
+    addSensitiveValue(values, rawValue);
+    if (/^[\[{]/.test(value)) {
+      try {
+        collectNestedSensitiveJsonValues(JSON.parse(value), "", values);
+      } catch {
+        // Keep the raw value redaction for malformed JSON; no structured leaves are available.
+      }
+    }
+  }
+  return values;
+}
+
+function collectSensitiveValues(env, args) {
+  const values = collectSensitiveEnvironmentValues(env);
+  for (const value of collectSensitiveArgumentValues(args)) {
+    addSensitiveValue(values, value);
+  }
+  return expandSensitiveValueVariants(values);
+}
+
+function redactAndBoundText(value, maxBytes, sensitiveValues = []) {
+  const partialUserinfoRedacted = redactText(value, sensitiveValues).replace(
     /((?:\b[a-z][a-z0-9+.-]*:)?\/\/)[^/\s@]*:[^@\s/?#]*$/gi,
     "$1[REDACTED]",
   );
@@ -223,6 +407,7 @@ export async function runAcceptanceCommand({
   let detectedSkipReason = null;
   let outputTruncated = false;
   let timedOut = false;
+  const sensitiveValues = collectSensitiveValues(env, args);
   const appendOutput = (current, chunk) => {
     const next = `${current}${chunk}`;
     const bytes = Buffer.byteLength(next, "utf8");
@@ -305,8 +490,8 @@ export async function runAcceptanceCommand({
   const resolvedEvidencePath = path.resolve(evidencePath);
   const stdoutPath = `${resolvedEvidencePath}.stdout.log`;
   const stderrPath = `${resolvedEvidencePath}.stderr.log`;
-  const stdoutEvidence = redactAndBoundText(stdout, maxOutputBytes);
-  const stderrEvidence = redactAndBoundText(stderr, maxOutputBytes);
+  const stdoutEvidence = redactAndBoundText(stdout, maxOutputBytes, sensitiveValues);
+  const stderrEvidence = redactAndBoundText(stderr, maxOutputBytes, sensitiveValues);
   const redactedStdout = stdoutEvidence.text;
   const redactedStderr = stderrEvidence.text;
   outputTruncated ||= stdoutEvidence.truncated || stderrEvidence.truncated;
@@ -314,8 +499,8 @@ export async function runAcceptanceCommand({
     id: String(id),
     layer,
     status,
-    command: redactText(String(command)),
-    args: redactArgs(args),
+    command: redactText(String(command), sensitiveValues),
+    args: redactArgs(args, sensitiveValues),
     exitCode,
     evidencePath: resolvedEvidencePath,
     stdoutPath,
@@ -326,7 +511,7 @@ export async function runAcceptanceCommand({
     outputTruncated,
     timedOut,
     timeoutMs,
-    skipReason: skipReason ? redactText(skipReason) : null,
+    skipReason: skipReason ? redactText(skipReason, sensitiveValues) : null,
   };
   await Promise.all([
     writeTextAtomic(stdoutPath, redactedStdout),

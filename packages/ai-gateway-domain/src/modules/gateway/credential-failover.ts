@@ -171,7 +171,6 @@ export class CredentialFailoverManager<T = unknown> {
    */
   private selectNextCredential(
     availableCredentials: CredentialEntry<T>[],
-    attempt: number,
   ): CredentialEntry<T> | null {
     if (availableCredentials.length === 0) {
       return null;
@@ -229,29 +228,22 @@ export class CredentialFailoverManager<T = unknown> {
     let totalAttempts = 0;
     const allErrors: Array<{ credentialId: string; error: string }> = [];
     const credentialAttempts = new Map<string, number>();
+    const maxAttemptsPerCredential =
+      this.config.loadBalancingMode === "balanced"
+        ? this.config.maxRetriesPerCredential + 1
+        : this.config.maxRetriesPerCredential;
 
     while (totalAttempts < this.config.maxTotalRetries) {
-      // Select next credential
-      const entry = this.selectNextCredential(availableCredentials, totalAttempts);
+      const eligibleCredentials = availableCredentials.filter(
+        (entry) => (credentialAttempts.get(entry.id) ?? 0) < maxAttemptsPerCredential,
+      );
+      const entry = this.selectNextCredential(eligibleCredentials);
       if (!entry) {
         break;
       }
 
       const credentialId = entry.id;
       const credentialAttemptCount = credentialAttempts.get(credentialId) ?? 0;
-
-      // Check if we've exceeded max retries for this credential
-      if (credentialAttemptCount >= this.config.maxRetriesPerCredential) {
-        // Move to next credential
-        const currentIndex = availableCredentials.findIndex((e) => e.id === credentialId);
-        if (currentIndex >= 0) {
-          availableCredentials.splice(currentIndex, 1);
-        }
-        if (availableCredentials.length === 0) {
-          break;
-        }
-        continue;
-      }
 
       totalAttempts += 1;
       credentialAttempts.set(credentialId, credentialAttemptCount + 1);

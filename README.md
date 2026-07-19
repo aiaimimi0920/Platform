@@ -120,7 +120,7 @@ Focused Web Tea tests:
 
 ```powershell
 cd Platform
-node --test --import tsx web/src/lib/tea-client.test.ts web/src/lib/tea-route-utils.test.ts web/src/lib/tea-api-handlers.test.ts web/src/lib/tea-detail-controls.test.ts web/src/lib/tea-real-core-smoke.test.ts web/src/lib/tea-web-ui-smoke-harness-contract.test.ts
+node --test --import tsx web/src/lib/tea-client.test.ts web/src/lib/tea-route-utils.test.ts web/src/lib/tea-api-handlers.test.ts web/src/lib/tea-detail-controls.test.ts web/src/lib/tea-web-ui-smoke-harness-contract.test.ts
 ```
 
 To prove the browser-facing Platform Web handlers can operate through Platform

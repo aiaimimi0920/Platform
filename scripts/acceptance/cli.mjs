@@ -1,3 +1,4 @@
+import { spawnSync } from "node:child_process";
 import { mkdir, open, rm } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -5,13 +6,68 @@ import { fileURLToPath } from "node:url";
 import {
   createAcceptanceManifest,
   finalizeAcceptanceManifest,
+  redactText,
   validateAcceptanceRunId,
   writeManifestAtomic,
 } from "./manifest.mjs";
+import { runRequiredAcceptance } from "./run-required.mjs";
+import { runLiveAcceptance } from "./run-live.mjs";
 
-const acceptanceRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../.runtime/acceptance");
+const defaultPlatformRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
+const acceptanceRoot = path.join(defaultPlatformRoot, ".runtime", "acceptance");
 const acceptanceClaimRoot = path.join(acceptanceRoot, ".claims");
 const evidenceOwnerFileName = ".acceptance-owner.json";
+
+function probeGitValue(platformRoot, args) {
+  try {
+    const result = spawnSync("git", ["-C", platformRoot, ...args], {
+      encoding: "utf8",
+      shell: false,
+      windowsHide: true,
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    if (result.error || result.status !== 0) return null;
+    return result.stdout.trim();
+  } catch {
+    return null;
+  }
+}
+
+export function resolveAcceptanceGitMetadata({
+  env = process.env,
+  platformRoot = defaultPlatformRoot,
+} = {}) {
+  const commitOverride = typeof env.PLATFORM_ACCEPTANCE_GIT_COMMIT === "string"
+    ? env.PLATFORM_ACCEPTANCE_GIT_COMMIT.trim()
+    : "";
+  const dirtyOverride = typeof env.PLATFORM_ACCEPTANCE_GIT_DIRTY === "string"
+    ? env.PLATFORM_ACCEPTANCE_GIT_DIRTY.trim().toLowerCase()
+    : null;
+  const probedCommit = commitOverride || probeGitValue(platformRoot, ["rev-parse", "HEAD"]);
+  const probedDirty = probeGitValue(platformRoot, [
+    "status",
+    "--porcelain=v1",
+    "--untracked-files=normal",
+    "--",
+    ".",
+  ]);
+  const detectedDirty = probedDirty === null ? null : probedDirty.length > 0;
+  const dirty =
+    dirtyOverride === "true"
+      ? true
+      : dirtyOverride === "false"
+        ? false
+        : detectedDirty;
+  return {
+    commit: probedCommit || null,
+    dirty,
+  };
+}
+
+function isInside(parentPath, childPath) {
+  const relative = path.relative(parentPath, childPath);
+  return relative && relative !== ".." && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative);
+}
 
 function nextRunId() {
   const suffix = `${Date.now()}-${process.pid}-${Math.random().toString(16).slice(2, 10)}`;
@@ -110,28 +166,72 @@ async function claimAcceptanceRun({ evidenceDir, manifestPath, runId }) {
   }
 }
 
-export async function runAcceptanceCli(argv = process.argv.slice(2)) {
+export async function runAcceptanceCli(
+  argv = process.argv.slice(2),
+  {
+    runRequired = runRequiredAcceptance,
+    runLive = runLiveAcceptance,
+    execute = true,
+  } = {},
+) {
   const options = parseAcceptanceArgs(argv);
   const manifestPath = path.join(options.evidenceDir, "acceptance-manifest.json");
   await claimAcceptanceRun({ ...options, manifestPath });
+  const platformRoot = defaultPlatformRoot;
   const manifest = createAcceptanceManifest({
     runId: options.runId,
     evidenceDir: options.evidenceDir,
-    git: {
-      commit: process.env.PLATFORM_ACCEPTANCE_GIT_COMMIT || null,
-      dirty: process.env.PLATFORM_ACCEPTANCE_GIT_DIRTY === "true",
-    },
+    git: resolveAcceptanceGitMetadata({ platformRoot }),
   });
+  await writeManifestAtomic(manifestPath, manifest);
+  if (execute) {
+    try {
+      if (options.mode === "ci") {
+        await runRequired({
+          manifest,
+          evidenceDir: options.evidenceDir,
+          platformRoot,
+        });
+      } else {
+        await runLive({
+          manifest,
+          evidenceDir: options.evidenceDir,
+          platformRoot,
+        });
+      }
+    } catch (error) {
+      const finalized = finalizeAcceptanceManifest(manifest, {
+        requiredLayers: options.mode === "ci" ? ["required", "externalBoundary"] : ["conditionalLive"],
+      });
+      const message = redactText(error instanceof Error ? error.message : String(error));
+      finalized.manifest.failureReasons.push(
+        `${options.mode} acceptance orchestrator failed: ${message}`,
+      );
+      finalized.manifest.status = "failed";
+      await writeManifestAtomic(manifestPath, finalized.manifest);
+      if (isInside(acceptanceRoot, options.evidenceDir)) {
+        await writeManifestAtomic(path.join(acceptanceRoot, "latest.json"), {
+          runId: options.runId,
+          mode: options.mode,
+          manifestPath,
+          status: finalized.manifest.status,
+        });
+      }
+      throw error;
+    }
+  }
   const finalized = finalizeAcceptanceManifest(manifest, {
     requiredLayers: options.mode === "ci" ? ["required", "externalBoundary"] : ["conditionalLive"],
   });
   await writeManifestAtomic(manifestPath, finalized.manifest);
-  await writeManifestAtomic(path.join(acceptanceRoot, "latest.json"), {
-    runId: options.runId,
-    mode: options.mode,
-    manifestPath,
-    status: finalized.manifest.status,
-  });
+  if (isInside(acceptanceRoot, options.evidenceDir)) {
+    await writeManifestAtomic(path.join(acceptanceRoot, "latest.json"), {
+      runId: options.runId,
+      mode: options.mode,
+      manifestPath,
+      status: finalized.manifest.status,
+    });
+  }
   return { ...finalized, manifestPath, options };
 }
 
@@ -141,7 +241,7 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
     console.log(JSON.stringify({ manifestPath: result.manifestPath, status: result.manifest.status }));
     process.exitCode = result.exitCode;
   } catch (error) {
-    console.error(error instanceof Error ? error.message : String(error));
+    console.error(redactText(error instanceof Error ? error.message : String(error)));
     process.exitCode = 2;
   }
 }
