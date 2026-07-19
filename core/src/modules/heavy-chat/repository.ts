@@ -66,6 +66,11 @@ export type AppendHeavyChatMessageArgs = Omit<AppendHeavyChatMessageInput, "crea
 
 export type TransitionHeavyChatMessageArgs = Omit<TransitionHeavyChatMessageInput, "status"> & {
   updatedAt?: Date;
+  expectedAttemptNumber?: number;
+};
+
+export type ReserveHeavyChatMessageAttemptOptions = {
+  staleBefore?: Date;
 };
 
 export interface HeavyChatStore {
@@ -113,6 +118,13 @@ export interface HeavyChatStore {
     ownerUserId: string,
     id: string,
     currentStatus: HeavyChatMessageStatus,
+    patch: Partial<HeavyChatMessageRecord>,
+  ): Promise<HeavyChatMessageRecord | null>;
+  updateMessageIfStatusAndAttempt(
+    ownerUserId: string,
+    id: string,
+    currentStatus: HeavyChatMessageStatus,
+    attemptNumber: number,
     patch: Partial<HeavyChatMessageRecord>,
   ): Promise<HeavyChatMessageRecord | null>;
   listMessages(ownerUserId: string, threadId: string): Promise<HeavyChatMessageRecord[]>;
@@ -439,6 +451,28 @@ class DrizzleHeavyChatStore implements HeavyChatStore {
     return updated ? toMessageRecord(updated) : null;
   }
 
+  async updateMessageIfStatusAndAttempt(
+    ownerUserId: string,
+    id: string,
+    currentStatus: HeavyChatMessageStatus,
+    attemptNumber: number,
+    patch: Partial<HeavyChatMessageRecord>,
+  ) {
+    const [updated] = await this.database
+      .update(heavyChatMessages)
+      .set(patch)
+      .where(
+        and(
+          eq(heavyChatMessages.ownerUserId, ownerUserId),
+          eq(heavyChatMessages.id, id),
+          eq(heavyChatMessages.status, currentStatus),
+          eq(heavyChatMessages.attemptNumber, attemptNumber),
+        ),
+      )
+      .returning();
+    return updated ? toMessageRecord(updated) : null;
+  }
+
   async listMessages(ownerUserId: string, threadId: string) {
     const rows = await this.database
       .select()
@@ -613,6 +647,20 @@ class LazyDrizzleHeavyChatStore implements HeavyChatStore {
       : delegate.updateMessage(ownerUserId, id, patch);
   }
 
+  async updateMessageIfStatusAndAttempt(
+    ownerUserId: string,
+    id: string,
+    currentStatus: HeavyChatMessageStatus,
+    attemptNumber: number,
+    patch: Partial<HeavyChatMessageRecord>,
+  ) {
+    const delegate = await this.getDelegate();
+    if (typeof delegate.updateMessageIfStatusAndAttempt !== "function") {
+      throw new HeavyChatAttemptConflictError("Attempt-aware message transition requires atomic CAS support");
+    }
+    return delegate.updateMessageIfStatusAndAttempt(ownerUserId, id, currentStatus, attemptNumber, patch);
+  }
+
   async listMessages(ownerUserId: string, threadId: string) {
     return (await this.getDelegate()).listMessages(ownerUserId, threadId);
   }
@@ -664,6 +712,18 @@ function resolveMaxSlots(args: CreateHeavyChatSlotInput) {
 function normalizeIdempotencyKey(value: string | null | undefined) {
   const normalized = value?.trim() ?? "";
   return normalized || null;
+}
+
+function recoveryAttemptKey(rootAttemptId: string, attemptNumber: number) {
+  return `heavy-chat:recovery:${rootAttemptId}:${attemptNumber}`;
+}
+
+function isRecoverableStaleMessage(message: HeavyChatMessageRecord, staleBefore: Date | undefined) {
+  return (
+    staleBefore !== undefined &&
+    (message.status === "pending" || message.status === "streaming") &&
+    message.updatedAt.getTime() <= staleBefore.getTime()
+  );
 }
 
 const defaultLocalMutationLocks = new Map<string, Promise<void>>();
@@ -989,7 +1049,12 @@ export function createHeavyChatRepository(options: HeavyChatRepositoryOptions = 
       return store.findSlotAgentBySlot(owner, requireText(slotId, "Heavy chat slot id"));
     },
 
-    async reserveMessageAttempt(ownerUserId: string, messageId: string, idempotencyKey: string) {
+    async reserveMessageAttempt(
+      ownerUserId: string,
+      messageId: string,
+      idempotencyKey: string,
+      options: ReserveHeavyChatMessageAttemptOptions = {},
+    ) {
       const owner = normalizeOwnerUserId(ownerUserId);
       const normalizedMessageId = requireText(messageId, "Heavy chat message id");
       const normalizedKey = requireText(idempotencyKey, "Heavy chat attempt idempotency key");
@@ -999,9 +1064,81 @@ export function createHeavyChatRepository(options: HeavyChatRepositoryOptions = 
           if (existingAttempt.messageId !== normalizedMessageId) {
             throw new HeavyChatAttemptConflictError("Heavy chat attempt key is already used for another message");
           }
+          await tx.lockMessage?.(owner, normalizedMessageId);
           const existingMessage = await tx.findMessageById(owner, existingAttempt.messageId);
           if (!existingMessage) throw new HeavyChatOwnershipError("Heavy chat message does not belong to the owner");
-          return { attempt: existingAttempt, message: existingMessage, created: false as const };
+
+          let activeAttempt = existingAttempt;
+          if (existingMessage.attemptNumber !== existingAttempt.attemptNumber) {
+            const recoveryAttempt = await tx.findMessageAttemptByIdempotencyKey(
+              owner,
+              recoveryAttemptKey(existingAttempt.id, existingMessage.attemptNumber),
+            );
+            if (
+              !recoveryAttempt ||
+              recoveryAttempt.messageId !== existingMessage.id ||
+              recoveryAttempt.attemptNumber !== existingMessage.attemptNumber
+            ) {
+              return { attempt: existingAttempt, message: existingMessage, created: false as const };
+            }
+            activeAttempt = recoveryAttempt;
+          }
+
+          if (isRecoverableStaleMessage(existingMessage, options.staleBefore)) {
+            const attemptNumber = (await tx.maxMessageAttemptNumber(owner, existingMessage.id)) + 1;
+            const recoveryKey = recoveryAttemptKey(existingAttempt.id, attemptNumber);
+            const racedRecovery = await tx.findMessageAttemptByIdempotencyKey(owner, recoveryKey);
+            if (racedRecovery) {
+              const racedMessage = await tx.findMessageById(owner, racedRecovery.messageId);
+              if (racedMessage) {
+                return { attempt: racedRecovery, message: racedMessage, created: false as const };
+              }
+            }
+
+            const recoveryAttempt: HeavyChatMessageAttemptRecord = {
+              id: createId(),
+              ownerUserId: owner,
+              messageId: existingMessage.id,
+              idempotencyKey: recoveryKey,
+              attemptNumber,
+              createdAt: now(),
+            };
+            try {
+              await tx.insertMessageAttempt(recoveryAttempt);
+            } catch (error) {
+              if (error instanceof HeavyChatAttemptConflictError) {
+                const raced = await tx.findMessageAttemptByIdempotencyKey(owner, recoveryKey);
+                if (raced) {
+                  const racedMessage = await tx.findMessageById(owner, raced.messageId);
+                  if (racedMessage) {
+                    return { attempt: raced, message: racedMessage, created: false as const };
+                  }
+                }
+              }
+              throw error;
+            }
+
+            const updated = await tx.updateMessageIfStatusAndAttempt(
+              owner,
+              existingMessage.id,
+              existingMessage.status,
+              activeAttempt.attemptNumber,
+              {
+                status: "pending",
+                attemptNumber,
+                errorCode: null,
+                errorMessage: null,
+                updatedAt: now(),
+              },
+            );
+            if (!updated) {
+              throw new HeavyChatAttemptConflictError("Heavy chat message changed before stale attempt recovery");
+            }
+            await touchThread(tx, owner, updated.threadId, updated.updatedAt);
+            return { attempt: recoveryAttempt, message: updated, created: true as const };
+          }
+
+          return { attempt: activeAttempt, message: existingMessage, created: false as const };
         }
 
         await tx.lockMessage?.(owner, normalizedMessageId);
@@ -1089,11 +1226,28 @@ export function createHeavyChatRepository(options: HeavyChatRepositoryOptions = 
         if (args.actions !== undefined) patch.actions = structuredClone(args.actions);
         if (args.errorCode !== undefined) patch.errorCode = args.errorCode?.trim() || null;
         if (args.errorMessage !== undefined) patch.errorMessage = args.errorMessage?.trim() || null;
-        const updated = tx.updateMessageIfStatus
-          ? await tx.updateMessageIfStatus(owner, message.id, message.status, patch)
-          : await tx.updateMessage(owner, message.id, patch);
+        let updated: HeavyChatMessageRecord | null;
+        if (args.expectedAttemptNumber !== undefined) {
+          if (typeof tx.updateMessageIfStatusAndAttempt !== "function") {
+            throw new HeavyChatAttemptConflictError("Attempt-aware message transition requires atomic CAS support");
+          }
+          updated = await tx.updateMessageIfStatusAndAttempt(
+            owner,
+            message.id,
+            message.status,
+            args.expectedAttemptNumber,
+            patch,
+          );
+        } else if (tx.updateMessageIfStatus) {
+          updated = await tx.updateMessageIfStatus(owner, message.id, message.status, patch);
+        } else {
+          updated = await tx.updateMessage(owner, message.id, patch);
+        }
         if (!updated) {
           const latest = await tx.findMessageById(owner, message.id);
+          if (latest && args.expectedAttemptNumber !== undefined && latest.attemptNumber !== args.expectedAttemptNumber) {
+            throw new HeavyChatAttemptConflictError("Heavy chat message attempt changed before transition");
+          }
           if (latest && !canTransitionHeavyChatMessageStatus(latest.status, status)) {
             throw new HeavyChatInvalidTransitionError(
               `Cannot move heavy chat message from ${latest.status} to ${status}`,

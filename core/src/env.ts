@@ -25,6 +25,8 @@ type CoreEnv = {
   internalApiToken: string;
   aiGatewayInternalUrl: string | null;
   aiGatewayManagementToken: string | null;
+  heavyChatGatewayModel: string | null;
+  heavyChatGatewayTimeoutMs: number;
   teaServerUrl: string | null;
   teaAuthToken: string | null;
   platformOperatorUserIds: string[];
@@ -2280,6 +2282,16 @@ function requireEnv(name: string): string {
   return value;
 }
 
+export function parseHeavyChatGatewayTimeoutMs(value: string | undefined, fallback = 30_000) {
+  const normalized = value?.trim();
+  if (!normalized) return fallback;
+  const parsed = Number(normalized);
+  if (!Number.isFinite(parsed)) {
+    throw new Error("HEAVY_CHAT_GATEWAY_TIMEOUT_MS must be a finite number");
+  }
+  return Math.max(1_000, Math.floor(parsed));
+}
+
 function parseBooleanEnv(value: string | undefined, fallback: boolean) {
   if (!value) return fallback;
   const normalized = value.trim().toLowerCase();
@@ -2352,6 +2364,8 @@ export const env: CoreEnv = {
     process.env.GATEWAY_MANAGEMENT_TOKEN?.trim() ||
     process.env.INTERNAL_API_TOKEN?.trim() ||
     null,
+  heavyChatGatewayModel: process.env.HEAVY_CHAT_GATEWAY_MODEL?.trim() || null,
+  heavyChatGatewayTimeoutMs: parseHeavyChatGatewayTimeoutMs(process.env.HEAVY_CHAT_GATEWAY_TIMEOUT_MS),
   teaServerUrl: process.env.TEA_SERVER_URL?.trim() || process.env.TEA_BASE_URL?.trim() || null,
   teaAuthToken: process.env.TEA_AUTH_TOKEN?.trim() || process.env.INTERNAL_API_TOKEN?.trim() || null,
   platformOperatorUserIds,

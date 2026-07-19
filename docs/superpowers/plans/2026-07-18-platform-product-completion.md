@@ -214,13 +214,13 @@ web/src/features/account-heavy-agent-chat/adapter.ts
 - Modify: `deploy/env/core.env.example`
 - Modify: both Compose files
 
-- [ ] Write contract tests against the Platform Gateway double for success, streaming chunks, provider rejection, timeout, and correlation-id propagation.
-- [ ] Confirm RED because no server-side heavy-chat Gateway client exists.
-- [ ] Implement a server-only client using `AI_GATEWAY_INTERNAL_URL` and management/project credentials; never return management tokens to Web.
-- [ ] Persist the user message before dispatch; persist assistant `pending`, append stream state, then finalize `complete` or `failed`.
-- [ ] Make retry idempotent by original assistant message id and idempotency key.
-- [ ] Run gateway-client, service, and isolated external-boundary tests.
-- [ ] Commit `feat(platform): execute heavy chat through gateway`.
+- [x] Write contract tests against the Platform Gateway double for success, streaming chunks, provider rejection, timeout, and correlation-id propagation.
+- [x] Confirm RED because no server-side heavy-chat Gateway client exists.
+- [x] Implement a server-only client using `AI_GATEWAY_INTERNAL_URL` and management/project credentials; never return management tokens to Web.
+- [x] Persist the user message before dispatch; persist assistant `pending`, append stream state, then finalize `complete` or `failed`.
+- [x] Make retry idempotent by original assistant message id and idempotency key.
+- [x] Run gateway-client, service, and isolated external-boundary tests, including PostgreSQL attempt CAS verification.
+- [x] Commit `feat(platform): execute heavy chat through gateway`.
 
 ### Task P2-04: Core Router, Web API, And Client State
 

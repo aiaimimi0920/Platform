@@ -115,7 +115,7 @@ function isBearer(request, token) {
   return headerValue(request, "authorization") === `Bearer ${token}`;
 }
 
-function unauthorized(response, requestId, boundary) {
+function unauthorized(response, requestId, correlationId, boundary) {
   sendJson(
     response,
     401,
@@ -125,10 +125,11 @@ function unauthorized(response, requestId, boundary) {
       error: { code: "FIXTURE_UNAUTHORIZED", message: `Invalid ${boundary} fixture credential` },
     },
     requestId,
+    { "x-correlation-id": correlationId },
   );
 }
 
-function fixtureError(response, requestId, statusCode = 503, code = "FIXTURE_REJECTED") {
+function fixtureError(response, requestId, correlationId, statusCode = 503, code = "FIXTURE_REJECTED") {
   sendJson(
     response,
     statusCode,
@@ -138,10 +139,11 @@ function fixtureError(response, requestId, statusCode = 503, code = "FIXTURE_REJ
       error: { code, message: "Deterministic Gateway fixture rejection" },
     },
     requestId,
+    { "x-correlation-id": correlationId },
   );
 }
 
-function sendCompletion(response, requestId, body) {
+function sendCompletion(response, requestId, correlationId, body) {
   const model = typeof body.model === "string" && body.model ? body.model : "fixture-chat";
   const payload = {
     id: `chatcmpl-${requestId}`,
@@ -159,15 +161,16 @@ function sendCompletion(response, requestId, body) {
     ],
     usage: { prompt_tokens: 1, completion_tokens: 3, total_tokens: 4 },
   };
-  sendJson(response, 200, payload, requestId);
+  sendJson(response, 200, payload, requestId, { "x-correlation-id": correlationId });
 }
 
-function sendCompletionStream(response, requestId, body) {
+function sendCompletionStream(response, requestId, correlationId, body) {
   const model = typeof body.model === "string" && body.model ? body.model : "fixture-chat";
   response.writeHead(200, {
     "cache-control": "no-store",
     connection: "keep-alive",
     "content-type": "text/event-stream; charset=utf-8",
+    "x-correlation-id": correlationId,
     "x-platform-fixture": "true",
     "x-request-id": requestId,
   });
@@ -211,6 +214,7 @@ export function createGatewayDoubleServer({
       headerValue(request, "x-request-id").trim() ||
       headerValue(request, "x-correlation-id").trim() ||
       `gateway-double-${++requestSequence}`;
+    const correlationId = headerValue(request, "x-correlation-id").trim() || requestId;
 
     try {
       const url = new URL(request.url || "/", "http://gateway-double");
@@ -220,35 +224,38 @@ export function createGatewayDoubleServer({
           200,
           { fixture: true, ok: true, ready: url.pathname !== "/health", requestId, service: "gateway-double" },
           requestId,
+          { "x-correlation-id": correlationId },
         );
         return;
       }
 
       if (url.pathname.startsWith("/__fixture__/")) {
         if (headerValue(request, "x-internal-api-key") !== managementToken && !isBearer(request, projectToken)) {
-          unauthorized(response, requestId, "Gateway");
+          unauthorized(response, requestId, correlationId, "Gateway");
           return;
         }
         const mode = url.pathname.slice("/__fixture__/".length);
         if (mode === "timeout") await new Promise((resolve) => setTimeout(resolve, timeoutMs));
         if (mode === "error" || mode === "reject") {
-          fixtureError(response, requestId);
+          fixtureError(response, requestId, correlationId);
           return;
         }
-        sendJson(response, 200, { fixture: true, ok: true, requestId, service: "gateway-double" }, requestId);
+        sendJson(response, 200, { fixture: true, ok: true, requestId, service: "gateway-double" }, requestId, {
+          "x-correlation-id": correlationId,
+        });
         return;
       }
 
       if (url.pathname.startsWith("/v1/internal/")) {
         if (headerValue(request, "x-internal-api-key") !== managementToken) {
-          unauthorized(response, requestId, "Gateway management");
+          unauthorized(response, requestId, correlationId, "Gateway management");
           return;
         }
         const body = request.method === "GET" ? {} : await readJsonBody(request);
         const mode = fixtureMode(request, url, body);
         if (mode === "timeout") await new Promise((resolve) => setTimeout(resolve, timeoutMs));
         if (mode === "error" || mode === "reject") {
-          fixtureError(response, requestId);
+          fixtureError(response, requestId, correlationId);
           return;
         }
 
@@ -268,6 +275,7 @@ export function createGatewayDoubleServer({
               routePolicy: createRoutePolicy(projectId),
             },
             requestId,
+            { "x-correlation-id": correlationId },
           );
           return;
         }
@@ -276,7 +284,13 @@ export function createGatewayDoubleServer({
           /^\/v1\/internal\/gateway\/projects\/([^/]+)\/api-access(?:\/rotate)?$/,
         );
         if (accessMatch && (request.method === "GET" || request.method === "POST")) {
-          sendJson(response, 200, { ...createApiAccess(decodeURIComponent(accessMatch[1]), projectToken), requestId }, requestId);
+          sendJson(
+            response,
+            200,
+            { ...createApiAccess(decodeURIComponent(accessMatch[1]), projectToken), requestId },
+            requestId,
+            { "x-correlation-id": correlationId },
+          );
           return;
         }
 
@@ -289,27 +303,28 @@ export function createGatewayDoubleServer({
             error: { code: "FIXTURE_NOT_FOUND", message: `Unsupported Gateway management fixture: ${url.pathname}` },
           },
           requestId,
+          { "x-correlation-id": correlationId },
         );
         return;
       }
 
       if (request.method === "POST" && url.pathname === "/v1/chat/completions") {
         if (!isBearer(request, projectToken)) {
-          unauthorized(response, requestId, "Gateway project");
+          unauthorized(response, requestId, correlationId, "Gateway project");
           return;
         }
         const body = await readJsonBody(request);
         const mode = fixtureMode(request, url, body);
         if (mode === "timeout") await new Promise((resolve) => setTimeout(resolve, timeoutMs));
         if (mode === "reject" || mode === "error") {
-          fixtureError(response, requestId, 429, "FIXTURE_RATE_LIMITED");
+          fixtureError(response, requestId, correlationId, 429, "FIXTURE_RATE_LIMITED");
           return;
         }
         if (body.stream === true || mode === "sse" || mode === "stream") {
-          sendCompletionStream(response, requestId, body);
+          sendCompletionStream(response, requestId, correlationId, body);
           return;
         }
-        sendCompletion(response, requestId, body);
+        sendCompletion(response, requestId, correlationId, body);
         return;
       }
 
@@ -322,6 +337,7 @@ export function createGatewayDoubleServer({
           error: { code: "FIXTURE_NOT_FOUND", message: `Unsupported Gateway fixture: ${url.pathname}` },
         },
         requestId,
+        { "x-correlation-id": correlationId },
       );
     } catch (error) {
       sendJson(
@@ -333,6 +349,7 @@ export function createGatewayDoubleServer({
           error: { code: "FIXTURE_BAD_REQUEST", message: error instanceof Error ? error.message : String(error) },
         },
         requestId,
+        { "x-correlation-id": correlationId },
       );
     }
   });

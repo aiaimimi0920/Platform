@@ -10,6 +10,7 @@ import type { PoolClient } from "pg";
 import * as schema from "@/db/schema";
 import { createHeavyChatRepository } from "@/modules/heavy-chat/repository";
 import {
+  HeavyChatAttemptConflictError,
   HeavyChatInvalidTransitionError,
   HeavyChatOwnershipError,
   HeavyChatSlotLimitError,
@@ -385,6 +386,19 @@ if (!databaseUrl) {
       assert.equal(secondAttempt.created, true);
       assert.equal(secondAttempt.attempt.attemptNumber, 2);
       assert.equal(secondAttempt.message.status, "pending");
+      await repositoryB.transitionMessage("owner-a", retryMessage.id, "complete", {
+        expectedAttemptNumber: secondAttempt.attempt.attemptNumber,
+        content: "fresh result",
+      });
+      await assert.rejects(
+        () =>
+          repositoryA.transitionMessage("owner-a", retryMessage.id, "complete", {
+            expectedAttemptNumber: firstAttempt.attempt.attemptNumber,
+            content: "stale result",
+          }),
+        (error: unknown) => error instanceof HeavyChatAttemptConflictError,
+      );
+      assert.equal((await repositoryA.findMessageById("owner-a", retryMessage.id))?.content, "fresh result");
       const attemptCount = await poolA.query<{ count: string }>(
         "select count(*)::text as count from heavy_chat_message_attempts where owner_user_id = $1 and message_id = $2",
         ["owner-a", retryMessage.id],

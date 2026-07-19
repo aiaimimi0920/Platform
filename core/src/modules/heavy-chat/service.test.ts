@@ -4,6 +4,8 @@ import test from "node:test";
 import type { HeavyChatRepository } from "./repository";
 import { createHeavyChatService } from "./service";
 import {
+  type HeavyChatMessageAttemptRecord,
+  type HeavyChatMessageRecord,
   HeavyChatOwnershipError,
   HeavyChatSlotLimitError,
 } from "./types";
@@ -216,4 +218,632 @@ test("heavy chat service rejects mismatched agent resolution and every managed-h
       /managed_heavy agent cannot set|external runtime or managed-light/i,
     );
   }
+});
+
+type P203GatewayRequest = {
+  model: string;
+  messages: Array<{ role: "user" | "assistant" | "system"; content: string }>;
+  requestId: string;
+  correlationId: string;
+  stream?: boolean;
+  onChunk?: (delta: string) => Promise<void> | void;
+};
+
+type P203GatewayResponse = {
+  content: string;
+  requestId: string;
+  statusCode: number;
+  finishReason: string | null;
+};
+
+type P203GatewayClient = {
+  complete(input: P203GatewayRequest): Promise<P203GatewayResponse>;
+};
+
+type P203SendResult = {
+  userMessage: HeavyChatMessageRecord;
+  assistantMessage: HeavyChatMessageRecord;
+  attempt: HeavyChatMessageAttemptRecord;
+  created: boolean;
+};
+
+type P203HeavyChatService = ReturnType<typeof createHeavyChatService> & {
+  sendMessage(
+    ownerUserId: string,
+    input: {
+      threadId: string;
+      content: string;
+      idempotencyKey: string;
+      correlationId: string;
+    },
+  ): Promise<P203SendResult>;
+  retryMessage(
+    ownerUserId: string,
+    input: {
+      messageId: string;
+      idempotencyKey: string;
+      correlationId: string;
+    },
+  ): Promise<Omit<P203SendResult, "userMessage">>;
+};
+
+type P203GatewayDispatch = (input: P203GatewayRequest) => Promise<P203GatewayResponse>;
+
+function createP203Deferred<T>() {
+  let resolve!: (value: T) => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise;
+    reject = rejectPromise;
+  });
+  return { promise, resolve, reject };
+}
+
+async function waitForP203Condition(predicate: () => boolean) {
+  for (let attempt = 0; attempt < 50; attempt += 1) {
+    if (predicate()) return;
+    await new Promise<void>((resolve) => setImmediate(resolve));
+  }
+  assert.fail("Timed out waiting for the P2-03 test condition");
+}
+
+function buildP203ExecutionHarness() {
+  const ownerUserId = "owner-p203";
+  const slotId = "slot-p203";
+  const threadId = "thread-p203";
+  const agentId = "agent-p203";
+  const events: string[] = [];
+  const messages = new Map<string, HeavyChatMessageRecord>();
+  const attempts = new Map<string, HeavyChatMessageAttemptRecord>();
+  const gatewayRequests: P203GatewayRequest[] = [];
+  let nextMessageId = 0;
+  let nextAttemptId = 0;
+  let historyFailure: Error | null = null;
+  let gatewayDispatch: P203GatewayDispatch = async (input) => ({
+    content: "default response",
+    requestId: input.requestId,
+    statusCode: 200,
+    finishReason: "stop",
+  });
+
+  function findMessageByIdempotencyKey(candidateOwnerUserId: string, idempotencyKey: string) {
+    return (
+      [...messages.values()].find(
+        (message) =>
+          message.ownerUserId === candidateOwnerUserId && message.idempotencyKey === idempotencyKey,
+      ) ?? null
+    );
+  }
+
+  function currentAttemptNumber(messageId: string) {
+    return [...attempts.values()]
+      .filter((attempt) => attempt.ownerUserId === ownerUserId && attempt.messageId === messageId)
+      .reduce((maximum, attempt) => Math.max(maximum, attempt.attemptNumber), 0);
+  }
+
+  const repository = {
+    async findThreadById(candidateOwnerUserId: string, candidateThreadId: string) {
+      if (candidateOwnerUserId !== ownerUserId || candidateThreadId !== threadId) return null;
+      return {
+        id: threadId,
+        ownerUserId,
+        slotId,
+        projectId: null,
+        title: "P2-03 thread",
+        favorite: false,
+        sortOrder: 0,
+        createdAt: new Date("2026-07-19T00:00:00.000Z"),
+        updatedAt: new Date("2026-07-19T00:00:00.000Z"),
+      };
+    },
+    async findAgentBindingForSlot(candidateOwnerUserId: string, candidateSlotId: string) {
+      if (candidateOwnerUserId !== ownerUserId || candidateSlotId !== slotId) return null;
+      return {
+        id: "binding-p203",
+        ownerUserId,
+        slotId,
+        agentId,
+        createdAt: new Date("2026-07-19T00:00:00.000Z"),
+        updatedAt: new Date("2026-07-19T00:00:00.000Z"),
+      };
+    },
+    async appendMessage(
+      candidateOwnerUserId: string,
+      input: {
+        threadId: string;
+        role: "user" | "assistant" | "system";
+        status?: "pending" | "streaming" | "complete" | "failed";
+        content?: string;
+        idempotencyKey?: string | null;
+      },
+    ) {
+      const idempotencyKey = input.idempotencyKey?.trim() || null;
+      if (idempotencyKey) {
+        const existing = findMessageByIdempotencyKey(candidateOwnerUserId, idempotencyKey);
+        if (existing) return existing;
+      }
+      const createdAt = new Date(`2026-07-19T00:00:${String(nextMessageId).padStart(2, "0")}.000Z`);
+      const message: HeavyChatMessageRecord = {
+        id: `message-p203-${++nextMessageId}`,
+        ownerUserId: candidateOwnerUserId,
+        threadId: input.threadId,
+        role: input.role,
+        status: input.status ?? (input.role === "assistant" ? "pending" : "complete"),
+        sequence: messages.size + 1,
+        attemptNumber: 0,
+        content: input.content ?? "",
+        references: [],
+        actions: [],
+        idempotencyKey,
+        errorCode: null,
+        errorMessage: null,
+        createdAt,
+        updatedAt: createdAt,
+      };
+      messages.set(message.id, message);
+      events.push(`append:${message.role}:${message.status}`);
+      return message;
+    },
+    async reserveMessageAttempt(
+      candidateOwnerUserId: string,
+      messageId: string,
+      idempotencyKey: string,
+    ) {
+      const existingAttempt = [...attempts.values()].find(
+        (attempt) =>
+          attempt.ownerUserId === candidateOwnerUserId && attempt.idempotencyKey === idempotencyKey,
+      );
+      if (existingAttempt) {
+        const existingMessage = messages.get(existingAttempt.messageId);
+        assert.ok(existingMessage);
+        return { attempt: existingAttempt, message: existingMessage, created: false as const };
+      }
+      const message = messages.get(messageId);
+      if (!message || message.ownerUserId !== candidateOwnerUserId) {
+        throw new HeavyChatOwnershipError("message does not belong to owner");
+      }
+      const attemptNumber = currentAttemptNumber(messageId) + 1;
+      const attempt: HeavyChatMessageAttemptRecord = {
+        id: `attempt-p203-${++nextAttemptId}`,
+        ownerUserId: candidateOwnerUserId,
+        messageId,
+        idempotencyKey,
+        attemptNumber,
+        createdAt: new Date(),
+      };
+      attempts.set(attempt.id, attempt);
+      const pendingMessage = {
+        ...message,
+        status: "pending" as const,
+        attemptNumber,
+        errorCode: null,
+        errorMessage: null,
+        updatedAt: new Date(),
+      };
+      messages.set(messageId, pendingMessage);
+      events.push(`attempt:${attemptNumber}`);
+      return { attempt, message: pendingMessage, created: true as const };
+    },
+    async transitionMessage(
+      candidateOwnerUserId: string,
+      messageId: string,
+      status: "pending" | "streaming" | "complete" | "failed",
+      input: {
+        content?: string;
+        errorCode?: string | null;
+        errorMessage?: string | null;
+      } = {},
+    ) {
+      const message = messages.get(messageId);
+      if (!message || message.ownerUserId !== candidateOwnerUserId) {
+        throw new HeavyChatOwnershipError("message does not belong to owner");
+      }
+      const updated = {
+        ...message,
+        status,
+        content: input.content ?? message.content,
+        errorCode: input.errorCode !== undefined ? input.errorCode : message.errorCode,
+        errorMessage: input.errorMessage !== undefined ? input.errorMessage : message.errorMessage,
+        updatedAt: new Date(),
+      };
+      messages.set(messageId, updated);
+      events.push(`transition:${status}:${updated.content}`);
+      return updated;
+    },
+    async findMessageById(candidateOwnerUserId: string, messageId: string) {
+      const message = messages.get(messageId) ?? null;
+      return message?.ownerUserId === candidateOwnerUserId ? message : null;
+    },
+    async findMessageByIdempotencyKey(candidateOwnerUserId: string, idempotencyKey: string) {
+      return findMessageByIdempotencyKey(candidateOwnerUserId, idempotencyKey);
+    },
+    async listMessages(candidateOwnerUserId: string, candidateThreadId: string) {
+      if (historyFailure) {
+        const error = historyFailure;
+        historyFailure = null;
+        throw error;
+      }
+      return [...messages.values()]
+        .filter(
+          (message) =>
+            message.ownerUserId === candidateOwnerUserId && message.threadId === candidateThreadId,
+        )
+        .sort((left, right) => left.sequence - right.sequence);
+    },
+  };
+
+  const gatewayClient: P203GatewayClient = {
+    async complete(input) {
+      gatewayRequests.push(input);
+      events.push("gateway:start");
+      return gatewayDispatch(input);
+    },
+  };
+  const typedRepository = repository as unknown as HeavyChatRepository;
+
+  const service = createHeavyChatService({
+    repository: typedRepository,
+    resolveManagedHeavyAgent: async (candidateOwnerUserId, candidateAgentId) =>
+      candidateOwnerUserId === ownerUserId && candidateAgentId === agentId
+        ? validAgent({ id: agentId, ownerUserId })
+        : null,
+    gatewayClient,
+    gatewayModel: "heavy-default-model",
+  } as Parameters<typeof createHeavyChatService>[0] & {
+    gatewayClient: P203GatewayClient;
+    gatewayModel: string;
+  }) as P203HeavyChatService;
+
+  return {
+    ownerUserId,
+    threadId,
+    agentId,
+    service,
+    repository: typedRepository,
+    events,
+    messages,
+    attempts,
+    gatewayRequests,
+    setGatewayDispatch(dispatch: P203GatewayDispatch) {
+      gatewayDispatch = dispatch;
+    },
+    setHistoryFailure(error: Error | null) {
+      historyFailure = error;
+    },
+  };
+}
+
+test("P2-03 RED: send persists user, pending assistant, and attempt before streaming to complete", async () => {
+  const harness = buildP203ExecutionHarness();
+  harness.setGatewayDispatch(async (input) => {
+    assert.deepEqual(harness.events.slice(0, 4), [
+      "append:user:complete",
+      "append:assistant:pending",
+      "attempt:1",
+      "gateway:start",
+    ]);
+    await input.onChunk?.("Hello");
+    await input.onChunk?.(" world");
+    return {
+      content: "Hello world",
+      requestId: input.requestId,
+      statusCode: 200,
+      finishReason: "stop",
+    };
+  });
+
+  const result = await harness.service.sendMessage(harness.ownerUserId, {
+    threadId: harness.threadId,
+    content: "Start the task",
+    idempotencyKey: "send-p203-success",
+    correlationId: "corr-p203-success",
+  });
+
+  assert.equal(result.userMessage.status, "complete");
+  assert.equal(result.assistantMessage.status, "complete");
+  assert.equal(result.assistantMessage.content, "Hello world");
+  assert.equal(result.attempt.attemptNumber, 1);
+  assert.equal(harness.gatewayRequests[0]?.model, "heavy-default-model");
+  assert.equal(harness.gatewayRequests[0]?.correlationId, "corr-p203-success");
+  assert.equal(harness.gatewayRequests[0]?.requestId, result.attempt.id);
+  assert.deepEqual(
+    harness.events.filter((event) => event.startsWith("transition:streaming:")),
+    ["transition:streaming:Hello", "transition:streaming:Hello world"],
+  );
+  assert.equal(harness.events.at(-1), "transition:complete:Hello world");
+});
+
+test("P2-03 RED: gateway failure persists a retryable failed assistant message", async () => {
+  const harness = buildP203ExecutionHarness();
+  harness.setGatewayDispatch(async () => {
+    throw Object.assign(new Error("provider denied the request"), {
+      code: "provider_rejected",
+      statusCode: 429,
+      requestId: "attempt-provider-rejected",
+    });
+  });
+
+  await assert.rejects(
+    () =>
+      harness.service.sendMessage(harness.ownerUserId, {
+        threadId: harness.threadId,
+        content: "This should fail",
+        idempotencyKey: "send-p203-failure",
+        correlationId: "corr-p203-failure",
+      }),
+    /provider denied/i,
+  );
+
+  const persistedMessages = [...harness.messages.values()];
+  const userMessage = persistedMessages.find((message) => message.role === "user");
+  const assistantMessage = persistedMessages.find((message) => message.role === "assistant");
+  assert.equal(userMessage?.status, "complete");
+  assert.equal(assistantMessage?.status, "failed");
+  assert.equal(assistantMessage?.errorCode, "provider_rejected");
+  assert.match(assistantMessage?.errorMessage ?? "", /provider denied/i);
+  assert.equal(assistantMessage?.attemptNumber, 1);
+});
+
+test("P2-03 RED: repeated send idempotency key reuses messages and skips gateway redispatch", async () => {
+  const harness = buildP203ExecutionHarness();
+  harness.setGatewayDispatch(async (input) => ({
+    content: "idempotent response",
+    requestId: input.requestId,
+    statusCode: 200,
+    finishReason: "stop",
+  }));
+  const input = {
+    threadId: harness.threadId,
+    content: "Only send once",
+    idempotencyKey: "send-p203-idempotent",
+    correlationId: "corr-p203-idempotent",
+  };
+
+  const first = await harness.service.sendMessage(harness.ownerUserId, input);
+  const replay = await harness.service.sendMessage(harness.ownerUserId, input);
+
+  assert.equal(replay.created, false);
+  assert.equal(replay.userMessage.id, first.userMessage.id);
+  assert.equal(replay.assistantMessage.id, first.assistantMessage.id);
+  assert.equal(replay.attempt.id, first.attempt.id);
+  assert.equal(harness.messages.size, 2);
+  assert.equal(harness.attempts.size, 1);
+  assert.equal(harness.gatewayRequests.length, 1);
+});
+
+test("P2-03 RED: retry reuses the failed assistant and is idempotent by retry key", async () => {
+  const harness = buildP203ExecutionHarness();
+  let dispatchCount = 0;
+  harness.setGatewayDispatch(async (input) => {
+    dispatchCount += 1;
+    if (dispatchCount === 1) {
+      throw Object.assign(new Error("temporary provider timeout"), { code: "provider_timeout" });
+    }
+    await input.onChunk?.("Recovered");
+    return {
+      content: "Recovered",
+      requestId: input.requestId,
+      statusCode: 200,
+      finishReason: "stop",
+    };
+  });
+
+  await assert.rejects(() =>
+    harness.service.sendMessage(harness.ownerUserId, {
+      threadId: harness.threadId,
+      content: "Retry this request",
+      idempotencyKey: "send-p203-retry",
+      correlationId: "corr-p203-retry-initial",
+    }),
+  );
+  const failedAssistant = [...harness.messages.values()].find((message) => message.role === "assistant");
+  assert.ok(failedAssistant);
+
+  const firstRetry = await harness.service.retryMessage(harness.ownerUserId, {
+    messageId: failedAssistant.id,
+    idempotencyKey: "retry-p203-1",
+    correlationId: "corr-p203-retry",
+  });
+  const replay = await harness.service.retryMessage(harness.ownerUserId, {
+    messageId: failedAssistant.id,
+    idempotencyKey: "retry-p203-1",
+    correlationId: "corr-p203-retry",
+  });
+
+  assert.equal(firstRetry.assistantMessage.id, failedAssistant.id);
+  assert.equal(firstRetry.assistantMessage.status, "complete");
+  assert.equal(firstRetry.assistantMessage.content, "Recovered");
+  assert.equal(firstRetry.attempt.attemptNumber, 2);
+  assert.equal(replay.created, false);
+  assert.equal(replay.attempt.id, firstRetry.attempt.id);
+  assert.equal(harness.messages.size, 2);
+  assert.equal(harness.attempts.size, 2);
+  assert.equal(harness.gatewayRequests.length, 2);
+});
+
+test("P2-03 RED: a stale attempt cannot overwrite a newer retry result", async () => {
+  const harness = buildP203ExecutionHarness();
+  const staleGatewayResult = createP203Deferred<P203GatewayResponse>();
+  let dispatchCount = 0;
+  harness.setGatewayDispatch(async (input) => {
+    dispatchCount += 1;
+    if (dispatchCount === 1) return staleGatewayResult.promise;
+    await input.onChunk?.("fresh result");
+    return {
+      content: "fresh result",
+      requestId: input.requestId,
+      statusCode: 200,
+      finishReason: "stop",
+    };
+  });
+
+  const staleSend = harness.service.sendMessage(harness.ownerUserId, {
+    threadId: harness.threadId,
+    content: "Race this request",
+    idempotencyKey: "send-p203-stale",
+    correlationId: "corr-p203-stale",
+  });
+  await waitForP203Condition(() => harness.gatewayRequests.length === 1);
+  const assistantMessage = [...harness.messages.values()].find((message) => message.role === "assistant");
+  assert.ok(assistantMessage);
+  await harness.repository.transitionMessage(harness.ownerUserId, assistantMessage.id, "failed", {
+    errorCode: "provider_timeout",
+    errorMessage: "first attempt timed out",
+  });
+
+  const retry = await harness.service.retryMessage(harness.ownerUserId, {
+    messageId: assistantMessage.id,
+    idempotencyKey: "retry-p203-fresh",
+    correlationId: "corr-p203-fresh",
+  });
+  assert.equal(retry.assistantMessage.attemptNumber, 2);
+  assert.equal(retry.assistantMessage.content, "fresh result");
+
+  staleGatewayResult.resolve({
+    content: "stale result",
+    requestId: harness.gatewayRequests[0]?.requestId ?? "stale-request",
+    statusCode: 200,
+    finishReason: "stop",
+  });
+  await staleSend.catch(() => undefined);
+
+  const finalMessage = harness.messages.get(assistantMessage.id);
+  assert.equal(finalMessage?.attemptNumber, 2);
+  assert.equal(finalMessage?.status, "complete");
+  assert.equal(finalMessage?.content, "fresh result");
+});
+
+test("P2-03 RED: send and retry reject blank idempotency keys before persistence", async () => {
+  const harness = buildP203ExecutionHarness();
+
+  await assert.rejects(
+    () =>
+      harness.service.sendMessage(harness.ownerUserId, {
+        threadId: harness.threadId,
+        content: "Should not persist",
+        idempotencyKey: "   ",
+        correlationId: "corr-p203-blank-send",
+      }),
+    /idempotency key/i,
+  );
+  await assert.rejects(
+    () =>
+      harness.service.retryMessage(harness.ownerUserId, {
+        messageId: "missing-message",
+        idempotencyKey: "\t",
+        correlationId: "corr-p203-blank-retry",
+      }),
+    /idempotency key/i,
+  );
+  assert.equal(harness.messages.size, 0);
+  assert.equal(harness.gatewayRequests.length, 0);
+});
+
+test("P2-03 RED: Gateway history contains only complete prior messages", async () => {
+  const harness = buildP203ExecutionHarness();
+  harness.setGatewayDispatch(async (input) => {
+    return {
+      content: "new answer",
+      requestId: input.requestId,
+      statusCode: 200,
+      finishReason: "stop",
+    };
+  });
+
+  await harness.repository.appendMessage(harness.ownerUserId, {
+    threadId: harness.threadId,
+    role: "user",
+    status: "complete",
+    content: "older question",
+    idempotencyKey: "history-old-user",
+  });
+  await harness.repository.appendMessage(harness.ownerUserId, {
+    threadId: harness.threadId,
+    role: "assistant",
+    status: "streaming",
+    content: "partial answer that must be excluded",
+    idempotencyKey: "history-partial-assistant",
+  });
+  await harness.repository.appendMessage(harness.ownerUserId, {
+    threadId: harness.threadId,
+    role: "assistant",
+    status: "complete",
+    content: "older answer",
+    idempotencyKey: "history-complete-assistant",
+  });
+
+  await harness.service.sendMessage(harness.ownerUserId, {
+    threadId: harness.threadId,
+    content: "new question",
+    idempotencyKey: "send-p203-history",
+    correlationId: "corr-p203-history",
+  });
+
+  assert.deepEqual(harness.gatewayRequests.at(-1)?.messages, [
+    { role: "user", content: "older question" },
+    { role: "assistant", content: "older answer" },
+    { role: "user", content: "new question" },
+  ]);
+});
+
+test("P2-03 RED: a detached send method still executes through its private helper", async () => {
+  const harness = buildP203ExecutionHarness();
+  harness.setGatewayDispatch(async (input) => ({
+    content: "detached response",
+    requestId: input.requestId,
+    statusCode: 200,
+    finishReason: "stop",
+  }));
+
+  const { sendMessage } = harness.service;
+  const result = await sendMessage(harness.ownerUserId, {
+    threadId: harness.threadId,
+    content: "Detached invocation",
+    idempotencyKey: "send-p203-detached",
+    correlationId: "corr-p203-detached",
+  });
+
+  assert.equal(result.assistantMessage.status, "complete");
+  assert.equal(result.assistantMessage.content, "detached response");
+});
+
+test("P2-03 RED: configuration and history failures finalize the reserved assistant as failed", async () => {
+  const configHarness = buildP203ExecutionHarness();
+  const serviceWithoutGateway = createHeavyChatService({
+    repository: configHarness.repository,
+    resolveManagedHeavyAgent: async (ownerUserId, agentId) =>
+      ownerUserId === configHarness.ownerUserId && agentId === configHarness.agentId
+        ? validAgent({ id: configHarness.agentId, ownerUserId })
+        : null,
+  });
+
+  await assert.rejects(
+    () =>
+      serviceWithoutGateway.sendMessage(configHarness.ownerUserId, {
+        threadId: configHarness.threadId,
+        content: "Missing gateway configuration",
+        idempotencyKey: "send-p203-missing-gateway",
+        correlationId: "corr-p203-missing-gateway",
+      }),
+    /Gateway client is not configured/i,
+  );
+  const configAssistant = [...configHarness.messages.values()].find((message) => message.role === "assistant");
+  assert.equal(configAssistant?.status, "failed");
+  assert.match(configAssistant?.errorMessage ?? "", /Gateway client is not configured/i);
+
+  const historyHarness = buildP203ExecutionHarness();
+  historyHarness.setHistoryFailure(new Error("history store unavailable"));
+  await assert.rejects(
+    () =>
+      historyHarness.service.sendMessage(historyHarness.ownerUserId, {
+        threadId: historyHarness.threadId,
+        content: "History failure",
+        idempotencyKey: "send-p203-history-failure",
+        correlationId: "corr-p203-history-failure",
+      }),
+    /history store unavailable/i,
+  );
+  const historyAssistant = [...historyHarness.messages.values()].find((message) => message.role === "assistant");
+  assert.equal(historyAssistant?.status, "failed");
+  assert.match(historyAssistant?.errorMessage ?? "", /history store unavailable/i);
 });

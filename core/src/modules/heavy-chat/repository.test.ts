@@ -24,6 +24,7 @@ import type {
   HeavyChatThreadRecord,
 } from "./types";
 import {
+  HeavyChatAttemptConflictError,
   HeavyChatInvalidTransitionError,
   HeavyChatOwnershipError,
   HeavyChatSlotLimitError,
@@ -248,6 +249,25 @@ class MemoryHeavyChatStore {
     return clone(this.messages[index]);
   }
 
+  async updateMessageIfStatusAndAttempt(
+    ownerUserId: string,
+    id: string,
+    currentStatus: HeavyChatMessageRecord["status"],
+    attemptNumber: number,
+    patch: Partial<HeavyChatMessageRecord>,
+  ) {
+    const index = this.messages.findIndex(
+      (row) =>
+        row.ownerUserId === ownerUserId &&
+        row.id === id &&
+        row.status === currentStatus &&
+        row.attemptNumber === attemptNumber,
+    );
+    if (index < 0) return null;
+    this.messages[index] = { ...this.messages[index], ...clone(patch) };
+    return clone(this.messages[index]);
+  }
+
   async listMessages(ownerUserId: string, threadId: string) {
     return clone(
       this.messages
@@ -286,12 +306,12 @@ class MemoryHeavyChatStore {
   }
 }
 
-function buildRepository() {
-  const store = new MemoryHeavyChatStore();
+function buildRepository(options: { now?: () => Date; store?: MemoryHeavyChatStore } = {}) {
+  const store = options.store ?? new MemoryHeavyChatStore();
   let id = 0;
   const repository = createHeavyChatRepository({
     store: store as unknown as HeavyChatStore,
-    now: () => new Date("2026-07-19T00:00:00.000Z"),
+    now: options.now ?? (() => new Date("2026-07-19T00:00:00.000Z")),
     createId: () => `generated-${++id}`,
   });
   return { repository, store };
@@ -834,6 +854,145 @@ test("message attempts reserve retries idempotently without duplicating dispatch
     () => attemptRepository.reserveMessageAttempt("owner-b", message.id, "retry-request-owner-b"),
     (error: unknown) => error instanceof HeavyChatOwnershipError,
   );
+});
+
+test("attempt-aware transitions reject stale writes after a retry starts", async () => {
+  const { repository } = buildRepository();
+  const slot = await repository.createOrGetDefaultSlot("owner-a");
+  const thread = await repository.createThread("owner-a", {
+    id: "thread-attempt-cas",
+    slotId: slot.id,
+    title: "Attempt CAS",
+  });
+  const assistant = await repository.appendMessage("owner-a", {
+    id: "message-attempt-cas",
+    threadId: thread.id,
+    role: "assistant",
+    status: "pending",
+    idempotencyKey: "assistant-attempt-cas",
+  });
+
+  const first = await repository.reserveMessageAttempt("owner-a", assistant.id, "attempt-cas-1");
+  await repository.transitionMessage("owner-a", assistant.id, "failed", {
+    expectedAttemptNumber: first.attempt.attemptNumber,
+    errorCode: "provider_timeout",
+  });
+  const second = await repository.reserveMessageAttempt("owner-a", assistant.id, "attempt-cas-2");
+  await repository.transitionMessage("owner-a", assistant.id, "complete", {
+    expectedAttemptNumber: second.attempt.attemptNumber,
+    content: "fresh",
+  });
+
+  await assert.rejects(
+    () =>
+      repository.transitionMessage("owner-a", assistant.id, "complete", {
+        expectedAttemptNumber: first.attempt.attemptNumber,
+        content: "stale",
+      }),
+    (error: unknown) => error instanceof HeavyChatAttemptConflictError,
+  );
+  assert.equal((await repository.findMessageById("owner-a", assistant.id))?.content, "fresh");
+});
+
+test("stale pending and streaming attempts are reclaimed into a new fenced attempt", async () => {
+  let currentTime = new Date("2026-07-19T00:00:00.000Z");
+  const { repository } = buildRepository({ now: () => currentTime });
+  const reserveMessageAttempt = repository.reserveMessageAttempt as unknown as (
+    ownerUserId: string,
+    messageId: string,
+    idempotencyKey: string,
+    options?: { staleBefore?: Date },
+  ) => Promise<{
+    attempt: HeavyChatMessageAttemptRecord;
+    message: HeavyChatMessageRecord;
+    created: boolean;
+  }>;
+  const slot = await repository.createOrGetDefaultSlot("owner-a");
+  const thread = await repository.createThread("owner-a", {
+    id: "thread-stale-recovery",
+    slotId: slot.id,
+    title: "Stale recovery",
+  });
+
+  for (const initialStatus of ["pending", "streaming"] as const) {
+    const assistant = await repository.appendMessage("owner-a", {
+      id: `message-stale-${initialStatus}`,
+      threadId: thread.id,
+      role: "assistant",
+      status: "pending",
+      idempotencyKey: `assistant-stale-${initialStatus}`,
+    });
+    const first = await reserveMessageAttempt("owner-a", assistant.id, `stale-${initialStatus}`);
+    if (initialStatus === "streaming") {
+      await repository.transitionMessage("owner-a", assistant.id, "streaming", {
+        expectedAttemptNumber: first.attempt.attemptNumber,
+        content: "partial",
+      });
+    }
+
+    currentTime = new Date(currentTime.getTime() + 10 * 60 * 1000);
+    const recovered = await reserveMessageAttempt(
+      "owner-a",
+      assistant.id,
+      `stale-${initialStatus}`,
+      { staleBefore: new Date(currentTime.getTime() - 5 * 60 * 1000) },
+    );
+    assert.equal(recovered.created, true);
+    assert.equal(recovered.attempt.attemptNumber, 2);
+    assert.equal(recovered.message.status, "pending");
+
+    const replay = await reserveMessageAttempt(
+      "owner-a",
+      assistant.id,
+      `stale-${initialStatus}`,
+      { staleBefore: new Date(currentTime.getTime() - 5 * 60 * 1000) },
+    );
+    assert.equal(replay.created, false);
+    assert.equal(replay.attempt.id, recovered.attempt.id);
+
+    await assert.rejects(
+      () =>
+        repository.transitionMessage("owner-a", assistant.id, "complete", {
+          expectedAttemptNumber: first.attempt.attemptNumber,
+          content: "stale result",
+        }),
+      (error: unknown) => error instanceof HeavyChatAttemptConflictError,
+    );
+    const fresh = await repository.transitionMessage("owner-a", assistant.id, "complete", {
+      expectedAttemptNumber: recovered.attempt.attemptNumber,
+      content: "fresh result",
+    });
+    assert.equal(fresh.content, "fresh result");
+  }
+});
+
+test("attempt-aware transitions fail closed when a store lacks atomic CAS", async () => {
+  const { repository, store } = buildRepository();
+  const slot = await repository.createOrGetDefaultSlot("owner-a");
+  const thread = await repository.createThread("owner-a", {
+    id: "thread-cas-required",
+    slotId: slot.id,
+    title: "CAS required",
+  });
+  const assistant = await repository.appendMessage("owner-a", {
+    id: "message-cas-required",
+    threadId: thread.id,
+    role: "assistant",
+    status: "pending",
+  });
+  const first = await repository.reserveMessageAttempt("owner-a", assistant.id, "cas-required-1");
+  (store as unknown as { updateMessageIfStatusAndAttempt?: unknown }).updateMessageIfStatusAndAttempt =
+    undefined;
+
+  await assert.rejects(
+    () =>
+      repository.transitionMessage("owner-a", assistant.id, "complete", {
+        expectedAttemptNumber: first.attempt.attemptNumber,
+        content: "must not write",
+      }),
+    /attempt-aware.*CAS|compare-and-set/i,
+  );
+  assert.equal((await repository.findMessageById("owner-a", assistant.id))?.status, "pending");
 });
 
 test("schema and migration carry owner-scoped uniqueness, foreign keys, and idempotency", async () => {

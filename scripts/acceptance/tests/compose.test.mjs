@@ -498,10 +498,14 @@ test("Gateway double proves management to project token to chat runtime boundary
   );
 
   const health = await fetch(`${baseUrl}/healthz`, {
-    headers: { "x-request-id": "gateway-health-request" },
+    headers: {
+      "x-request-id": "gateway-health-request",
+      "x-correlation-id": "gateway-health-correlation",
+    },
   });
   assert.equal(health.status, 200);
   assert.equal(health.headers.get("x-request-id"), "gateway-health-request");
+  assert.equal(health.headers.get("x-correlation-id"), "gateway-health-correlation");
   assert.equal((await responseJson(health)).fixture, true);
 
   const unauthorized = await fetch(`${baseUrl}/v1/internal/gateway/projects/project-1/api-access`);
@@ -514,6 +518,7 @@ test("Gateway double proves management to project token to chat runtime boundary
       "content-type": "application/json",
       "x-internal-api-key": "management-token",
       "x-request-id": "gateway-management-request",
+      "x-correlation-id": "gateway-management-correlation",
     },
     body: JSON.stringify({ serviceId: "service-1", userId: "user-1", serviceTitle: "Fixture Service" }),
   });
@@ -522,6 +527,7 @@ test("Gateway double proves management to project token to chat runtime boundary
   assert.equal(ensuredBody.fixture, true);
   assert.equal(ensuredBody.project.id, "benefit-service-1-user-1");
   assert.equal(ensured.headers.get("x-request-id"), "gateway-management-request");
+  assert.equal(ensured.headers.get("x-correlation-id"), "gateway-management-correlation");
 
   const access = await fetch(
     `${baseUrl}/v1/internal/gateway/projects/${encodeURIComponent(ensuredBody.project.id)}/api-access`,
@@ -539,12 +545,14 @@ test("Gateway double proves management to project token to chat runtime boundary
       authorization: "Bearer project-token",
       "content-type": "application/json",
       "x-request-id": "gateway-runtime-request",
+      "x-correlation-id": "gateway-runtime-correlation",
     },
     body: JSON.stringify({ model: "fixture-chat", messages: [{ role: "user", content: "hello" }] }),
   });
   const completionBody = await responseJson(completion);
   assert.equal(completion.status, 200);
   assert.equal(completion.headers.get("x-request-id"), "gateway-runtime-request");
+  assert.equal(completion.headers.get("x-correlation-id"), "gateway-runtime-correlation");
   assert.equal(completionBody.fixture, true);
   assert.equal(completionBody.choices[0].message.content, "Gateway fixture response");
 
