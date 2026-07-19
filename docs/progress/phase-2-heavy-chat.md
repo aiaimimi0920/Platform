@@ -18,8 +18,8 @@ Acceptance: an isolated Owner can send, reload, retry, create a task, and create
 
 ## P2-02 Evidence
 
-- Focused service and registry suite: `6/6` passed, including default/custom slot delegation, server-side entitlement, message retry delegation, owner denial, managed-heavy binding rules, and registry wiring.
+- Focused service and registry suite: `7/7` passed, including default/custom slot delegation, server-side entitlement, message retry delegation, owner denial, complete managed-heavy binding rules, resolver ID matching, and registry wiring.
 - Managed-heavy validation is pure and has no PostgreSQL, Redis, or environment initialization side effects.
-- `npm run test:heavy-chat --workspace @neuro/core`: `20/20` passed (`14` repository, `3` service, `3` registry/validator).
+- `npm run test:heavy-chat --workspace @neuro/core`: `21/21` passed (`14` repository, `4` service, `3` registry/validator).
 - Core typecheck: exit `0`.
 - Managed-heavy creation and update paths retain the legacy `registry_only` compatibility behavior while explicit `managed_heavy` inputs reject external runtime and managed-light execution fields.

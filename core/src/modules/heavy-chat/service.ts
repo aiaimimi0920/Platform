@@ -12,6 +12,8 @@ import {
   type HeavyChatSlotAgentBindingRecord,
   type HeavyChatSlotRecord,
 } from "./types";
+import { validateManagedHeavyAgentInput } from "../agent-registry/managed-heavy-validation";
+import { HttpError } from "../../platform/errors";
 
 export type ManagedHeavyAgentResolution = {
   id: string;
@@ -60,18 +62,15 @@ function validateManagedHeavyAgent(
       "Heavy chat requires a platform-owned managed_heavy agent; external runtime or managed-light agents are not allowed",
     );
   }
-  const forbiddenFields = [
-    ["runtimeEndpoint", agent.runtimeEndpoint],
-    ["runtimeAuthToken", agent.runtimeAuthToken],
-    ["managedServiceId", agent.managedServiceId],
-    ["managedApiBaseUrl", agent.managedApiBaseUrl],
-    ["managedApiKey", agent.managedApiKey],
-  ] as const;
-  const suppliedForbiddenField = forbiddenFields.find(([, value]) => typeof value === "string" && value.trim());
-  if (suppliedForbiddenField) {
-    throw new HeavyChatManagedAgentValidationError(
-      `Platform managed_heavy agent cannot set ${suppliedForbiddenField[0]}; external runtime or managed-light fields are rejected`,
-    );
+  try {
+    validateManagedHeavyAgentInput(agent);
+  } catch (error) {
+    if (error instanceof HttpError) {
+      throw new HeavyChatManagedAgentValidationError(
+        `${error.message}; external runtime or managed-light fields are rejected`,
+      );
+    }
+    throw error;
   }
   return agent;
 }
@@ -124,6 +123,9 @@ export function createHeavyChatService(options: HeavyChatServiceOptions) {
       agentId: string,
     ): Promise<HeavyChatSlotAgentBindingRecord> {
       const agent = await options.resolveManagedHeavyAgent(ownerUserId, agentId);
+      if (!agent || agent.id !== agentId) {
+        throw new HeavyChatOwnershipError("Heavy chat agent resolution did not match the requested agent");
+      }
       const validatedAgent = validateManagedHeavyAgent(ownerUserId, agent);
       return repository.bindAgentToSlot(ownerUserId, slotId, validatedAgent.id);
     },

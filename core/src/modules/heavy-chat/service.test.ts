@@ -183,3 +183,37 @@ test("heavy chat service preserves owner denial at the service boundary", async 
     (error: unknown) => error instanceof HeavyChatOwnershipError,
   );
 });
+
+test("heavy chat service rejects mismatched agent resolution and every managed-heavy runtime field", async () => {
+  const { repository } = buildFakeRepository();
+  let agent: FakeAgent | null = validAgent();
+  const service = createHeavyChatService({
+    repository,
+    resolveManagedHeavyAgent: async () => agent,
+  });
+  const slot = await service.ensureDefaultSlot("owner-a");
+
+  agent = validAgent({ id: "different-agent" });
+  await assert.rejects(
+    () => service.bindManagedAgent("owner-a", slot.id, "agent-heavy"),
+    (error: unknown) => error instanceof HeavyChatOwnershipError,
+  );
+
+  const forbiddenAgents: FakeAgent[] = [
+    validAgent({ authMode: "bearer", runtimeAuthToken: "secret" }),
+    validAgent({ managedProviderLabel: "provider" }),
+    validAgent({ managedModel: "model" }),
+    validAgent({ managedSystemPrompt: "system" }),
+    validAgent({ managedPromptTemplate: "template" }),
+    validAgent({ managedTaskCategory: "task" }),
+    validAgent({ managedCapabilitySummary: "capability" }),
+  ];
+
+  for (const forbiddenAgent of forbiddenAgents) {
+    agent = forbiddenAgent;
+    await assert.rejects(
+      () => service.bindManagedAgent("owner-a", slot.id, "agent-heavy"),
+      /managed_heavy agent cannot set|external runtime or managed-light/i,
+    );
+  }
+});
