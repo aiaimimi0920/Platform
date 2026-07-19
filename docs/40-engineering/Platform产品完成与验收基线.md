@@ -21,7 +21,7 @@
 
 ## 当前实施快照（2026-07-19）
 
-Phase 1 验收基础设施已完成 `4/4`（包括 P1-04 strict entry point、debt 修复和 external-boundary harness），但这不是产品完成。最终真实验收 run `.runtime/acceptance/platform-acceptance-p104-runtime2/acceptance-manifest.json` 的 required 层仍为 `14 discovered / 14 executed / 9 passed / 5 failed / 0 skipped`；external-boundary 为 `4 discovered / 4 executed / 3 passed / 0 failed / 1 not-applicable`。Phase 2-6、完整 release 和最终浏览器验收仍未完成，因此当前 canonical 结论必须保持为 `Platform 产品未完成`。
+Phase 1 验收基础设施已完成 `4/4`（包括 P1-04 strict entry point、debt 修复和 external-boundary harness），但这不是产品完成。最终真实验收 run `.runtime/acceptance/platform-acceptance-p104-runtime5/acceptance-manifest.json` 的 required 层仍为 `14 discovered / 14 executed / 9 passed / 5 failed / 0 skipped`；external-boundary 为 `4 discovered / 4 executed / 3 passed / 0 failed / 1 not-applicable`。Phase 2-6、完整 release 和最终浏览器验收仍未完成，因此当前 canonical 结论必须保持为 `Platform 产品未完成`。
 
 ## 1. 正式范围
 
@@ -281,15 +281,15 @@ P1-04 开始时冻结的历史债务 RED 基线为 `npm run test:debt`：
 - `credential-refresh.test.ts`：19 项中 3 项失败，分别为 expiration check、registered refresher refresh、refresh 前验证。
 - `thinking-filter.test.ts`：20 项中 5 项失败，分别为完整块、跨 chunk 起始、跨 chunk 结束、尾随空白、thinking 后 tool use。
 - 起始合计为 `44 passed / 9 failed / 53 total`；这是 P1-04 的 RED 起始证据，不是当前测试状态。`test:node-mock:debt` 当时因前置 Vitest 失败尚未执行，P1-04 已将两组 debt 拆开纳入门禁。
-- P1-04 修复后的当前 debt 证据为 Vitest `55/55` passed、Node module-mock `56/56` passed；对应输出保留在 `.runtime/acceptance/platform-acceptance-p104-runtime2/suites/debt-vitest.json.stdout.log` 和 `debt-node-mock.json.stdout.log`。
+- P1-04 修复后的当前 debt 证据为 Vitest `55/55` passed、Node module-mock `56/56` passed；runtime5 对应输出保留在 `.runtime/acceptance/platform-acceptance-p104-runtime5/suites/debt-vitest.json.stdout.log` 和 `debt-node-mock.json.stdout.log`。
 
 上述测试不得通过删除、改名、移出脚本或降低断言来获得绿灯；应先判断实现缺陷还是过期契约，再以独立测试证据修复。
 
 ### 6.2.1 P1-04 真实运行结果
 
-最终有效 run 为 `.runtime/acceptance/platform-acceptance-p104-runtime2/`，机器可读 manifest 为 `.runtime/acceptance/platform-acceptance-p104-runtime2/acceptance-manifest.json`。required 层发现并执行 14 项，9 项通过、5 项失败、0 项跳过；失败项为 `integration-required`（required 模式禁止 gate skip，需 `AI_GATEWAY_INTEGRATION_TESTS=1`）以及尚未实现的 `browser-owner`、`browser-visitor`、`browser-operator`、`browser-errors`。external-boundary 层发现并执行 4 项，Gateway/Loom/Tea 通过，Hook inventory 为 `not-applicable`，无失败项。
+最终有效 run 为 `.runtime/acceptance/platform-acceptance-p104-runtime5/`，机器可读 manifest 为 `.runtime/acceptance/platform-acceptance-p104-runtime5/acceptance-manifest.json`。required 层发现并执行 14 项，9 项通过、5 项失败、0 项跳过；失败项为 `integration-required`（required 模式禁止 gate skip，需真实 integration 环境）以及尚未实现的 `browser-owner`、`browser-visitor`、`browser-operator`、`browser-errors`。external-boundary 层发现并执行 4 项，Gateway/Loom/Tea 通过，Hook inventory 为 `not-applicable`，无失败项。runtime5 Git metadata 为已提交 P1-04 commit `77831496c3baa886d9f08ac804b92268f58000f6`、Platform `dirty: true`（仅有 P2-01 未提交文件）。
 
-Compose render/startup 均 exit `0`，startup 运行服务均为 healthy；`.runtime/acceptance/platform-acceptance-p104-runtime2/compose/startup/compose-cleanup.json` 和 `compose/render/compose-cleanup.json` 是 owner cleanup receipt。cleanup 后本次验收 project 的容器、网络和 volume 均为 `0`，临时 `resources/` 已删除。该证据证明验收栈隔离与清理成立，不证明产品功能或 release 已验收通过。
+Compose render/startup 均 exit `0`，startup 运行服务均为 healthy；`.runtime/acceptance/platform-acceptance-p104-runtime5/compose/startup/compose-cleanup.json` 和 `compose/render/compose-cleanup.json` 是 owner cleanup receipt，均记录 `cleaned: true`。cleanup 后本次验收 project 的容器、网络和 volume 均为 `0`，临时 `resources/` 已删除。该证据证明验收栈隔离与清理成立，不证明产品功能或 release 已验收通过。
 
 因此 P1-04 的正确结论是“验收基础设施完成、产品验收未通过”；在 required 失败清零、浏览器旅程实现、Phase 2-6 完成并通过 release smoke 之前，最终状态仍必须写作 `Platform 产品未完成`。
 

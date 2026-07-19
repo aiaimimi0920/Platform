@@ -166,7 +166,7 @@ web/src/features/account-heavy-agent-chat/adapter.ts
 - [x] Run `npm run test:vitest:debt --workspace @neuro/ai-gateway-domain` and `npm run test:node-mock:debt --workspace @neuro/ai-gateway-domain`; require zero failures.
 - [x] Change `smoke` to call `acceptance:ci`; preserve the previous command as `smoke:quick`.
 - [x] Verify `npm run smoke:quick`, `npm run test:debt`, and the acceptance orchestration unit tests pass.
-- [ ] Commit `test(platform): make acceptance gates truthful`.
+- [x] Commit `test(platform): make acceptance gates truthful` (`7783149`).
 
 ## Phase 2: Real Heavy-Agent Chat
 

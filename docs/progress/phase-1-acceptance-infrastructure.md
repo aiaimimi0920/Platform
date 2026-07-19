@@ -40,10 +40,10 @@ Phase 1 的基础设施任务已全部完成（`4/4`），但这不等于 Platfo
 
 ## P1-04 Evidence
 
-- acceptance unit tests：`node --test scripts/acceptance/tests/*.test.mjs`，`90/90` passed；`npm run smoke:quick`、`npm run test:debt` 和受影响 workspace 验证通过。
+- acceptance unit tests：`node --test scripts/acceptance/tests/*.test.mjs`，`112/112` passed；`npm run smoke:quick`、全 workspace `npm run typecheck` 与 `npm run build` 均通过。脱敏回归覆盖 CLI 顶层异常、敏感环境变量及 JSON 叶子、URL userinfo、base64/base64url 和 credential argv。
 - debt 修复结果：原 9 项失败均已清零；`npm run test:vitest:debt --workspace @neuro/ai-gateway-domain` 为 `55/55` passed；`npm run test:node-mock:debt --workspace @neuro/ai-gateway-domain` 为 `56/56` passed。P1-04 开始前的 `44 passed / 9 failed / 53 total` 已作为历史 RED 起始基线保留，不再代表当前结果。
-- required/external-boundary inventory 固定为 `14 + 4` 项。最终真实 run 为 `.runtime/acceptance/platform-acceptance-p104-runtime2/acceptance-manifest.json`：required `14 discovered / 14 executed / 9 passed / 5 failed / 0 skipped`；external-boundary `4 discovered / 4 executed / 3 passed / 0 failed / 1 not-applicable`。
+- required/external-boundary inventory 固定为 `14 + 4` 项。最终真实 run 为 `.runtime/acceptance/platform-acceptance-p104-runtime5/acceptance-manifest.json`：required `14 discovered / 14 executed / 9 passed / 5 failed / 0 skipped`；external-boundary `4 discovered / 4 executed / 3 passed / 0 failed / 1 not-applicable`。runtime5 Git metadata 为 commit `77831496c3baa886d9f08ac804b92268f58000f6`、`dirty: true`（dirty 仅来自未提交的 P2-01 文件）。
 - required 的 5 个失败是：`integration-required` 在 required 模式拒绝 gated skip（需要 `AI_GATEWAY_INTEGRATION_TESTS=1`），以及 `browser-owner`、`browser-visitor`、`browser-operator`、`browser-errors` 尚未实现。它们均以非零失败留在 manifest 中，没有被伪装成通过或跳过。
 - external-boundary 的 Gateway、Loom、Tea contract probes 通过；Hook source/dependency inventory 证明当前没有 Platform-owned runtime hook 调用点，因此记录为 `not-applicable`，不是 `passed`。
-- Compose render/startup 均为 exit `0`；startup project 的服务均报告 healthy，`compose/startup/compose-cleanup.json` 与 `compose/render/compose-cleanup.json` 保留 owner cleanup receipt。cleanup 后本次 run 的容器、网络、volume 均为 `0`，临时 `resources/` 已清理。
+- Compose render/startup 均为 exit `0`；startup project 的服务均报告 healthy，`.runtime/acceptance/platform-acceptance-p104-runtime5/compose/startup/compose-cleanup.json` 与 `compose/render/compose-cleanup.json` 均记录 `cleaned: true`。cleanup 后本次 run 的容器、网络、volume 均为 `0`，临时 `resources/` 已清理；runtime5 证据目录未发现测试 canary。
 - P1-04 收口结论：Phase 1 acceptance infrastructure 可复现且门禁诚实，但 manifest overall 为 failed；当前 canonical 产品状态仍为 `Platform 产品未完成`，不得据此生成或宣称完整 release。
