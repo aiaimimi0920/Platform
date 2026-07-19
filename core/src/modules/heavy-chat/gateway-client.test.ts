@@ -37,6 +37,8 @@ type ResponseTransform = (args: {
   response: Response;
 }) => Promise<Response> | Response;
 
+type TestTransport = (request: Request) => Promise<Response>;
+
 type TestResponseBody = string | ReadableStream<Uint8Array> | null;
 
 type GatewayErrorCode = "provider_rejected" | "provider_timeout" | "unavailable" | "protocol_error" | "correlation_mismatch";
@@ -117,7 +119,10 @@ function echoResponseTracing(request: Request, response: Response): Response {
   });
 }
 
-function createCapturingFetch(transform?: ResponseTransform): {
+function createCapturingFetch(
+  transform?: ResponseTransform,
+  transport: TestTransport = fetch,
+): {
   fetchFn: GatewayFetch;
   requests: CapturedRequest[];
 } {
@@ -132,7 +137,7 @@ function createCapturingFetch(transform?: ResponseTransform): {
       url: new URL(request.url),
     });
 
-    const response = echoResponseTracing(request, await fetch(request));
+    const response = echoResponseTracing(request, await transport(request));
     return transform ? transform({ request, response }) : response;
   };
 
@@ -362,29 +367,32 @@ describe("heavy-chat Gateway client", { concurrency: false }, () => {
     const requestId = "attempt-management-stalled";
     const encoder = new TextEncoder();
     let cancelled = false;
-    const { fetchFn, requests } = createCapturingFetch(({ request, response }) => {
-      if (!new URL(request.url).pathname.endsWith("/benefit-projects/ensure")) return response;
-      return replaceResponse(
-        request,
-        response,
-        new ReadableStream<Uint8Array>({
-          start(controller) {
-            controller.enqueue(encoder.encode('{"project":'));
+    const { fetchFn, requests } = createCapturingFetch(
+      ({ request, response }) => {
+        if (!new URL(request.url).pathname.endsWith("/benefit-projects/ensure")) return response;
+        return replaceResponse(
+          request,
+          response,
+          new ReadableStream<Uint8Array>({
+            start(controller) {
+              controller.enqueue(encoder.encode('{"project":'));
+            },
+            cancel() {
+              cancelled = true;
+            },
+          }),
+          {
+            headers: {
+              "content-type": "application/json",
+              "x-request-id": requestId,
+              "x-correlation-id": correlationId,
+            },
+            status: 200,
           },
-          cancel() {
-            cancelled = true;
-          },
-        }),
-        {
-          headers: {
-            "content-type": "application/json",
-            "x-request-id": requestId,
-            "x-correlation-id": correlationId,
-          },
-          status: 200,
-        },
-      );
-    });
+        );
+      },
+      async () => new Response(null, { status: 200 }),
+    );
     const client = createClient(gatewayBaseUrl, fetchFn, 30);
 
     await assert.rejects(
