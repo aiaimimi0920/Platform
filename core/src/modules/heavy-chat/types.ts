@@ -106,6 +106,10 @@ export class HeavyChatAttemptConflictError extends Error {
   override name = "HeavyChatAttemptConflictError";
 }
 
+export class HeavyChatManagedAgentValidationError extends Error {
+  override name = "HeavyChatManagedAgentValidationError";
+}
+
 export class HeavyChatInvalidTransitionError extends Error {
   override name = "HeavyChatInvalidTransitionError";
 }

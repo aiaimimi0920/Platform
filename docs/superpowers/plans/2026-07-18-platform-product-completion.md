@@ -197,12 +197,12 @@ web/src/features/account-heavy-agent-chat/adapter.ts
 - Modify: `core/src/modules/agent-registry/service.ts`
 - Create: `core/src/modules/agent-registry/managed-heavy.test.ts`
 
-- [ ] Write failing tests for default slot creation, custom slot entitlement/limit, thread creation, message idempotency, retry reuse, and cross-user denial.
-- [ ] Write a failing managed-heavy test proving a valid Platform-owned heavy agent is accepted while external runtime fields are rejected.
-- [ ] Implement heavy-chat orchestration and replace the blanket `managed_heavy` rejection with a Platform-managed validation branch.
-- [ ] Keep heavy-chat behavior out of the existing Agent repository; use Agent service only for slot-to-agent binding.
-- [ ] Run both focused suites and Core typecheck.
-- [ ] Commit `feat(platform): enable managed heavy agents`.
+- [x] Write failing tests for default slot creation, custom slot entitlement/limit, thread creation, message idempotency, retry reuse, and cross-user denial.
+- [x] Write a failing managed-heavy test proving a valid Platform-owned heavy agent is accepted while external runtime fields are rejected.
+- [x] Implement heavy-chat orchestration and replace the blanket `managed_heavy` rejection with a Platform-managed validation branch.
+- [x] Keep heavy-chat behavior out of the existing Agent repository; use Agent service only for slot-to-agent binding.
+- [x] Run both focused suites and Core typecheck.
+- [x] Commit `feat(platform): enable managed heavy agents`.
 
 ### Task P2-03: Gateway Boundary And Real Message Execution
 

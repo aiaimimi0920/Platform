@@ -9,6 +9,7 @@ import {
   buildAgentCallbackCompatibilitySummary,
   getCallbackCompatibilityWindowState,
 } from "@/modules/agent-registry/callback-compatibility-analysis";
+import { validateManagedHeavyAgentInput } from "@/modules/agent-registry/managed-heavy-validation";
 import { agentExecutionCallbackRemediations, agentExecutionCallbacks, agentExecutions } from "@/modules/agent-execution/schema";
 import {
   getOwnedAgent,
@@ -560,7 +561,7 @@ function validateAgentInput(input: CreateAgentInput) {
     throw new HttpError(400, "BAD_REQUEST", "Platform agent should not set runtimeEndpoint");
   }
   if (persistedHostingMode === "managed_heavy") {
-    throw new HttpError(400, "BAD_REQUEST", "Platform heavy agents are not available yet");
+    validateManagedHeavyAgentInput(input);
   }
   if (hostingMode === "managed_light" && input.sourceType !== "platform") {
     throw new HttpError(400, "BAD_REQUEST", "Platform light agents only support platform-owned execution");
