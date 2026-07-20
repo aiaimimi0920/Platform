@@ -61,6 +61,7 @@ export async function registerCoreDomainRouters(app: FastifyInstance) {
     { redemptionMailboxMarketplaceRouter },
     { taskHubRouter },
     { teaRouter },
+    { heavyChatRouter },
   ] = await Promise.all([
     import("@/platform/outbox/router"),
     import("@/platform/feature-modules/router"),
@@ -75,6 +76,7 @@ export async function registerCoreDomainRouters(app: FastifyInstance) {
     import("@/modules/redemption-mailbox-marketplace/router"),
     import("@/modules/task-hub/router"),
     import("@/modules/tea/router"),
+    import("@/modules/heavy-chat/router"),
   ]);
 
   await app.register(outboxRouter);
@@ -90,6 +92,7 @@ export async function registerCoreDomainRouters(app: FastifyInstance) {
   await app.register(redemptionMailboxMarketplaceRouter);
   await app.register(taskHubRouter);
   await app.register(teaRouter);
+  await app.register(heavyChatRouter);
 }
 
 export async function registerCoreHttpDebugRoutes(app: FastifyInstance) {

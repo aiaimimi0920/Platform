@@ -626,6 +626,22 @@ export async function listOwnedAgents(ownerUserId: string): Promise<AgentView[]>
   return rows.map(toAgentView);
 }
 
+/**
+ * Internal resolver for server-side heavy-chat execution. The raw row is kept
+ * inside Core so credential fields never cross the HTTP or browser boundary.
+ */
+export async function resolveOwnedAgentForHeavyChat(ownerUserId: string, agentId: string) {
+  const agent = await getOwnedAgent(ownerUserId, agentId);
+  if (!agent) return null;
+  return {
+    ...agent,
+    hostingMode: normalizeAgentHostingMode(
+      (agent.hostingMode as CompatibleAgentHostingMode | null | undefined) ?? null,
+      agent.sourceType as AgentSourceType,
+    ),
+  };
+}
+
 export async function getAgentCallbackCompatibilitySummaryForOperator(
   operatorUserId: string,
 ): Promise<AgentCallbackCompatibilitySummaryView> {

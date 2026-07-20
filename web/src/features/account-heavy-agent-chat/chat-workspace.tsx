@@ -1,22 +1,20 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useState } from "react";
 
 import { NtBadge } from "@/components/nt-primitives";
-import {
-  createSeedProjects,
-  createSeedSlotProfiles,
-  createSeedThreads,
-} from "@/features/account-heavy-agent-chat/seed-data";
 import { HeavyChatComposer } from "@/features/account-heavy-agent-chat/heavy-chat-composer";
 import { HeavyChatDirectory } from "@/features/account-heavy-agent-chat/heavy-chat-directory";
 import { HeavyChatMessageCard } from "@/features/account-heavy-agent-chat/heavy-chat-message-card";
 import { useHeavyChatDirectory } from "@/features/account-heavy-agent-chat/use-heavy-chat-directory";
 import { useHeavyChatThreadState } from "@/features/account-heavy-agent-chat/use-heavy-chat-thread-state";
+import type { HeavyWorkspaceSnapshot } from "@/features/account-heavy-agent-chat/types";
 
 type HeavyAgentChatWorkspaceProps = {
   displayName: string;
+  initialError?: string | null;
+  initialSnapshot: HeavyWorkspaceSnapshot;
   initialSlotId?: string | null;
   mailboxVisible: boolean;
   storeVisible: boolean;
@@ -102,18 +100,18 @@ function EmptyHome({
 
 export function HeavyAgentChatWorkspace({
   displayName,
+  initialError = null,
+  initialSnapshot,
   initialSlotId = null,
   mailboxVisible,
   storeVisible,
 }: HeavyAgentChatWorkspaceProps) {
-  const slots = useMemo(() => createSeedSlotProfiles(), []);
-  const projects = useMemo(() => createSeedProjects(), []);
   const threadState = useHeavyChatThreadState({
-    displayName,
-    initialThreads: useMemo(() => createSeedThreads(displayName), [displayName]),
-    projects,
-    slots,
+    initialError,
+    initialSnapshot,
   });
+  const slots = threadState.slots;
+  const projects = threadState.projects;
   const directory = useHeavyChatDirectory({
     initialSlotId,
     projects,
@@ -129,7 +127,7 @@ export function HeavyAgentChatWorkspace({
   const activeThread = threadState.threads.find((thread) => thread.id === directory.activeThreadId) ?? null;
   const activeProjectId = activeThread?.projectId ?? directory.activeProjectId;
   const activeProject = projects.find((project) => project.id === activeProjectId) ?? null;
-  const isStreaming = activeThread?.messages.some((message) => message.status === "streaming") ?? false;
+  const isStreaming = threadState.busy || (activeThread?.messages.some((message) => message.status === "streaming") ?? false);
 
   function handleSelectSlot(slotId: string) {
     directory.selectSlot(slotId);
@@ -137,9 +135,6 @@ export function HeavyAgentChatWorkspace({
 
   function handleSelectProject(projectId: string) {
     directory.selectProject(projectId);
-    if (directory.activeThreadId) {
-      threadState.bindProjectToThread(directory.activeThreadId, projectId);
-    }
   }
 
   function handleSelectThread(threadId: string) {
@@ -147,17 +142,18 @@ export function HeavyAgentChatWorkspace({
     setMobileSidebarOpen(false);
   }
 
-  function handleCreateThread() {
+  async function handleCreateThread() {
     if (!directory.activeSlotId) {
       return;
     }
-    const thread = threadState.createThread(directory.activeSlotId, activeProjectId);
+    const thread = await threadState.createThread(directory.activeSlotId, activeProjectId);
+    if (!thread) return;
     directory.syncThreadContext(thread.id, thread.slotId, thread.projectId);
     setMobileSidebarOpen(false);
   }
 
-  function handleSend() {
-    const nextThread = threadState.sendMessage(
+  async function handleSend() {
+    const nextThread = await threadState.sendMessage(
       directory.activeThreadId,
       directory.activeSlotId,
       activeProjectId,
@@ -258,7 +254,7 @@ export function HeavyAgentChatWorkspace({
                     <HeavyChatMessageCard
                       key={message.id}
                       message={message}
-                      onAction={(action) => threadState.runMessageAction(activeThread.id, message.id, action)}
+                      onAction={(action) => void threadState.runMessageAction(activeThread.id, message.id, action)}
                     />
                   ))}
                 </div>

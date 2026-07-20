@@ -1,6 +1,6 @@
 "use client";
 
-import { useDeferredValue, useMemo, useState } from "react";
+import { useDeferredValue, useEffect, useMemo, useState } from "react";
 
 import type {
   HeavyChatThread,
@@ -16,24 +16,86 @@ type UseHeavyChatDirectoryOptions = {
   threads: HeavyChatThread[];
 };
 
+type HeavyChatDirectoryDefaultsInput = Pick<UseHeavyChatDirectoryOptions, "initialSlotId" | "projects" | "slots">;
+
+type HeavyChatDirectorySelectionInput = Pick<UseHeavyChatDirectoryOptions, "projects" | "slots"> & {
+  activeProjectId: string | null;
+  activeSlotId: string | null;
+};
+
+export function resolveHeavyChatDirectoryDefaults({
+  initialSlotId,
+  projects,
+  slots,
+}: HeavyChatDirectoryDefaultsInput) {
+  const activeSlotId = slots.some((slot) => slot.id === initialSlotId)
+    ? initialSlotId ?? null
+    : slots[0]?.id ?? null;
+  const activeSlot = slots.find((slot) => slot.id === activeSlotId);
+  const activeProjectId =
+    activeSlot?.projectIds.find((projectId) => projects.some((project) => project.id === projectId)) ?? null;
+
+  return { activeSlotId, activeProjectId };
+}
+
+export function reconcileHeavyChatDirectorySelection({
+  activeProjectId,
+  activeSlotId,
+  projects,
+  slots,
+}: HeavyChatDirectorySelectionInput) {
+  const defaults = resolveHeavyChatDirectoryDefaults({ initialSlotId: activeSlotId, projects, slots });
+  const projectIsValid =
+    activeProjectId !== null &&
+    slots.some((slot) => slot.id === defaults.activeSlotId && slot.projectIds.includes(activeProjectId)) &&
+    projects.some((project) => project.id === activeProjectId);
+
+  return {
+    activeSlotId: defaults.activeSlotId,
+    activeProjectId: projectIsValid ? activeProjectId : defaults.activeProjectId,
+  };
+}
+
+function resolveBoundProjectId(slotId: string | null, slots: HeavySlotProfile[], projects: HeavyProjectContext[]) {
+  const slot = slots.find((item) => item.id === slotId);
+  return slot?.projectIds.find((projectId) => projects.some((project) => project.id === projectId)) ?? null;
+}
+
 export function useHeavyChatDirectory({
   initialSlotId,
   projects,
   slots,
   threads,
 }: UseHeavyChatDirectoryOptions) {
-  const resolvedInitialSlotId = slots.some((slot) => slot.id === initialSlotId) ? initialSlotId ?? null : (slots[0]?.id ?? null);
-  const resolvedInitialProjectId =
-    slots.find((slot) => slot.id === resolvedInitialSlotId)?.projectIds[0] ?? projects[0]?.id ?? null;
+  const defaults = resolveHeavyChatDirectoryDefaults({ initialSlotId, projects, slots });
 
-  const [activeSlotId, setActiveSlotId] = useState(resolvedInitialSlotId);
-  const [activeProjectId, setActiveProjectId] = useState<string | null>(resolvedInitialProjectId);
+  const [activeSlotId, setActiveSlotId] = useState(defaults.activeSlotId);
+  const [activeProjectId, setActiveProjectId] = useState<string | null>(defaults.activeProjectId);
   const [activeThreadId, setActiveThreadId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [historyFilter, setHistoryFilter] = useState<HeavyHistoryFilter>("all");
   const [mobileRailOpen, setMobileRailOpen] = useState(false);
   const deferredSearchQuery = useDeferredValue(searchQuery);
   const normalizedQuery = deferredSearchQuery.trim().toLowerCase();
+
+  useEffect(() => {
+    const nextSelection = reconcileHeavyChatDirectorySelection({
+      activeProjectId,
+      activeSlotId,
+      projects,
+      slots,
+    });
+
+    if (activeSlotId !== nextSelection.activeSlotId) {
+      setActiveSlotId(nextSelection.activeSlotId);
+    }
+    if (activeProjectId !== nextSelection.activeProjectId) {
+      setActiveProjectId(nextSelection.activeProjectId);
+    }
+    if (activeThreadId && !threads.some((thread) => thread.id === activeThreadId)) {
+      setActiveThreadId(null);
+    }
+  }, [activeProjectId, activeSlotId, activeThreadId, projects, slots, threads]);
 
   const visibleProjects = useMemo(() => {
     return projects.filter((project) => {
@@ -90,8 +152,7 @@ export function useHeavyChatDirectory({
 
   function selectSlot(slotId: string) {
     setActiveSlotId(slotId);
-    const firstProject = slots.find((slot) => slot.id === slotId)?.projectIds[0] ?? null;
-    setActiveProjectId(firstProject);
+    setActiveProjectId(resolveBoundProjectId(slotId, slots, projects));
     setActiveThreadId(null);
   }
 

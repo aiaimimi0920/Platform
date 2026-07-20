@@ -12,6 +12,9 @@ import {
   type HeavyChatMessageRecord,
   type HeavyChatSlotAgentBindingRecord,
   type HeavyChatSlotRecord,
+  type HeavyChatProjectRecord,
+  type HeavyChatSlotProjectRecord,
+  type HeavyChatThreadRecord,
 } from "./types";
 import { validateManagedHeavyAgentInput } from "../agent-registry/managed-heavy-validation";
 import { HttpError } from "../../platform/errors";
@@ -95,6 +98,15 @@ export type HeavyChatExecutionResult = {
 
 export type HeavyChatSendMessageResult = HeavyChatExecutionResult & {
   userMessage: HeavyChatMessageRecord;
+};
+
+export type HeavyChatSnapshotRecord = {
+  slots: HeavyChatSlotRecord[];
+  projects: HeavyChatProjectRecord[];
+  slotProjects: Array<Pick<HeavyChatSlotProjectRecord, "slotId" | "projectId">>;
+  bindings: HeavyChatSlotAgentBindingRecord[];
+  threads: HeavyChatThreadRecord[];
+  messages: HeavyChatMessageRecord[];
 };
 
 const DEFAULT_ATTEMPT_RECOVERY_AFTER_MS = 5 * 60 * 1000;
@@ -277,6 +289,52 @@ export function createHeavyChatService(options: HeavyChatServiceOptions) {
   }
 
   return {
+    async getSnapshot(ownerUserId: string): Promise<HeavyChatSnapshotRecord> {
+      await repository.createOrGetDefaultSlot(ownerUserId);
+      const [slots, projects, threads] = await Promise.all([
+        repository.listSlots(ownerUserId),
+        repository.listProjects(ownerUserId),
+        repository.listThreads(ownerUserId),
+      ]);
+
+      const [bindings, slotProjects, messagesByThread] = await Promise.all([
+        Promise.all(slots.map((slot) => repository.findAgentBindingForSlot(ownerUserId, slot.id))),
+        Promise.all(
+          slots.map((slot) =>
+            repository.listProjectsForSlot(ownerUserId, slot.id).then((boundProjects) =>
+              boundProjects.map((project) => ({ slotId: slot.id, projectId: project.id })),
+            ),
+          ),
+        ),
+        Promise.all(threads.map((thread) => repository.listMessages(ownerUserId, thread.id))),
+      ]);
+
+      return {
+        slots,
+        projects,
+        slotProjects: slotProjects.flat(),
+        bindings: bindings.filter((binding): binding is HeavyChatSlotAgentBindingRecord => binding !== null),
+        threads,
+        messages: messagesByThread.flat(),
+      };
+    },
+
+    async listSlots(ownerUserId: string) {
+      return repository.listSlots(ownerUserId);
+    },
+
+    async listProjects(ownerUserId: string) {
+      return repository.listProjects(ownerUserId);
+    },
+
+    async listThreads(ownerUserId: string) {
+      return repository.listThreads(ownerUserId);
+    },
+
+    async listMessages(ownerUserId: string, threadId: string) {
+      return repository.listMessages(ownerUserId, threadId);
+    },
+
     async ensureDefaultSlot(ownerUserId: string): Promise<HeavyChatSlotRecord> {
       return repository.createOrGetDefaultSlot(ownerUserId);
     },

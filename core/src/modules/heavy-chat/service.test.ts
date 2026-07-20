@@ -94,6 +94,21 @@ function buildFakeRepository() {
       const binding = bindings.get(`${ownerUserId}:${slotId}`);
       return binding ? { id: "binding-existing", ownerUserId, ...binding } : null;
     },
+    async listSlots(ownerUserId: string) {
+      return [...slots.values()].filter((slot) => slot.ownerUserId === ownerUserId);
+    },
+    async listProjects() {
+      return [];
+    },
+    async listProjectsForSlot() {
+      return [];
+    },
+    async listThreads() {
+      return [];
+    },
+    async listMessages() {
+      return [];
+    },
   };
   return { repository: repository as unknown as HeavyChatRepository, calls, slots };
 }
@@ -119,6 +134,25 @@ function validAgent(overrides: Partial<FakeAgent> = {}): FakeAgent {
     ...overrides,
   };
 }
+
+test("heavy chat service builds an owner-scoped snapshot after ensuring the default slot", async () => {
+  const { repository, calls } = buildFakeRepository();
+  const service = createHeavyChatService({
+    repository,
+    resolveManagedHeavyAgent: async () => validAgent(),
+  });
+
+  const snapshot = await service.getSnapshot("owner-a");
+
+  assert.deepEqual(snapshot.projects, []);
+  assert.deepEqual(snapshot.slotProjects, []);
+  assert.deepEqual(snapshot.bindings, []);
+  assert.deepEqual(snapshot.threads, []);
+  assert.deepEqual(snapshot.messages, []);
+  assert.equal(snapshot.slots.length, 1);
+  assert.equal(snapshot.slots[0]?.ownerUserId, "owner-a");
+  assert.ok(calls.some((call) => call.method === "createOrGetDefaultSlot"));
+});
 
 test("heavy chat service applies server-side entitlement and preserves repository idempotency", async () => {
   const { repository, calls } = buildFakeRepository();

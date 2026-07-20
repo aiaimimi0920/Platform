@@ -5,6 +5,7 @@ import { getPublicSurfaceSnapshot } from "@/lib/core-client";
 import { isPublicSurfaceVisibleForViewer } from "@/lib/public-surface-visibility";
 
 import { HeavyAgentChatWorkspace } from "./chat-workspace";
+import { loadHeavyChatWorkspace } from "./server";
 
 type HeavyAgentChatPageProps = {
   searchParams?: Promise<{
@@ -25,10 +26,17 @@ export default async function HeavyAgentChatPage({ searchParams }: HeavyAgentCha
 
   const resolvedSearchParams = searchParams ? await searchParams : undefined;
   const displayName = session.user.username || session.user.name || "当前用户";
+  const workspace = await loadHeavyChatWorkspace({
+    userId: session.user.id,
+    providerUserId: session.user.providerUserId || undefined,
+    username: session.user.username || session.user.name || undefined,
+  });
 
   return (
     <HeavyAgentChatWorkspace
       displayName={displayName}
+      initialError={workspace.error}
+      initialSnapshot={workspace.workspace}
       initialSlotId={resolvedSearchParams?.slotId ?? null}
       mailboxVisible={publicSurfaces.mailbox.enabled}
       storeVisible={publicSurfaces.store.enabled}

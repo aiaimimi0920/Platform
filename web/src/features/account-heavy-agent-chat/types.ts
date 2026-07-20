@@ -96,8 +96,14 @@ export type HeavySlotProfile = {
   occupied: boolean;
 };
 
+export type HeavyWorkspaceSnapshot = {
+  slots: HeavySlotProfile[];
+  projects: HeavyProjectContext[];
+  threads: HeavyChatThread[];
+};
+
 export type HeavyActionNotice = {
   id: string;
-  tone: "glass" | "warning" | "cyan" | "success";
+  tone: "glass" | "warning" | "cyan" | "success" | "danger";
   message: string;
 };

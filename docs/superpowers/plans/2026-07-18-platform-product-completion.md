@@ -239,14 +239,14 @@ web/src/features/account-heavy-agent-chat/adapter.ts
 - Modify: `web/src/features/account-heavy-agent-chat/chat-workspace.tsx`
 - Modify: `web/src/features/account-heavy-agent-chat/use-heavy-chat-thread-state.ts`
 
-- [ ] Write router permission/idempotency/error tests and Web client tests.
-- [ ] Confirm RED for missing `/v1/me/heavy-chat/*` routes.
-- [ ] Register owner-scoped Core routes and Next route handlers.
-- [ ] Replace seed initialization and timers with server snapshot hydration and API mutations.
-- [ ] Preserve the existing UI component structure and NeuroTerminal visual system.
-- [ ] Verify refresh restores the same persisted thread and failed messages remain retryable.
-- [ ] Run Core, Web, and typecheck suites.
-- [ ] Commit `feat(platform): connect heavy chat UI to persistence`.
+- [x] Write router permission/idempotency/error tests and Web client tests.
+- [x] Confirm RED for missing `/v1/me/heavy-chat/*` routes.
+- [x] Register owner-scoped Core routes and Next route handlers.
+- [x] Replace seed initialization and timers with server snapshot hydration and API mutations.
+- [x] Preserve the existing UI component structure and NeuroTerminal visual system.
+- [x] Verify refresh restores the same persisted thread and failed messages remain retryable.
+- [x] Run Core, Web, and typecheck suites.
+- [x] Commit `feat(platform): connect heavy chat UI to persistence`.
 
 ### Task P2-05: Real Task And Mailbox Actions
 

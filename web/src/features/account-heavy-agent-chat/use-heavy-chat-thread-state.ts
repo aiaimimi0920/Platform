@@ -1,132 +1,269 @@
 "use client";
 
-import { startTransition, useMemo, useState } from "react";
+import { startTransition, useCallback, useMemo, useRef, useState } from "react";
 
-import {
-  buildAssistantReplyBlocks,
-  createEmptyThread,
-  createReference,
-  flattenMessageText,
-  nowGroup,
-  nowLabel,
-} from "@/features/account-heavy-agent-chat/seed-data";
+import type { HeavyChatSnapshot, HeavyChatThreadView } from "@neuro/contracts";
+
+import { adaptHeavyChatSnapshot } from "./adapter";
 import type {
   HeavyActionNotice,
-  HeavyChatMessage,
   HeavyChatReference,
-  HeavyChatThread,
   HeavyMessageBlock,
   HeavyProjectContext,
   HeavyReferenceType,
-  HeavySlotProfile,
-} from "@/features/account-heavy-agent-chat/types";
+  HeavyWorkspaceSnapshot,
+} from "./types";
 
 type UseHeavyChatThreadStateOptions = {
-  displayName: string;
-  initialThreads: HeavyChatThread[];
-  projects: HeavyProjectContext[];
-  slots: HeavySlotProfile[];
+  initialSnapshot: HeavyWorkspaceSnapshot;
+  initialError?: string | null;
 };
 
 function id(prefix: string) {
-  return `${prefix}-${Math.random().toString(36).slice(2, 10)}`;
+  const random = globalThis.crypto?.randomUUID?.() ?? Math.random().toString(36).slice(2, 12);
+  return `${prefix}-${random}`;
 }
 
-function buildUserMessage(input: string, references: HeavyChatReference[]): HeavyChatMessage {
-  const blocks: HeavyMessageBlock[] = [
-    {
-      id: id("block-text"),
-      type: "text",
-      text: input,
-    },
-  ];
-  if (references.length > 0) {
-    blocks.push({
-      id: id("block-reference"),
-      type: "reference",
-      references,
-    });
+function correlationId() {
+  return globalThis.crypto?.randomUUID?.() ?? id("correlation");
+}
+
+function errorMessage(error: unknown) {
+  if (error instanceof Error && error.message.trim()) return error.message;
+  return "重度对话服务暂时不可用。";
+}
+
+async function browserRequest<T>(pathname: string, init?: RequestInit): Promise<T> {
+  const headers = new Headers(init?.headers);
+  if (init?.body) headers.set("content-type", "application/json");
+  const response = await fetch(pathname, {
+    ...init,
+    headers,
+    cache: "no-store",
+  });
+  const raw = await response.text();
+  let body: unknown = null;
+  if (raw) {
+    try {
+      body = JSON.parse(raw) as unknown;
+    } catch {
+      body = raw;
+    }
   }
+  if (!response.ok) {
+    const message = body && typeof body === "object" && "error" in body
+      ? (body as { error?: unknown }).error
+      : null;
+    throw new Error(typeof message === "string" && message.trim() ? message : "重度对话请求失败。");
+  }
+  return body as T;
+}
+
+function referenceTone(type: HeavyReferenceType): HeavyChatReference["tone"] {
+  if (type === "mail") return "warning";
+  if (type === "task") return "success";
+  if (type === "delivery") return "violet";
+  return "cyan";
+}
+
+function createReference(type: HeavyReferenceType, sequence: number, projectTitle?: string): HeavyChatReference {
   return {
-    id: id("message-user"),
-    role: "user",
-    status: "complete",
-    createdAtLabel: nowLabel(),
-    blocks,
+    id: id("reference"),
+    type,
+    title: type === "file"
+      ? `${projectTitle || "项目"}上下文-${sequence}`
+      : type === "mail"
+        ? `站内邮箱消息 #${sequence}`
+        : type === "task"
+          ? `任务单 TASK-${String(sequence).padStart(3, "0")}`
+          : `交付项 DEL-${String(sequence).padStart(3, "0")}`,
+    meta: type === "file" ? "Project context" : type === "mail" ? "Mailbox" : type === "task" ? "Task Hub" : "Delivery",
+    tone: referenceTone(type),
   };
 }
 
-function buildStreamingAssistantMessage(): HeavyChatMessage {
-  return {
-    id: id("message-assistant"),
-    role: "assistant",
-    status: "streaming",
-    createdAtLabel: nowLabel(),
-    meta: "服务端重度运行时 / streaming",
-    blocks: [
-      {
-        id: id("block-status"),
-        type: "status",
-        label: "Streaming",
-        description: "正在整理上下文并生成结构化回复。",
-        tone: "warning",
-      },
-    ],
-  };
+function flattenMessageText(blocks: HeavyMessageBlock[]) {
+  return blocks
+    .map((block) => {
+      if (block.type === "text") return block.text;
+      if (block.type === "status") return `${block.label}${block.description ? `: ${block.description}` : ""}`;
+      if (block.type === "actionable-summary") return `${block.title}\n${block.items.join("\n")}`;
+      return block.references.map((reference) => `${reference.title} (${reference.meta})`).join("\n");
+    })
+    .join("\n\n");
+}
+
+function notice(tone: HeavyActionNotice["tone"], message: string): HeavyActionNotice {
+  return { id: id("notice"), tone, message };
 }
 
 export function useHeavyChatThreadState({
-  displayName,
-  initialThreads,
-  projects,
-  slots,
+  initialSnapshot,
+  initialError = null,
 }: UseHeavyChatThreadStateOptions) {
-  const [threads, setThreads] = useState<HeavyChatThread[]>(initialThreads);
+  const [workspace, setWorkspace] = useState<HeavyWorkspaceSnapshot>(initialSnapshot);
   const [draft, setDraft] = useState("");
   const [selectedReferences, setSelectedReferences] = useState<HeavyChatReference[]>([]);
-  const [actionNotice, setActionNotice] = useState<HeavyActionNotice | null>(null);
+  const [actionNotice, setActionNotice] = useState<HeavyActionNotice | null>(
+    initialError ? notice("danger", initialError) : null,
+  );
+  const [busy, setBusy] = useState(false);
+  const busyRef = useRef(false);
 
-  const threadMap = useMemo(() => new Map(threads.map((thread) => [thread.id, thread])), [threads]);
+  const threadMap = useMemo(
+    () => new Map(workspace.threads.map((thread) => [thread.id, thread])),
+    [workspace.threads],
+  );
 
-  function ensureThread(slotId: string, projectId: string | null) {
-    const slot = slots.find((item) => item.id === slotId);
-    const freshThread = createEmptyThread(slotId, projectId, slot?.title || "重度对话体");
-    setThreads((current) => [freshThread, ...current]);
-    return freshThread;
+  const refreshSnapshot = useCallback(async () => {
+    const response = await browserRequest<{ snapshot: HeavyChatSnapshot }>("/api/heavy-chat/snapshot");
+    const nextWorkspace = adaptHeavyChatSnapshot(response.snapshot);
+    startTransition(() => setWorkspace(nextWorkspace));
+    return nextWorkspace;
+  }, []);
+
+  const refreshSnapshotSilently = useCallback(async () => {
+    try {
+      return await refreshSnapshot();
+    } catch {
+      return null;
+    }
+  }, [refreshSnapshot]);
+
+  const createPersistedThread = useCallback(
+    async (slotId: string, projectId: string | null, title: string) => {
+      const response = await browserRequest<{ thread: HeavyChatThreadView }>("/api/heavy-chat/threads", {
+        method: "POST",
+        body: JSON.stringify({ slotId, projectId, title }),
+      });
+      const nextWorkspace = await refreshSnapshot();
+      return nextWorkspace.threads.find((thread) => thread.id === response.thread.id) ?? null;
+    },
+    [refreshSnapshot],
+  );
+
+  async function createThread(slotId: string, projectId: string | null) {
+    if (busyRef.current) return null;
+    const slot = workspace.slots.find((item) => item.id === slotId);
+    busyRef.current = true;
+    setBusy(true);
+    try {
+      const thread = await createPersistedThread(slotId, projectId, `新对话 / ${slot?.title || "重度对话"}`);
+      setActionNotice(thread ? notice("success", "会话已保存到当前账户。") : notice("danger", "会话创建后未能刷新持久化状态。"));
+      return thread;
+    } catch (error) {
+      await refreshSnapshotSilently();
+      setActionNotice(notice("danger", errorMessage(error)));
+      return null;
+    } finally {
+      busyRef.current = false;
+      setBusy(false);
+    }
   }
 
-  function createThread(slotId: string, projectId: string | null) {
-    const nextThread = ensureThread(slotId, projectId);
-    return nextThread;
+  async function sendMessage(
+    activeThreadId: string | null,
+    activeSlotId: string | null,
+    activeProjectId: string | null,
+  ) {
+    const content = draft.trim();
+    if (!content || !activeSlotId || busyRef.current) {
+      if (!content) setActionNotice(notice("danger", "请输入消息后再发送。"));
+      return null;
+    }
+
+    setDraft("");
+    setSelectedReferences([]);
+    busyRef.current = true;
+    setBusy(true);
+    let targetThreadId = activeThreadId;
+    try {
+      if (!targetThreadId) {
+        const created = await createPersistedThread(
+          activeSlotId,
+          activeProjectId,
+          `${content.slice(0, 32)}${content.length > 32 ? "…" : ""}`,
+        );
+        if (!created) throw new Error("会话创建后未能读取持久化线程");
+        targetThreadId = created.id;
+      }
+
+      await browserRequest(`/api/heavy-chat/threads/${encodeURIComponent(targetThreadId)}/messages`, {
+        method: "POST",
+        body: JSON.stringify({
+          content,
+          idempotencyKey: id(`heavy-chat:send:${targetThreadId}`),
+          correlationId: correlationId(),
+        }),
+      });
+      const nextWorkspace = await refreshSnapshot();
+      const persistedThread = nextWorkspace.threads.find((thread) => thread.id === targetThreadId);
+      setActionNotice(notice("success", "回复已持久化，可以继续编辑、重试或转入后续工作流。"));
+      return persistedThread
+        ? { threadId: persistedThread.id, slotId: persistedThread.slotId, projectId: persistedThread.projectId }
+        : null;
+    } catch (error) {
+      await refreshSnapshotSilently();
+      setActionNotice(notice("danger", errorMessage(error)));
+      return targetThreadId
+        ? { threadId: targetThreadId, slotId: activeSlotId, projectId: activeProjectId }
+        : null;
+    } finally {
+      busyRef.current = false;
+      setBusy(false);
+    }
   }
 
-  function bindProjectToThread(threadId: string, projectId: string | null) {
-    setThreads((current) =>
-      current.map((thread) =>
-        thread.id === threadId
-          ? {
-              ...thread,
-              projectId,
-              updatedAtLabel: nowLabel(),
-              updatedAtGroup: nowGroup(),
-              updatedAtSort: Date.now(),
-            }
-          : thread,
-      ),
-    );
-  }
+  async function runMessageAction(
+    threadId: string,
+    messageId: string,
+    action: "copy" | "retry" | "task" | "mailbox" | "edit",
+  ) {
+    const thread = threadMap.get(threadId);
+    const message = thread?.messages.find((item) => item.id === messageId);
+    if (!thread || !message) return;
 
-  function toggleFavorite(threadId: string) {
-    setThreads((current) =>
-      current.map((thread) =>
-        thread.id === threadId
-          ? {
-              ...thread,
-              favorite: !thread.favorite,
-            }
-          : thread,
-      ),
-    );
+    if (action === "copy") {
+      const text = flattenMessageText(message.blocks);
+      await navigator.clipboard?.writeText(text);
+      setActionNotice(notice("glass", "已复制当前消息内容。"));
+      return;
+    }
+    if (action === "edit") {
+      setDraft(flattenMessageText(message.blocks));
+      setActionNotice(notice("warning", "已把当前消息放回输入框。"));
+      return;
+    }
+    if (action === "task") {
+      setActionNotice(notice("warning", "任务动作将在 Task Hub bridge 完成后写入。"));
+      return;
+    }
+    if (action === "mailbox") {
+      setActionNotice(notice("warning", "邮箱动作将在 mailbox bridge 完成后写入。"));
+      return;
+    }
+    if (busyRef.current || message.role !== "assistant") return;
+
+    busyRef.current = true;
+    setBusy(true);
+    setActionNotice(notice("warning", "正在向服务端提交重试请求。"));
+    try {
+      await browserRequest(`/api/heavy-chat/messages/${encodeURIComponent(messageId)}/retry`, {
+        method: "POST",
+        body: JSON.stringify({
+          idempotencyKey: id(`heavy-chat:retry:${messageId}`),
+          correlationId: correlationId(),
+        }),
+      });
+      await refreshSnapshot();
+      setActionNotice(notice("success", "重试结果已持久化。"));
+    } catch (error) {
+      await refreshSnapshotSilently();
+      setActionNotice(notice("danger", errorMessage(error)));
+    } finally {
+      busyRef.current = false;
+      setBusy(false);
+    }
   }
 
   function addReference(type: HeavyReferenceType, project?: HeavyProjectContext | null) {
@@ -140,241 +277,21 @@ export function useHeavyChatThreadState({
     setSelectedReferences((current) => current.filter((reference) => reference.id !== referenceId));
   }
 
-  function clearReferences() {
-    setSelectedReferences([]);
-  }
-
-  function sendMessage(
-    activeThreadId: string | null,
-    activeSlotId: string | null,
-    activeProjectId: string | null,
-  ) {
-    const input = draft.trim();
-    if (!input || !activeSlotId) {
-      return null;
-    }
-
-    const resolvedProject = projects.find((project) => project.id === activeProjectId) ?? null;
-    const thread = activeThreadId ? threadMap.get(activeThreadId) : null;
-    const targetThread = thread ?? ensureThread(activeSlotId, activeProjectId);
-    const userMessage = buildUserMessage(input, selectedReferences);
-    const assistantMessage = buildStreamingAssistantMessage();
-    const nextPreview = input;
-    const nextTitle =
-      targetThread.messages.length === 0 && targetThread.title.startsWith("新对话")
-        ? `${input.slice(0, 16)}${input.length > 16 ? "…" : ""}`
-        : targetThread.title;
-
-    setThreads((current) =>
-      current.map((item) =>
-        item.id === targetThread.id
-          ? {
-              ...item,
-              projectId: activeProjectId,
-              title: nextTitle,
-              preview: nextPreview,
-              updatedAtLabel: nowLabel(),
-              updatedAtGroup: nowGroup(),
-              updatedAtSort: Date.now(),
-              messages: [...item.messages, userMessage, assistantMessage],
-            }
-          : item,
-      ),
-    );
-    setDraft("");
-    clearReferences();
-    setActionNotice({
-      id: id("notice"),
-      tone: "cyan",
-      message: "已把输入挂到当前线程，正在整理服务端重度运行时回复。",
-    });
-
-    window.setTimeout(() => {
-      const slot = slots.find((item) => item.id === activeSlotId) ?? null;
-      const replyBlocks = buildAssistantReplyBlocks(input, resolvedProject);
-      const firstReplyText = replyPreview(replyBlocks);
-      setThreads((current) =>
-        current.map((item) =>
-          item.id === targetThread.id
-            ? {
-                ...item,
-                preview: firstReplyText ?? item.preview,
-                updatedAtLabel: nowLabel(),
-                updatedAtGroup: nowGroup(),
-                updatedAtSort: Date.now(),
-                messages: item.messages.map((message) =>
-                  message.id === assistantMessage.id
-                    ? {
-                        ...message,
-                        status: "complete",
-                        meta: `${slot?.title || "重度智能体"} / 结构化回复`,
-                        blocks: replyBlocks,
-                      }
-                    : message,
-                ),
-              }
-            : item,
-        ),
-      );
-      setActionNotice({
-        id: id("notice"),
-        tone: "success",
-        message: "结构化回复已生成。你可以复制、重试、转成任务或投递到邮箱。",
-      });
-    }, 520);
-
-    return {
-      projectId: activeProjectId,
-      slotId: activeSlotId,
-      threadId: targetThread.id,
-    };
-  }
-
-  function runMessageAction(threadId: string, messageId: string, action: "copy" | "retry" | "task" | "mailbox" | "edit") {
-    const thread = threadMap.get(threadId);
-    const message = thread?.messages.find((item) => item.id === messageId);
-    if (!thread || !message) {
-      return;
-    }
-
-    if (action === "copy") {
-      const text = flattenMessageText(message.blocks);
-      navigator.clipboard?.writeText(text);
-      setActionNotice({
-        id: id("notice"),
-        tone: "glass",
-        message: "已复制当前消息内容。",
-      });
-      return;
-    }
-
-    if (action === "edit") {
-      const text = flattenMessageText(message.blocks);
-      setDraft(text);
-      setActionNotice({
-        id: id("notice"),
-        tone: "warning",
-        message: "已把当前用户消息重新放回输入框。",
-      });
-      return;
-    }
-
-    if (action === "task") {
-      setActionNotice({
-        id: id("notice"),
-        tone: "success",
-        message: "已生成任务草稿，可从任务面板继续完善与发布。",
-      });
-      return;
-    }
-
-    if (action === "mailbox") {
-      setActionNotice({
-        id: id("notice"),
-        tone: "cyan",
-        message: "已生成邮箱投递草稿，可从邮箱与站内消息流程继续处理。",
-      });
-      return;
-    }
-
-    const priorUserMessage = [...thread.messages]
-      .reverse()
-      .find((item) => item.role === "user");
-
-    if (!priorUserMessage) {
-      return;
-    }
-
-    const text = flattenMessageText(priorUserMessage.blocks);
-    const resolvedProject = projects.find((project) => project.id === thread.projectId) ?? null;
-    setThreads((current) =>
-      current.map((item) =>
-        item.id === threadId
-          ? {
-              ...item,
-              updatedAtLabel: nowLabel(),
-              updatedAtGroup: nowGroup(),
-              updatedAtSort: Date.now(),
-              messages: item.messages.map((entry) =>
-                entry.id === messageId
-                  ? {
-                      ...entry,
-                      status: "streaming",
-                      meta: "重试中 / streaming",
-                      blocks: [
-                        {
-                          id: id("block-status"),
-                          type: "status",
-                          label: "Retry",
-                          description: "正在重新整理上一条用户输入。",
-                          tone: "warning",
-                        },
-                      ],
-                    }
-                  : entry,
-              ),
-            }
-          : item,
-      ),
-    );
-    setActionNotice({
-      id: id("notice"),
-      tone: "warning",
-      message: "已重新触发重试流程。",
-    });
-
-    window.setTimeout(() => {
-      const replyBlocks = buildAssistantReplyBlocks(`${text} retry`, resolvedProject);
-      const nextReplyText = replyPreview(replyBlocks);
-      startTransition(() => {
-        setThreads((current) =>
-          current.map((item) =>
-            item.id === threadId
-              ? {
-                  ...item,
-                  preview: nextReplyText ?? item.preview,
-                  updatedAtLabel: nowLabel(),
-                  updatedAtGroup: nowGroup(),
-                  updatedAtSort: Date.now(),
-                  messages: item.messages.map((entry) =>
-                    entry.id === messageId
-                      ? {
-                          ...entry,
-                          status: "complete",
-                          meta: "重试完成 / 结构化回复",
-                          blocks: replyBlocks,
-                        }
-                      : entry,
-                  ),
-                }
-              : item,
-          ),
-        );
-      });
-    }, 460);
-  }
-
   return {
     actionNotice,
     addReference,
-    bindProjectToThread,
-    clearReferences,
+    busy,
     createThread,
     draft,
+    projects: workspace.projects,
+    refreshSnapshot,
     removeReference,
     runMessageAction,
     selectedReferences,
     sendMessage,
     setActionNotice,
     setDraft,
-    threads,
-    toggleFavorite,
+    slots: workspace.slots,
+    threads: workspace.threads,
   };
-}
-
-function replyPreview(blocks: HeavyMessageBlock[]) {
-  const firstTextBlock = blocks.find(
-    (block): block is Extract<HeavyMessageBlock, { type: "text" }> => block.type === "text",
-  );
-  return firstTextBlock?.text.slice(0, 44) ?? null;
 }

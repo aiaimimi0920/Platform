@@ -104,6 +104,47 @@ export type HeavyChatMessageAttemptView = {
   createdAt: string;
 };
 
+export type HeavyChatSlotProjectView = {
+  slotId: string;
+  projectId: string;
+};
+
+export type HeavyChatSnapshot = {
+  slots: HeavyChatSlotView[];
+  projects: HeavyChatProjectView[];
+  slotProjects: HeavyChatSlotProjectView[];
+  bindings: HeavyChatSlotAgentBindingView[];
+  threads: HeavyChatThreadView[];
+  messages: HeavyChatMessageView[];
+};
+
+export type CreateHeavyChatThreadRequest = {
+  slotId: string;
+  projectId?: string | null;
+  title: string;
+};
+
+export type SendHeavyChatMessageRequest = {
+  content: string;
+  idempotencyKey: string;
+  correlationId?: string;
+};
+
+export type RetryHeavyChatMessageRequest = {
+  idempotencyKey: string;
+  correlationId?: string;
+};
+
+export type HeavyChatMessageAttemptResult = {
+  assistantMessage: HeavyChatMessageView;
+  attempt: HeavyChatMessageAttemptView;
+  created: boolean;
+};
+
+export type HeavyChatSendMessageResult = HeavyChatMessageAttemptResult & {
+  userMessage: HeavyChatMessageView;
+};
+
 export type CreateHeavyChatSlotInput = {
   slotKey?: string;
   title: string;
