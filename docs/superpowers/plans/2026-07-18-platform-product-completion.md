@@ -275,9 +275,9 @@ web/src/features/account-heavy-agent-chat/adapter.ts
 - Create: `web/src/components/dependency-state.tsx`
 - Create: `web/src/components/dependency-state.test.tsx`
 
-- [ ] Test typed `ready|empty|partial|unavailable|unauthorized` results, correlation ids, retry metadata, and secret redaction.
-- [ ] Implement the envelope and shared rendering primitives.
-- [ ] Run Web tests and commit `feat(platform): add dependency result states`.
+- [x] Test typed `ready|empty|partial|unavailable|unauthorized` results, correlation ids, retry metadata, and secret redaction.
+- [x] Implement the envelope and shared rendering primitives.
+- [x] Run Web tests and commit `feat(platform): add dependency result states`.
 
 ### Task P3-02: Remove Demo And Silent Empty Fallbacks
 
