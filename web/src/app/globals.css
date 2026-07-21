@@ -2641,6 +2641,18 @@ a {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
+.app-task-deep-link-target {
+  scroll-margin-block-start: 180px;
+}
+
+.app-task-deep-link-target:target {
+  outline: 2px solid rgba(217, 255, 56, 0.72);
+  outline-offset: 4px;
+  box-shadow:
+    0 0 0 6px rgba(217, 255, 56, 0.08),
+    0 20px 48px rgba(0, 0, 0, 0.3);
+}
+
 .app-honor-trigger {
   position: relative;
   display: inline-flex;

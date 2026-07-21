@@ -5,6 +5,7 @@ import { startTransition, useCallback, useMemo, useRef, useState } from "react";
 import type { HeavyChatSnapshot, HeavyChatThreadView } from "@neuro/contracts";
 
 import { adaptHeavyChatSnapshot } from "./adapter";
+import { runHeavyChatBrowserAction } from "./browser-action";
 import type {
   HeavyActionNotice,
   HeavyChatReference,
@@ -108,6 +109,7 @@ export function useHeavyChatThreadState({
     initialError ? notice("danger", initialError) : null,
   );
   const [busy, setBusy] = useState(false);
+  const [messageBusy, setMessageBusy] = useState(false);
   const busyRef = useRef(false);
 
   const threadMap = useMemo(
@@ -176,6 +178,7 @@ export function useHeavyChatThreadState({
     setSelectedReferences([]);
     busyRef.current = true;
     setBusy(true);
+    setMessageBusy(true);
     let targetThreadId = activeThreadId;
     try {
       if (!targetThreadId) {
@@ -211,6 +214,7 @@ export function useHeavyChatThreadState({
     } finally {
       busyRef.current = false;
       setBusy(false);
+      setMessageBusy(false);
     }
   }
 
@@ -234,18 +238,39 @@ export function useHeavyChatThreadState({
       setActionNotice(notice("warning", "已把当前消息放回输入框。"));
       return;
     }
-    if (action === "task") {
-      setActionNotice(notice("warning", "任务动作将在 Task Hub bridge 完成后写入。"));
-      return;
-    }
-    if (action === "mailbox") {
-      setActionNotice(notice("warning", "邮箱动作将在 mailbox bridge 完成后写入。"));
+    if (action === "task" || action === "mailbox") {
+      if (message.role !== "assistant" || message.status !== "complete" || busyRef.current) return;
+      busyRef.current = true;
+      setBusy(true);
+      setActionNotice(notice("warning", action === "task" ? "正在创建 Task Hub 草稿。" : "正在写入邮箱草稿。"));
+      try {
+        const result = await runHeavyChatBrowserAction({
+          messageId,
+          type: action,
+          request: browserRequest,
+          refresh: refreshSnapshot,
+        });
+        if (result.action.status === "pending") {
+          setActionNotice(notice("warning", "动作已提交，等待服务端完成。"));
+        } else if (result.action.status === "complete") {
+          setActionNotice(notice("success", action === "task" ? "任务草稿已保存。" : "邮箱草稿已保存。"));
+        } else {
+          setActionNotice(notice("danger", result.action.errorMessage || "动作执行失败，可重试。"));
+        }
+      } catch (error) {
+        await refreshSnapshotSilently();
+        setActionNotice(notice("danger", errorMessage(error)));
+      } finally {
+        busyRef.current = false;
+        setBusy(false);
+      }
       return;
     }
     if (busyRef.current || message.role !== "assistant") return;
 
     busyRef.current = true;
     setBusy(true);
+    setMessageBusy(true);
     setActionNotice(notice("warning", "正在向服务端提交重试请求。"));
     try {
       await browserRequest(`/api/heavy-chat/messages/${encodeURIComponent(messageId)}/retry`, {
@@ -263,6 +288,7 @@ export function useHeavyChatThreadState({
     } finally {
       busyRef.current = false;
       setBusy(false);
+      setMessageBusy(false);
     }
   }
 
@@ -283,6 +309,7 @@ export function useHeavyChatThreadState({
     busy,
     createThread,
     draft,
+    messageBusy,
     projects: workspace.projects,
     refreshSnapshot,
     removeReference,

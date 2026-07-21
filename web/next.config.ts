@@ -9,6 +9,7 @@ const nextDistDir = process.env.NEXT_DIST_DIR?.trim();
 
 const nextConfig: NextConfig = {
   distDir: nextDistDir && nextDistDir.length > 0 ? nextDistDir : ".next",
+  allowedDevOrigins: ["127.0.0.1"],
   transpilePackages: ["@neuro/contracts"],
   turbopack: {
     root: path.join(__dirname, ".."),

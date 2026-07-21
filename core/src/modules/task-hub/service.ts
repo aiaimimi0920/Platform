@@ -1,5 +1,7 @@
 import type {
   AgentMarketplaceListingView,
+  CreateTaskDraftInput,
+  CreateTaskDraftResult,
   CreateTaskAgentProposalInput,
   CreateTaskInput,
   DispatchDecisionView,
@@ -42,6 +44,7 @@ import {
   getOwnedAgentById,
   getTaskAgentProposalById,
   getTaskById,
+  getTaskByOwnerAndId,
   listTaskAgentProposalsByTask,
   listTaskApplicationsByTask,
   listTasksWithCountsByUser,
@@ -55,6 +58,11 @@ import {
   taskRewardHolds,
   tasks,
 } from "@/modules/task-hub/schema";
+import {
+  buildTaskDraftRecord,
+  normalizeTaskDraftInput,
+  taskDraftPayloadMatches,
+} from "@/modules/task-hub/draft";
 import { ledgerEntries } from "@/modules/wallet-ledger/schema";
 import { BadRequestError, ConflictError, NotFoundError } from "@/platform/errors";
 import { getSingleFeatureModule } from "@/platform/feature-modules/service";
@@ -1361,6 +1369,83 @@ export async function listMyTasks(userId: string): Promise<TaskView[]> {
   const rows = await listTasksWithCountsByUser(userId);
   return rows.map(({ task, applicationCount, arbitrationCaseCount }) =>
     toTaskView(task, applicationCount, arbitrationCaseCount),
+  );
+}
+
+export async function createTaskDraft(
+  userId: string,
+  input: CreateTaskDraftInput,
+): Promise<CreateTaskDraftResult> {
+  const ownerUserId = userId.trim();
+  if (!ownerUserId) throw new BadRequestError("Task draft owner is required");
+  let normalized;
+  try {
+    normalized = normalizeTaskDraftInput(input);
+  } catch (error) {
+    throw new BadRequestError(error instanceof Error ? error.message : "Invalid task draft");
+  }
+
+  return db.transaction(async (tx) => {
+    const findExisting = async () => {
+      const [existing] = await tx
+        .select()
+        .from(tasks)
+        .where(
+          and(
+            eq(tasks.creatorUserId, ownerUserId),
+            eq(tasks.idempotencyKey, normalized.idempotencyKey),
+          ),
+        )
+        .limit(1);
+      return existing ?? null;
+    };
+    const existing = await findExisting();
+    if (existing) {
+      if (!taskDraftPayloadMatches(existing, normalized)) {
+        throw new ConflictError("Task draft idempotency key is already used for another payload");
+      }
+      return { task: toTaskView(existing, 0), created: false };
+    }
+
+    const record = buildTaskDraftRecord({
+      id: crypto.randomUUID(),
+      ownerUserId,
+      input: normalized,
+      createdAt: now(),
+    });
+    const [inserted] = await tx
+      .insert(tasks)
+      .values(record)
+      .onConflictDoNothing({ target: [tasks.creatorUserId, tasks.idempotencyKey] })
+      .returning();
+    if (inserted) {
+      return { task: toTaskView(inserted, 0), created: true };
+    }
+
+    const raced = await findExisting();
+    if (!raced) throw new ConflictError("Task draft could not be recovered after an idempotency conflict");
+    if (!taskDraftPayloadMatches(raced, normalized)) {
+      throw new ConflictError("Task draft idempotency key is already used for another payload");
+    }
+    return { task: toTaskView(raced, 0), created: false };
+  });
+}
+
+export async function getOwnedTaskSummary(ownerUserId: string, taskId: string) {
+  const task = await getTaskByOwnerAndId(ownerUserId, taskId);
+  if (!task) return null;
+  const [applicationCountRow] = await db
+    .select({ count: count(taskApplications.id) })
+    .from(taskApplications)
+    .where(eq(taskApplications.taskId, task.id));
+  const [arbitrationCountRow] = await db
+    .select({ count: count() })
+    .from(schema.arbitrationCases)
+    .where(and(eq(schema.arbitrationCases.entityType, "task"), eq(schema.arbitrationCases.entityId, task.id)));
+  return toTaskView(
+    task,
+    Number(applicationCountRow?.count ?? 0),
+    Number(arbitrationCountRow?.count ?? 0),
   );
 }
 

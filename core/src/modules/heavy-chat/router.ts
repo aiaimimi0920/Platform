@@ -10,11 +10,16 @@ import type {
   HeavyChatSlotView,
   HeavyChatSnapshot,
   HeavyChatThreadView,
+  HeavyChatActionType,
 } from "@neuro/contracts";
 import type { FastifyPluginAsync } from "fastify";
 import { z } from "zod";
 
 import { GatewayClientError } from "./gateway-client";
+import {
+  HeavyChatActionExecutionError,
+  type HeavyChatActionResult,
+} from "./action-bridge";
 import type { CreateHeavyChatThreadArgs } from "./repository";
 import type {
   HeavyChatExecutionResult,
@@ -25,6 +30,7 @@ import type {
 } from "./service";
 import {
   HeavyChatAgentBindingConflictError,
+  HeavyChatActionConflictError,
   HeavyChatAttemptConflictError,
   HeavyChatInvalidTransitionError,
   HeavyChatManagedAgentValidationError,
@@ -45,6 +51,10 @@ export type HeavyChatRouterService = {
   createThread(ownerUserId: string, input: CreateHeavyChatThreadArgs): Promise<HeavyChatThreadRecord>;
   sendMessage(ownerUserId: string, input: HeavyChatSendMessageInput): Promise<HeavyChatSendMessageResult>;
   retryMessage(ownerUserId: string, input: HeavyChatRetryMessageInput): Promise<HeavyChatExecutionResult>;
+  runMessageAction(
+    ownerUserId: string,
+    input: { messageId: string; type: HeavyChatActionType },
+  ): Promise<HeavyChatActionResult>;
 };
 
 export type HeavyChatRouterOptions = {
@@ -71,6 +81,9 @@ const sendMessageSchema = z.object({
 const retryMessageSchema = z.object({
   idempotencyKey: idempotencyKeySchema,
   correlationId: correlationIdSchema.optional(),
+});
+const messageActionSchema = z.object({
+  type: z.enum(["task", "mailbox"]),
 });
 
 let productionServicePromise: Promise<HeavyChatRouterService> | null = null;
@@ -161,13 +174,26 @@ function toSendResultView(result: HeavyChatSendMessageResult): HeavyChatSendMess
   };
 }
 
+function toActionResultView(result: HeavyChatActionResult) {
+  return {
+    action: result.action,
+    target: result.target,
+    executed: result.executed,
+    created: result.created,
+  };
+}
+
 function normalizeHeavyChatError(error: unknown): Error {
   if (error instanceof HttpError) return error;
+  if (error instanceof HeavyChatActionExecutionError) {
+    return new HttpError(503, "INTERNAL_SERVER_ERROR", error.message);
+  }
   if (error instanceof HeavyChatOwnershipError) {
     return new NotFoundError(error.message);
   }
   if (
     error instanceof HeavyChatAgentBindingConflictError ||
+    error instanceof HeavyChatActionConflictError ||
     error instanceof HeavyChatAttemptConflictError ||
     error instanceof HeavyChatSlotLimitError
   ) {
@@ -213,13 +239,21 @@ async function createProductionHeavyChatService(): Promise<HeavyChatRouterServic
     { createHeavyChatGatewayClient },
     { createHeavyChatRepository },
     { createHeavyChatService },
+    { createHeavyChatActionBridge },
     { resolveOwnedAgentForHeavyChat },
+    taskHub,
+    accountDomain,
+    { requireModuleEnabled },
   ] = await Promise.all([
     import("../../env"),
     import("./gateway-client"),
     import("./repository"),
     import("./service"),
+    import("./action-bridge"),
     import("../agent-registry/service"),
+    import("../task-hub/service"),
+    import("@neuro/account-domain"),
+    import("../../platform/feature-modules/service"),
   ]);
 
   const gatewayClient = env.aiGatewayInternalUrl && env.aiGatewayManagementToken
@@ -233,11 +267,27 @@ async function createProductionHeavyChatService(): Promise<HeavyChatRouterServic
       })
     : undefined;
 
+  const repository = createHeavyChatRepository();
+  const actionBridge = createHeavyChatActionBridge({
+    repository,
+    assertEnabled: (type) => requireModuleEnabled(type === "task" ? "taskHub" : "mailbox"),
+    taskHub: {
+      createTaskDraft: taskHub.createTaskDraft,
+      getOwnedTaskSummary: taskHub.getOwnedTaskSummary,
+    },
+    mailbox: {
+      createMailboxMessage: accountDomain.createMailboxMessage,
+      getMailboxMessageById: accountDomain.getMailboxMessageById,
+    },
+    now: () => new Date(),
+  });
+
   return createHeavyChatService({
-    repository: createHeavyChatRepository(),
+    repository,
     resolveManagedHeavyAgent: resolveOwnedAgentForHeavyChat,
     gatewayClient,
     gatewayModel: env.heavyChatGatewayModel ?? undefined,
+    actionBridge,
   });
 }
 
@@ -312,6 +362,25 @@ export function createHeavyChatRouter(options: HeavyChatRouterOptions = {}): Fas
             correlationId: payload.correlationId ?? randomUUID(),
           });
           return { result: toExecutionResultView(result) };
+        } catch (error) {
+          throw normalizeHeavyChatError(error);
+        }
+      },
+    );
+
+    app.post<{ Params: { messageId: string }; Body: unknown }>(
+      "/v1/me/heavy-chat/messages/:messageId/actions",
+      { preHandler: withInternalRequest },
+      async (request, reply) => {
+        const { userId } = assertUserContext(request);
+        const payload = parseRequestBody(messageActionSchema, request.body);
+        try {
+          const result = await (await getService()).runMessageAction(userId, {
+            messageId: request.params.messageId,
+            type: payload.type,
+          });
+          const response = { result: toActionResultView(result) };
+          return reply.status(result.action.status === "pending" ? 202 : 200).send(response);
         } catch (error) {
           throw normalizeHeavyChatError(error);
         }

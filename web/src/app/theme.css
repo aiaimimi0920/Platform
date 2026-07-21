@@ -1297,16 +1297,19 @@ body {
 .mg-terminal-list__meta {
   display: grid;
   gap: 6px;
+  min-width: 0;
 }
 
 .mg-terminal-list__title {
   font-size: 0.98rem;
   font-weight: 700;
+  overflow-wrap: anywhere;
 }
 
 .mg-terminal-list__subtitle {
   color: var(--mg-text-soft);
   font-size: 0.84rem;
+  overflow-wrap: anywhere;
 }
 
 .mg-terminal-nav {

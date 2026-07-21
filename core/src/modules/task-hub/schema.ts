@@ -19,8 +19,14 @@ export const tasks = pgTable("tasks", {
   rewardAmount: integer("reward_amount").notNull(),
   requiredBondAmount: integer("required_bond_amount").notNull(),
   status: text("status").notNull(),
+  idempotencyKey: text("idempotency_key"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
-});
+}, (table) => ({
+  ownerIdempotencyUnique: uniqueIndex("tasks_creator_idempotency_idx").on(
+    table.creatorUserId,
+    table.idempotencyKey,
+  ),
+}));
 
 export const taskApplications = pgTable("task_applications", {
   id: text("id").primaryKey(),

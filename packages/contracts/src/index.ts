@@ -4066,6 +4066,7 @@ export type ArchiveReadMailboxMessagesResult = {
 };
 
 export type TaskStatus =
+  | "draft"
   | "open"
   | "applying"
   | "assigned"
@@ -4115,6 +4116,18 @@ export type CreateTaskInput = {
   rewardCurrency: ProductCurrency;
   rewardAmount: number;
   requiredBondAmount: number;
+};
+
+export type CreateTaskDraftInput = {
+  title: string;
+  description: string;
+  preferredCapabilityCodes?: string[];
+  idempotencyKey: string;
+};
+
+export type CreateTaskDraftResult = {
+  task: TaskView;
+  created: boolean;
 };
 
 export type TaskApplicationView = {

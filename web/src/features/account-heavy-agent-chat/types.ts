@@ -6,6 +6,17 @@ export type HeavyMessageRole = "assistant" | "user";
 
 export type HeavyMessageStatus = "idle" | "streaming" | "complete" | "error";
 
+export type HeavyChatMessageAction = {
+  id: string;
+  type: "task" | "mailbox";
+  status: "pending" | "complete" | "failed";
+  attemptNumber: number;
+  targetId: string | null;
+  errorMessage: string | null;
+  updatedAt: string;
+  href: string | null;
+};
+
 export type HeavyHistoryFilter = "all" | "starred" | "recent";
 
 export type HeavyInspectorTarget =
@@ -54,6 +65,7 @@ export type HeavyChatMessage = {
   createdAtLabel: string;
   meta?: string | null;
   blocks: HeavyMessageBlock[];
+  actions: HeavyChatMessageAction[];
 };
 
 export type HeavyChatThread = {

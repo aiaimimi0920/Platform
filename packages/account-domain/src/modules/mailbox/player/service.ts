@@ -28,8 +28,13 @@ import {
   countPendingMailboxAttachments,
   countUnreadMailboxMessages,
   getMailboxAttachmentsByMessageIds,
+  getMailboxMessageByUserAndId,
   getMailboxMessagesByUser,
 } from "../repository/player";
+import {
+  mailboxIdempotentPayloadMatches,
+  normalizeMailboxIdempotencyKey,
+} from "./idempotency";
 
 const MAILBOX_INBOX_STORAGE_LIMIT = 200;
 
@@ -250,11 +255,18 @@ export async function createMailboxMessage(args: {
   summary?: string | null;
   sourceLabel?: string | null;
   expiresAt?: Date | string | null;
+  idempotencyKey?: string | null;
   attachments?: Array<
     | { kind: "currency"; currency: CurrencyKey; amount: number; title?: string | null }
     | { kind: "item"; productId: string; title?: string | null }
   >;
 }) {
+  let idempotencyKey: string | null;
+  try {
+    idempotencyKey = normalizeMailboxIdempotencyKey(args.idempotencyKey);
+  } catch (error) {
+    throw new BadRequestError(error instanceof Error ? error.message : "Invalid mailbox idempotency key");
+  }
   return db.transaction(async (tx) => {
     const messageId = crypto.randomUUID();
     const createdAt = now();
@@ -264,41 +276,103 @@ export async function createMailboxMessage(args: {
         : args.expiresAt instanceof Date
           ? args.expiresAt
           : null;
-    await tx.insert(mailboxMessages).values({
+    if (expiresAt && !Number.isFinite(expiresAt.getTime())) {
+      throw new BadRequestError("Mailbox expiry is invalid");
+    }
+    const folder = normalizeMailboxFolder(args.folder);
+    const summary = normalizeMailboxText(args.summary) ?? buildMailboxSummary(args.body, args.title);
+    const sourceLabel = normalizeMailboxText(args.sourceLabel) ?? buildMailboxSourceLabel(args.type);
+    const normalizedAttachments = (args.attachments ?? []).map((attachment, index) => ({
+      kind: attachment.kind,
+      title:
+        normalizeMailboxText(attachment.title) ??
+        (attachment.kind === "currency"
+          ? `${attachment.currency} x ${attachment.amount}`
+          : "邮件附件"),
+      currency: attachment.kind === "currency" ? attachment.currency : null,
+      amount: attachment.kind === "currency" ? attachment.amount : null,
+      productId: attachment.kind === "item" ? attachment.productId : null,
+      sortOrder: index,
+    }));
+    const payload = {
+      folder,
+      title: args.title,
+      body: args.body,
+      type: args.type,
+      summary,
+      sourceLabel,
+      expiresAt,
+      attachments: normalizedAttachments,
+    };
+    const [inserted] = await tx.insert(mailboxMessages).values({
       id: messageId,
       userId: args.userId,
-      folder: normalizeMailboxFolder(args.folder),
+      folder,
       title: args.title,
-      summary: normalizeMailboxText(args.summary) ?? buildMailboxSummary(args.body, args.title),
+      summary,
       body: args.body,
-      sourceLabel: normalizeMailboxText(args.sourceLabel) ?? buildMailboxSourceLabel(args.type),
+      sourceLabel,
       type: args.type,
+      idempotencyKey,
       readAt: null,
       favoritedAt: null,
       expiresAt,
       createdAt,
-    });
+    }).onConflictDoNothing({
+      target: [mailboxMessages.userId, mailboxMessages.idempotencyKey],
+    }).returning();
 
-    for (const [index, attachment] of (args.attachments ?? []).entries()) {
+    if (!inserted) {
+      if (!idempotencyKey) {
+        throw new ConflictError("Mailbox message insert conflicted without an idempotency key");
+      }
+      const [existing] = await tx
+        .select()
+        .from(mailboxMessages)
+        .where(
+          and(
+            eq(mailboxMessages.userId, args.userId),
+            eq(mailboxMessages.idempotencyKey, idempotencyKey),
+          ),
+        )
+        .limit(1);
+      if (!existing) {
+        throw new ConflictError("Mailbox message could not be recovered after an idempotency conflict");
+      }
+      const existingAttachments = await tx
+        .select({
+          kind: mailboxAttachments.kind,
+          title: mailboxAttachments.title,
+          currency: mailboxAttachments.currency,
+          amount: mailboxAttachments.amount,
+          productId: mailboxAttachments.productId,
+          sortOrder: mailboxAttachments.sortOrder,
+        })
+        .from(mailboxAttachments)
+        .where(eq(mailboxAttachments.messageId, existing.id))
+        .orderBy(asc(mailboxAttachments.sortOrder), asc(mailboxAttachments.id));
+      if (!mailboxIdempotentPayloadMatches({ ...existing, attachments: existingAttachments }, payload)) {
+        throw new ConflictError("Mailbox idempotency key is already used for another payload");
+      }
+      return { messageId: existing.id, created: false };
+    }
+
+    for (const attachment of normalizedAttachments) {
       await tx.insert(mailboxAttachments).values({
         id: crypto.randomUUID(),
         messageId,
         kind: attachment.kind,
-        title:
-          normalizeMailboxText(attachment.title) ??
-          (attachment.kind === "currency"
-            ? `${attachment.currency} x ${attachment.amount}`
-            : "邮件附件"),
-        currency: attachment.kind === "currency" ? attachment.currency : null,
-        amount: attachment.kind === "currency" ? attachment.amount : null,
-        productId: attachment.kind === "item" ? attachment.productId : null,
+        title: attachment.title,
+        currency: attachment.currency,
+        amount: attachment.amount,
+        productId: attachment.productId,
         itemId: null,
-        sortOrder: index,
+        sortOrder: attachment.sortOrder,
         claimedAt: null,
       });
     }
 
-    if (normalizeMailboxFolder(args.folder) === "inbox") {
+    if (folder === "inbox") {
       await pruneMailboxInboxOverflowInTx({
         tx,
         userId: args.userId,
@@ -314,8 +388,30 @@ export async function createMailboxMessage(args: {
       tx,
     );
 
-    return { messageId };
+    return { messageId, created: true };
   });
+}
+
+function toMailboxMessageView(
+  message: typeof mailboxMessages.$inferSelect,
+  attachments: MailboxAttachmentView[],
+): MailboxMessageView {
+  return {
+    folder: message.folder === "stash" ? "stash" : "inbox",
+    id: message.id,
+    title: message.title,
+    summary: normalizeMailboxText(message.summary) ?? buildMailboxSummary(message.body, message.title),
+    body: message.body,
+    sourceLabel: normalizeMailboxText(message.sourceLabel) ?? buildMailboxSourceLabel(message.type as MailboxMessageView["type"]),
+    type: message.type as MailboxMessageView["type"],
+    readAt: message.readAt ? message.readAt.toISOString() : null,
+    favoritedAt: message.favoritedAt ? message.favoritedAt.toISOString() : null,
+    expiresAt: message.expiresAt ? message.expiresAt.toISOString() : null,
+    createdAt: message.createdAt.toISOString(),
+    attachments,
+    pendingAttachmentCount: attachments.filter((attachment) => attachment.claimedAt === null).length,
+    claimedAttachmentCount: attachments.filter((attachment) => attachment.claimedAt !== null).length,
+  };
 }
 
 export async function listMailbox(userId: string): Promise<MailboxMessageView[]> {
@@ -329,22 +425,17 @@ export async function listMailbox(userId: string): Promise<MailboxMessageView[]>
     attachmentsByMessage.set(attachment.messageId, list);
   }
 
-  return messages.map((message) => ({
-    folder: message.folder === "stash" ? "stash" : "inbox",
-    id: message.id,
-    title: message.title,
-    summary: normalizeMailboxText(message.summary) ?? buildMailboxSummary(message.body, message.title),
-    body: message.body,
-    sourceLabel: normalizeMailboxText(message.sourceLabel) ?? buildMailboxSourceLabel(message.type as MailboxMessageView["type"]),
-    type: message.type as MailboxMessageView["type"],
-    readAt: message.readAt ? message.readAt.toISOString() : null,
-    favoritedAt: message.favoritedAt ? message.favoritedAt.toISOString() : null,
-    expiresAt: message.expiresAt ? message.expiresAt.toISOString() : null,
-    createdAt: message.createdAt.toISOString(),
-    attachments: attachmentsByMessage.get(message.id) || [],
-    pendingAttachmentCount: (attachmentsByMessage.get(message.id) || []).filter((attachment) => attachment.claimedAt === null).length,
-    claimedAttachmentCount: (attachmentsByMessage.get(message.id) || []).filter((attachment) => attachment.claimedAt !== null).length,
-  }));
+  return messages.map((message) => toMailboxMessageView(message, attachmentsByMessage.get(message.id) || []));
+}
+
+export async function getMailboxMessageById(
+  userId: string,
+  messageId: string,
+): Promise<MailboxMessageView | null> {
+  const message = await getMailboxMessageByUserAndId(userId, messageId);
+  if (!message) return null;
+  const attachments = await getMailboxAttachmentsByMessageIds([message.id]);
+  return toMailboxMessageView(message, attachments.map(toMailboxAttachmentView));
 }
 
 export async function getMailboxSnapshot(userId: string): Promise<MailboxSnapshot> {

@@ -5,6 +5,7 @@ import type { HeavyChatSnapshot, InternalUserContext } from "@neuro/contracts";
 
 import {
   handleHeavyChatCreateThreadRequest,
+  handleHeavyChatMessageActionRequest,
   handleHeavyChatSendMessageRequest,
   handleHeavyChatSnapshotRequest,
   loadHeavyChatWorkspace,
@@ -82,4 +83,42 @@ test("workspace loading returns an explicit unavailable state instead of seed da
 
   assert.deepEqual(loaded.workspace, { slots: [], projects: [], threads: [] });
   assert.equal(loaded.error, "Heavy chat service is temporarily unavailable");
+});
+
+test("P2-05 RED: heavy chat browser server proxies an owner message action", async () => {
+  let capturedContext: InternalUserContext | null = null;
+  let capturedInput: { messageId: string; type: "task" | "mailbox" } | null = null;
+  const response = await handleHeavyChatMessageActionRequest(
+    "message-1",
+    new Request("https://platform.local/api/heavy-chat/messages/message-1/actions", {
+      method: "POST",
+      body: JSON.stringify({ type: "task", ownerUserId: "forged-owner" }),
+    }),
+    {
+      requireUserContext: async () => userContext,
+      runAction: async (context, messageId, input) => {
+        capturedContext = context;
+        capturedInput = { messageId, type: input.type };
+        return {
+          action: {
+            id: "action-1",
+            type: "task",
+            status: "complete",
+            attemptNumber: 1,
+            targetId: "task-1",
+            errorMessage: null,
+            updatedAt: "2026-07-20T08:00:00.000Z",
+          },
+          target: { id: "task-1", type: "task", href: "/my-tasks#task-task-1" },
+          executed: true,
+          created: true,
+        };
+      },
+    },
+  );
+
+  assert.equal(response.status, 200);
+  assert.deepEqual(capturedContext, userContext);
+  assert.deepEqual(capturedInput, { messageId: "message-1", type: "task" });
+  assert.equal((await response.json()).result.target.id, "task-1");
 });

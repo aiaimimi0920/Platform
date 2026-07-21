@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useId, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 
 import type { MailboxMessageView } from "@neuro/contracts";
 
@@ -9,7 +9,12 @@ import { useAppToast } from "@/components/app-toast-center";
 import { acquireBodyOverlayLock } from "@/lib/overlay-lock";
 
 import { MAILBOX_POLL_INTERVAL_MS } from "./constants";
-import { isMessageExpired, sortMailboxMessages } from "./utils";
+import {
+  isMessageExpired,
+  resolveSelectedMailboxMessageId,
+  selectMailboxMessages,
+  sortMailboxMessages,
+} from "./utils";
 
 type UseMailboxCenterOptions = {
   enabled: boolean;
@@ -19,12 +24,14 @@ type UseMailboxCenterOptions = {
 
 export function useMailboxCenter({ enabled, routeOpen, userId }: UseMailboxCenterOptions) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { pushToast } = useAppToast();
   const closeButtonRef = useRef<HTMLButtonElement | null>(null);
   const triggerButtonRef = useRef<HTMLButtonElement | null>(null);
   const wasOpenRef = useRef(false);
   const panelErrorToastRef = useRef<string | null>(null);
   const pendingReadIdsRef = useRef(new Set<string>());
+  const appliedTargetedMessageIdRef = useRef<string | null>(null);
   const titleId = useId();
 
   const [messages, setMessages] = useState<MailboxMessageView[]>([]);
@@ -37,15 +44,17 @@ export function useMailboxCenter({ enabled, routeOpen, userId }: UseMailboxCente
   const [togglingFavorite, setTogglingFavorite] = useState(false);
   const [deletingSelected, setDeletingSelected] = useState(false);
 
-  const inboxMessages = sortMailboxMessages(messages.filter((message) => message.folder === "inbox"));
+  const targetedMessageId = searchParams?.get("messageId")?.trim() || null;
+  const inboxMessages = selectMailboxMessages(messages, targetedMessageId);
+  const actualInboxMessages = sortMailboxMessages(messages.filter((message) => message.folder === "inbox"));
   const selectedMessage =
     inboxMessages.find((message) => message.id === selectedMessageId) ??
     inboxMessages[0] ??
     null;
   const selectedMessageHasAttachments = Boolean(selectedMessage && selectedMessage.attachments.length > 0);
-  const totalUnreadCount = inboxMessages.filter((message) => !message.readAt).length;
-  const totalPendingAttachmentCount = inboxMessages.reduce((sum, message) => sum + message.pendingAttachmentCount, 0);
-  const currentInboxCount = inboxMessages.length;
+  const totalUnreadCount = actualInboxMessages.filter((message) => !message.readAt).length;
+  const totalPendingAttachmentCount = actualInboxMessages.reduce((sum, message) => sum + message.pendingAttachmentCount, 0);
+  const currentInboxCount = actualInboxMessages.length;
   const readAndClearableCount = messages.filter(
     (message) =>
       message.folder === "inbox" &&
@@ -64,11 +73,10 @@ export function useMailboxCenter({ enabled, routeOpen, userId }: UseMailboxCente
 
   function syncMailboxState(nextMessages: MailboxMessageView[]) {
     setMessages(nextMessages);
-    const nextInboxMessages = sortMailboxMessages(nextMessages.filter((message) => message.folder === "inbox"));
-    const nextSelected = nextInboxMessages.some((message) => message.id === selectedMessageId)
-      ? selectedMessageId
-      : nextInboxMessages[0]?.id ?? null;
-    setSelectedMessageId(nextSelected);
+    const nextInboxMessages = selectMailboxMessages(nextMessages, targetedMessageId);
+    setSelectedMessageId((current) =>
+      resolveSelectedMailboxMessageId(nextInboxMessages, current, targetedMessageId),
+    );
   }
 
   async function refreshMailbox() {
@@ -341,6 +349,18 @@ export function useMailboxCenter({ enabled, routeOpen, userId }: UseMailboxCente
     setOpen(true);
     void refreshMailbox();
   }
+
+  useEffect(() => {
+    if (appliedTargetedMessageIdRef.current === targetedMessageId) {
+      return;
+    }
+
+    appliedTargetedMessageIdRef.current = targetedMessageId;
+    const visibleMessages = selectMailboxMessages(messages, targetedMessageId);
+    setSelectedMessageId((current) =>
+      resolveSelectedMailboxMessageId(visibleMessages, current, targetedMessageId),
+    );
+  }, [messages, targetedMessageId]);
 
   useEffect(() => {
     if (!enabled || !userId) {

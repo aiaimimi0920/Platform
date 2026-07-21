@@ -1,9 +1,10 @@
 import { redirect } from "next/navigation";
 
 import { auth } from "@/auth";
-import { getPublicSurfaceSnapshot } from "@/lib/core-client";
+import { getFeatureSnapshot, getPublicSurfaceSnapshot } from "@/lib/core-client";
 import { isPublicSurfaceVisibleForViewer } from "@/lib/public-surface-visibility";
 
+import { resolveChatActionAvailability } from "./action-availability";
 import { HeavyAgentChatWorkspace } from "./chat-workspace";
 import { loadHeavyChatWorkspace } from "./server";
 
@@ -19,10 +20,19 @@ export default async function HeavyAgentChatPage({ searchParams }: HeavyAgentCha
     redirect("/login");
   }
 
-  const publicSurfaces = await getPublicSurfaceSnapshot();
+  const [publicSurfaces, features] = await Promise.all([
+    getPublicSurfaceSnapshot(),
+    getFeatureSnapshot(),
+  ]);
   if (!isPublicSurfaceVisibleForViewer(publicSurfaces, "heavyChat", session.user.id, session.user.providerUserId)) {
     redirect("/dashboard");
   }
+  const actionAvailability = resolveChatActionAvailability(
+    features,
+    publicSurfaces,
+    session.user.id,
+    session.user.providerUserId,
+  );
 
   const resolvedSearchParams = searchParams ? await searchParams : undefined;
   const displayName = session.user.username || session.user.name || "当前用户";
@@ -38,8 +48,9 @@ export default async function HeavyAgentChatPage({ searchParams }: HeavyAgentCha
       initialError={workspace.error}
       initialSnapshot={workspace.workspace}
       initialSlotId={resolvedSearchParams?.slotId ?? null}
-      mailboxVisible={publicSurfaces.mailbox.enabled}
+      mailboxVisible={actionAvailability.mailbox}
       storeVisible={publicSurfaces.store.enabled}
+      taskVisible={actionAvailability.task}
     />
   );
 }

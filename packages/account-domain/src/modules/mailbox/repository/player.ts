@@ -11,6 +11,29 @@ export async function getMailboxMessagesByUser(userId: string) {
     .orderBy(desc(mailboxMessages.createdAt));
 }
 
+export async function getMailboxMessageByUserAndId(userId: string, messageId: string) {
+  const [message] = await db
+    .select()
+    .from(mailboxMessages)
+    .where(and(eq(mailboxMessages.userId, userId), eq(mailboxMessages.id, messageId)))
+    .limit(1);
+  return message ?? null;
+}
+
+export async function getMailboxMessageByUserAndIdempotencyKey(userId: string, idempotencyKey: string) {
+  const [message] = await db
+    .select()
+    .from(mailboxMessages)
+    .where(
+      and(
+        eq(mailboxMessages.userId, userId),
+        eq(mailboxMessages.idempotencyKey, idempotencyKey),
+      ),
+    )
+    .limit(1);
+  return message ?? null;
+}
+
 export async function getMailboxAttachmentsByMessageIds(messageIds: string[]) {
   if (messageIds.length === 0) return [];
   return db

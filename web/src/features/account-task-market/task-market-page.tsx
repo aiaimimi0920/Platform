@@ -171,6 +171,7 @@ function money(currency: ProductCurrency) {
 function taskStatus(status: TaskView["status"]) {
   return (
     {
+      draft: "草稿",
       open: "开放中",
       applying: "申请中",
       assigned: "已分配",

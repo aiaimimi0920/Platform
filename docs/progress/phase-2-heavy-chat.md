@@ -4,7 +4,7 @@
 - [x] `P2-02` heavy-chat service、slot entitlement、managed_heavy validation。
 - [x] `P2-03` server-side Gateway stream/error/retry boundary。
 - [x] `P2-04` Core/Web routes、server snapshot hydration、refresh persistence。
-- [ ] `P2-05` real Task Hub and mailbox action bridges with idempotency。
+- [x] `P2-05` real Task Hub and mailbox action bridges with idempotency。
 
 Acceptance: an isolated Owner can send, reload, retry, create a task, and create a mailbox record; all IDs are queryable.
 
@@ -46,4 +46,17 @@ Acceptance: an isolated Owner can send, reload, retry, create a task, and create
 - Acceptance Compose contract suite: `17/17` passed. The Gateway stalled-body regression also passed in `12/12` concurrent processes after the test transport was made deterministic.
 - Real isolated Web/Core/PostgreSQL/Gateway-double evidence is retained at `.runtime/acceptance/platform-p204-debug1/probe/final-snapshot.json`: one slot, one managed-agent binding, one thread, two messages, and assistant attempt `2` completed with `Gateway fixture response`. The same send idempotency key returned `created=false`, and retry updated the existing assistant message.
 - Cleanup evidence: Compose project `platform-p204-e2e3` has `0` containers, `0` volumes, and `0` networks. The run-owned environment file and browser cookie file were scrubbed to zero bytes; probe evidence contains no token/secret/cookie markers.
-- Scope boundary: Task Hub and mailbox actions still return explicit pending notices and remain P2-05. Complete slot management remains P3-04. Platform product completion is not claimed by P2-04.
+- P2-04 scope boundary: Task Hub and mailbox actions were intentionally deferred to P2-05 at that checkpoint. Complete slot management remains P3-04, so P2-04 did not claim product completion.
+
+## P2-05 Evidence
+
+- Heavy Chat assistant actions now persist owner-scoped `task` and `mailbox` execution state with `pending`, `complete`, and `failed` outcomes, target IDs, retry attempts, stale-attempt fencing, and redacted user-facing errors.
+- Task actions create idempotent zero-economy drafts. Drafts create no reward hold, ledger entry, or `task.created` event; public task discovery excludes drafts while the owner `/v1/tasks/mine` view retains them.
+- Mailbox actions create idempotent `stash` messages through the account-domain public service API. Full attachment payloads participate in conflict detection, and a conflict occurs before prune or outbox work.
+- Successful actions are marked complete only after the target is queryable. Links resolve to `/my-tasks#task-<taskId>` and `/mailbox?messageId=<mailboxId>`; normal mailbox browsing excludes unrelated stash records.
+- Focused and full verification passed before closeout: Core full suite `151/151`, account-domain unit `9/9`, contracts `2/2`, and Web full suite `225/225`. Core PostgreSQL integration passed `2/2`; account-domain PostgreSQL integration passed `1/1`. The database coverage includes concurrent reservation/completion, stale-attempt fencing, owner isolation, draft idempotency, mailbox attachment conflicts, and overflow preservation.
+- The isolated Compose/API/browser acceptance run is retained at `.runtime/acceptance/platform-p205-final-20260721030309/`. Its probe confirms one task target, one mailbox target, zero reward holds, zero ledger entries, zero `task.created` events, one fresh `mail.sent` event, public draft exclusion, owner draft visibility, complete action persistence, correct links, and replay without duplicate downstream records.
+- Browser evidence covers `1440x1000`, `768x1024`, and `390x844`, including action controls, task anchor offset/highlight, mailbox stash deep link, and no horizontal viewport overflow. Follow-up regression tests ensure long task and mailbox titles wrap before their status/expiry columns.
+- Cleanup receipt confirms the acceptance project has `0` containers, `0` networks, and `0` volumes after cleanup.
+
+Phase 2 is complete. Platform is not complete: Phase 3-6 remain to be implemented, and release generation is not permitted yet.

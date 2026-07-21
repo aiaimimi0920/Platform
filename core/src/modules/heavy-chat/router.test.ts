@@ -3,6 +3,7 @@ import { before, describe, it } from "node:test";
 
 import Fastify from "fastify";
 
+import { HeavyChatActionExecutionError } from "./action-bridge";
 import { GatewayClientError } from "./gateway-client";
 import { HeavyChatOwnershipError } from "./types";
 import { HttpError } from "../../platform/errors";
@@ -106,6 +107,23 @@ type RouterService = {
     attempt: ReturnType<typeof attemptRecord>;
     created: boolean;
   }>;
+  runMessageAction(
+    ownerUserId: string,
+    input: { messageId: string; type: "task" | "mailbox" },
+  ): Promise<{
+    action: {
+      id: string;
+      type: "task" | "mailbox";
+      status: "pending" | "complete" | "failed";
+      attemptNumber: number;
+      targetId: string | null;
+      errorMessage: string | null;
+      updatedAt: string;
+    };
+    target: { id: string; type: "task" | "mailbox"; href: string } | null;
+    executed: boolean;
+    created: boolean;
+  }>;
 };
 
 function createRouterService(overrides: Partial<RouterService> = {}): RouterService {
@@ -135,6 +153,22 @@ function createRouterService(overrides: Partial<RouterService> = {}): RouterServ
       return {
         assistantMessage: messageRecord("assistant"),
         attempt: attemptRecord(),
+        created: true,
+      };
+    },
+    async runMessageAction(_ownerUserId, input) {
+      return {
+        action: {
+          id: "action-1",
+          type: input.type,
+          status: "complete" as const,
+          attemptNumber: 1,
+          targetId: "target-1",
+          errorMessage: null,
+          updatedAt: NOW.toISOString(),
+        },
+        target: { id: "target-1", type: input.type, href: "/target/target-1" },
+        executed: true,
         created: true,
       };
     },
@@ -392,6 +426,73 @@ describe("heavy chat router", () => {
       assert.deepEqual(response.json(), {
         error: { code: "INTERNAL_SERVER_ERROR", message: "Gateway unavailable" },
       });
+    } finally {
+      await app.close();
+    }
+  });
+
+  it("runs an owner-scoped task or mailbox action and returns its target", async () => {
+    let capturedOwner = "";
+    let capturedInput: { messageId: string; type: "task" | "mailbox" } | null = null;
+    const service = createRouterService({
+      async runMessageAction(ownerUserId, input) {
+        capturedOwner = ownerUserId;
+        capturedInput = input;
+        return {
+          action: {
+            id: "action-1",
+            type: input.type,
+            status: "complete" as const,
+            attemptNumber: 1,
+            targetId: "task-1",
+            errorMessage: null,
+            updatedAt: NOW.toISOString(),
+          },
+          target: { id: "task-1", type: input.type, href: "/my-tasks#task-task-1" },
+          executed: true,
+          created: true,
+        };
+      },
+    });
+    const app = await buildRouterTestServer(service);
+    try {
+      const response = await app.inject({
+        method: "POST",
+        url: "/v1/me/heavy-chat/messages/message-assistant-1/actions",
+        headers: authHeaders("user-a"),
+        payload: { type: "task" },
+      });
+
+      assert.equal(response.statusCode, 200);
+      assert.equal(capturedOwner, "user-a");
+      assert.deepEqual(capturedInput, { messageId: "message-assistant-1", type: "task" });
+      assert.equal(response.json().result.target.href, "/my-tasks#task-task-1");
+    } finally {
+      await app.close();
+    }
+  });
+
+  it("redacts action execution failures at the Core HTTP boundary", async () => {
+    const service = createRouterService({
+      async runMessageAction() {
+        throw new HeavyChatActionExecutionError(
+          "mailbox",
+          new Error("ECONNREFUSED postgres://user:secret@10.0.0.9/platform"),
+        );
+      },
+    });
+    const app = await buildRouterTestServer(service);
+    try {
+      const response = await app.inject({
+        method: "POST",
+        url: "/v1/me/heavy-chat/messages/message-assistant-1/actions",
+        headers: authHeaders(),
+        payload: { type: "mailbox" },
+      });
+
+      assert.equal(response.statusCode, 503);
+      assert.doesNotMatch(response.body, /secret|10\.0\.0\.9|postgres:\/\//i);
+      assert.match(response.body, /mailbox draft action failed/i);
     } finally {
       await app.close();
     }

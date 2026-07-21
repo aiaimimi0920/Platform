@@ -32,6 +32,12 @@ import {
   isPublicSurfaceVisibleForViewer,
 } from "@/lib/public-surface-visibility";
 
+import {
+  countOpenCreatedTasks,
+  getTaskRewardLabel,
+  getTaskStatusLabel,
+} from "./presentation";
+
 type MyTasksPageProps = {
   searchParams?: Promise<{
     status?: string;
@@ -108,7 +114,7 @@ export default async function MyTasksPage({ searchParams }: MyTasksPageProps) {
   const unreadMailboxCount = mailboxSnapshot?.unreadMessages ?? 0;
   const pendingAttachmentCount = mailboxSnapshot?.pendingAttachments ?? 0;
   const activeAssignedCount = myAssignedTasks.filter((task) => ["assigned", "in_progress", "submitted"].includes(task.status)).length;
-  const openCreatedCount = myCreatedTasks.filter((task) => ["open", "applying"].includes(task.status)).length;
+  const openCreatedCount = countOpenCreatedTasks(myCreatedTasks);
   const accountCenterVisibility = buildAccountCenterSurfaceVisibility(
     publicSurfaces,
     session.user.id,
@@ -201,14 +207,14 @@ export default async function MyTasksPage({ searchParams }: MyTasksPageProps) {
                 ) : (
                   <div className="app-account-subgrid">
                     {myCreatedTasks.map((task) => (
-                      <Card className="app-stack" key={task.id}>
+                      <Card className="app-stack app-task-deep-link-target" id={`task-${task.id}`} key={task.id}>
                         <AccountHomeListRow
                           aside={
                             <div className="app-account-ledger-aside">
-                              <Badge variant={task.status === "accepted" ? "success" : task.status === "defaulted" ? "danger" : "warning"}>
-                                {task.status}
+                              <Badge variant={task.status === "draft" ? "glass" : task.status === "accepted" ? "success" : task.status === "defaulted" ? "danger" : "warning"}>
+                                {getTaskStatusLabel(task.status)}
                               </Badge>
-                              <strong>{`${task.rewardAmount} ${task.rewardCurrency}`}</strong>
+                              <strong>{getTaskRewardLabel(task)}</strong>
                             </div>
                           }
                           subtitle={[

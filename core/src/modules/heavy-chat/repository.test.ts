@@ -24,6 +24,7 @@ import type {
   HeavyChatThreadRecord,
 } from "./types";
 import {
+  HeavyChatActionConflictError,
   HeavyChatAttemptConflictError,
   HeavyChatInvalidTransitionError,
   HeavyChatOwnershipError,
@@ -993,6 +994,247 @@ test("attempt-aware transitions fail closed when a store lacks atomic CAS", asyn
     /attempt-aware.*CAS|compare-and-set/i,
   );
   assert.equal((await repository.findMessageById("owner-a", assistant.id))?.status, "pending");
+});
+
+test("message actions reserve and complete exactly once with a stable server identity", async () => {
+  const { repository } = buildRepository();
+  const slot = await repository.createOrGetDefaultSlot("owner-a");
+  const thread = await repository.createThread("owner-a", {
+    id: "thread-actions",
+    slotId: slot.id,
+    title: "Action lifecycle",
+  });
+  const assistant = await repository.appendMessage("owner-a", {
+    id: "message-actions",
+    threadId: thread.id,
+    role: "assistant",
+    status: "complete",
+    content: "Create a task draft",
+  });
+
+  const first = await repository.reserveMessageAction("owner-a", assistant.id, "task");
+  const replay = await repository.reserveMessageAction("owner-a", assistant.id, "task");
+
+  assert.equal(first.claimed, true);
+  assert.equal(first.action.id, `heavy-chat-action:${assistant.id}:task`);
+  assert.equal(first.action.status, "pending");
+  assert.equal(first.action.attemptNumber, 1);
+  assert.equal(replay.claimed, false);
+  assert.equal(replay.action.id, first.action.id);
+
+  const completed = await repository.completeMessageAction(
+    "owner-a",
+    assistant.id,
+    first.action.id,
+    first.action.attemptNumber,
+    "task-draft-1",
+  );
+  assert.equal(completed.action.status, "complete");
+  assert.equal(completed.action.targetId, "task-draft-1");
+
+  const completeReplay = await repository.completeMessageAction(
+    "owner-a",
+    assistant.id,
+    first.action.id,
+    first.action.attemptNumber,
+    "task-draft-1",
+  );
+  assert.equal(completeReplay.action.targetId, "task-draft-1");
+  const reservedComplete = await repository.reserveMessageAction("owner-a", assistant.id, "task");
+  assert.equal(reservedComplete.claimed, false);
+  assert.equal(reservedComplete.action.status, "complete");
+});
+
+test("failed message actions retry with fencing and preserve a known target", async () => {
+  const { repository } = buildRepository();
+  const slot = await repository.createOrGetDefaultSlot("owner-a");
+  const thread = await repository.createThread("owner-a", {
+    id: "thread-action-retry",
+    slotId: slot.id,
+    title: "Action retry",
+  });
+  const assistant = await repository.appendMessage("owner-a", {
+    id: "message-action-retry",
+    threadId: thread.id,
+    role: "assistant",
+    status: "complete",
+  });
+
+  const first = await repository.reserveMessageAction("owner-a", assistant.id, "mailbox");
+  const failed = await repository.failMessageAction(
+    "owner-a",
+    assistant.id,
+    first.action.id,
+    first.action.attemptNumber,
+    { errorMessage: "target lookup failed", targetId: "mailbox-1" },
+  );
+  assert.equal(failed.action.status, "failed");
+  assert.equal(failed.action.targetId, "mailbox-1");
+
+  const retry = await repository.reserveMessageAction("owner-a", assistant.id, "mailbox");
+  assert.equal(retry.claimed, true);
+  assert.equal(retry.action.attemptNumber, 2);
+  assert.equal(retry.action.targetId, "mailbox-1");
+  assert.equal(retry.action.errorMessage, null);
+
+  await assert.rejects(
+    () =>
+      repository.completeMessageAction(
+        "owner-a",
+        assistant.id,
+        first.action.id,
+        first.action.attemptNumber,
+        "mailbox-1",
+      ),
+    (error: unknown) => error instanceof HeavyChatActionConflictError,
+  );
+  const completed = await repository.completeMessageAction(
+    "owner-a",
+    assistant.id,
+    retry.action.id,
+    retry.action.attemptNumber,
+    "mailbox-1",
+  );
+  assert.equal(completed.action.status, "complete");
+});
+
+test("stale pending actions are reclaimed with a new attempt and fence old writers", async () => {
+  const { repository } = buildRepository();
+  const slot = await repository.createOrGetDefaultSlot("owner-a");
+  const thread = await repository.createThread("owner-a", {
+    id: "thread-action-stale",
+    slotId: slot.id,
+    title: "Stale action recovery",
+  });
+  const assistant = await repository.appendMessage("owner-a", {
+    id: "message-action-stale",
+    threadId: thread.id,
+    role: "assistant",
+    status: "complete",
+  });
+
+  const first = await repository.reserveMessageAction("owner-a", assistant.id, "task");
+  const recovered = await repository.reserveMessageAction(
+    "owner-a",
+    assistant.id,
+    "task",
+    { staleBefore: new Date("2026-07-20T00:00:00.000Z") },
+  );
+
+  assert.equal(recovered.claimed, true);
+  assert.equal(recovered.action.attemptNumber, first.action.attemptNumber + 1);
+  assert.equal(recovered.action.status, "pending");
+
+  await assert.rejects(
+    () => repository.completeMessageAction(
+      "owner-a",
+      assistant.id,
+      first.action.id,
+      first.action.attemptNumber,
+      "task-stale",
+    ),
+    (error: unknown) => error instanceof HeavyChatActionConflictError,
+  );
+  await assert.rejects(
+    () => repository.failMessageAction(
+      "owner-a",
+      assistant.id,
+      first.action.id,
+      first.action.attemptNumber,
+      { errorMessage: "stale failure" },
+    ),
+    (error: unknown) => error instanceof HeavyChatActionConflictError,
+  );
+
+  const completed = await repository.completeMessageAction(
+    "owner-a",
+    assistant.id,
+    recovered.action.id,
+    recovered.action.attemptNumber,
+    "task-fresh",
+  );
+  assert.equal(completed.action.targetId, "task-fresh");
+});
+
+test("concurrent task and mailbox actions preserve both JSONB entries", async () => {
+  const { repository } = buildRepository();
+  const slot = await repository.createOrGetDefaultSlot("owner-a");
+  const thread = await repository.createThread("owner-a", {
+    id: "thread-action-parallel",
+    slotId: slot.id,
+    title: "Parallel actions",
+  });
+  const assistant = await repository.appendMessage("owner-a", {
+    id: "message-action-parallel",
+    threadId: thread.id,
+    role: "assistant",
+    status: "complete",
+  });
+
+  const [task, mailbox] = await Promise.all([
+    repository.reserveMessageAction("owner-a", assistant.id, "task"),
+    repository.reserveMessageAction("owner-a", assistant.id, "mailbox"),
+  ]);
+  await Promise.all([
+    repository.completeMessageAction(
+      "owner-a",
+      assistant.id,
+      task.action.id,
+      task.action.attemptNumber,
+      "task-1",
+    ),
+    repository.completeMessageAction(
+      "owner-a",
+      assistant.id,
+      mailbox.action.id,
+      mailbox.action.attemptNumber,
+      "mailbox-1",
+    ),
+  ]);
+
+  const persisted = await repository.findMessageById("owner-a", assistant.id);
+  assert.deepEqual(
+    persisted?.actions.map((action) => [action.type, action.status, action.targetId]).sort(),
+    [
+      ["mailbox", "complete", "mailbox-1"],
+      ["task", "complete", "task-1"],
+    ],
+  );
+});
+
+test("message action reservations reject foreign owners and non-complete assistants", async () => {
+  const { repository } = buildRepository();
+  const slot = await repository.createOrGetDefaultSlot("owner-a");
+  const thread = await repository.createThread("owner-a", {
+    id: "thread-action-denial",
+    slotId: slot.id,
+    title: "Action denial",
+  });
+  const userMessage = await repository.appendMessage("owner-a", {
+    id: "message-action-user",
+    threadId: thread.id,
+    role: "user",
+    status: "complete",
+  });
+  const failedAssistant = await repository.appendMessage("owner-a", {
+    id: "message-action-failed",
+    threadId: thread.id,
+    role: "assistant",
+    status: "failed",
+  });
+
+  await assert.rejects(
+    () => repository.reserveMessageAction("owner-b", userMessage.id, "task"),
+    (error: unknown) => error instanceof HeavyChatOwnershipError,
+  );
+  await assert.rejects(
+    () => repository.reserveMessageAction("owner-a", userMessage.id, "task"),
+    (error: unknown) => error instanceof HeavyChatInvalidTransitionError,
+  );
+  await assert.rejects(
+    () => repository.reserveMessageAction("owner-a", failedAssistant.id, "mailbox"),
+    (error: unknown) => error instanceof HeavyChatInvalidTransitionError,
+  );
 });
 
 test("schema and migration carry owner-scoped uniqueness, foreign keys, and idempotency", async () => {

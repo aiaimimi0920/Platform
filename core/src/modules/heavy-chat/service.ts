@@ -16,6 +16,8 @@ import {
   type HeavyChatSlotProjectRecord,
   type HeavyChatThreadRecord,
 } from "./types";
+import type { HeavyChatActionType } from "@neuro/contracts";
+import type { HeavyChatActionResult } from "./action-bridge";
 import { validateManagedHeavyAgentInput } from "../agent-registry/managed-heavy-validation";
 import { HttpError } from "../../platform/errors";
 
@@ -48,6 +50,12 @@ export type HeavyChatServiceOptions = {
   gatewayClient?: HeavyChatGatewayClient;
   gatewayModel?: string;
   attemptRecoveryAfterMs?: number;
+  actionBridge?: {
+    runAction(
+      ownerUserId: string,
+      input: { messageId: string; type: HeavyChatActionType },
+    ): Promise<HeavyChatActionResult>;
+  };
   now?: () => Date;
 };
 
@@ -370,6 +378,16 @@ export function createHeavyChatService(options: HeavyChatServiceOptions) {
       created: boolean;
     }> {
       return repository.reserveMessageAttempt(ownerUserId, messageId, idempotencyKey);
+    },
+
+    async runMessageAction(
+      ownerUserId: string,
+      input: { messageId: string; type: HeavyChatActionType },
+    ) {
+      if (!options.actionBridge) {
+        throw new Error("Heavy chat action bridge is not configured");
+      }
+      return options.actionBridge.runAction(ownerUserId, input);
     },
 
     async bindManagedAgent(

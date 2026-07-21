@@ -49,8 +49,13 @@ export function HeavyChatComposer({
   return (
     <div className={`nt-chat-app-composer nt-chat-app-composer--${mode}`}>
       {actionNotice ? (
-        <div className="nt-chat-app-composer__notice">
-          <NtBadge tone={actionNotice.tone}>{actionNotice.message}</NtBadge>
+        <div aria-atomic="true" aria-live="polite" className="nt-chat-app-composer__notice">
+          <NtBadge
+            className={`nt-chat-app-composer__notice-badge nt-chat-app-composer__notice-badge--${actionNotice.tone}`}
+            tone={actionNotice.tone}
+          >
+            {actionNotice.message}
+          </NtBadge>
         </div>
       ) : null}
 
@@ -100,7 +105,7 @@ export function HeavyChatComposer({
           </div>
 
           <div className="nt-chat-app-composer__toolbar-side">
-            {streaming ? <NtBadge tone="warning">Streaming</NtBadge> : null}
+            {streaming ? <NtBadge tone="warning">回复生成中</NtBadge> : null}
             <button className="nt-btn nt-btn--primary" onClick={onSend} type="button">
               发送
             </button>

@@ -7,6 +7,7 @@ import * as schema from "../../db/schema";
 import { env } from "../../env";
 import type { PlatformProgressionMetrics } from "../../platform/core-integration/service";
 import { buildUserProgressionSnapshot, type UserProgressionMetricValues } from "./model";
+import { buildPublishedTaskCreatorFilter } from "./task-scope";
 
 export { buildUserProgressionSnapshot, getUserProgressionAccessRule } from "./model";
 
@@ -101,7 +102,7 @@ export async function getUserProgressionSnapshot(
       tx
         .select({ count: sql<number>`count(*)::int` })
         .from(schema.tasks)
-        .where(eq(schema.tasks.creatorUserId, seed.userId)),
+        .where(buildPublishedTaskCreatorFilter(seed.userId)),
       tx
         .select({ count: sql<number>`count(*)::int` })
         .from(schema.tasks)

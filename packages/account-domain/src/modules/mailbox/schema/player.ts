@@ -1,22 +1,32 @@
-import { integer, pgTable, text, timestamp } from "drizzle-orm/pg-core";
+import { integer, pgTable, text, timestamp, uniqueIndex } from "drizzle-orm/pg-core";
 
 import { items, products } from "@/modules/product-order-item/schema";
 import { users } from "@/modules/identity/schema";
 
-export const mailboxMessages = pgTable("mailbox_messages", {
-  id: text("id").primaryKey(),
-  userId: text("user_id").notNull().references(() => users.id),
-  folder: text("folder").notNull().default("inbox"),
-  title: text("title").notNull(),
-  summary: text("summary"),
-  body: text("body").notNull(),
-  sourceLabel: text("source_label"),
-  type: text("type").notNull(),
-  readAt: timestamp("read_at", { withTimezone: true }),
-  favoritedAt: timestamp("favorited_at", { withTimezone: true }),
-  expiresAt: timestamp("expires_at", { withTimezone: true }),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
-});
+export const mailboxMessages = pgTable(
+  "mailbox_messages",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id").notNull().references(() => users.id),
+    folder: text("folder").notNull().default("inbox"),
+    title: text("title").notNull(),
+    summary: text("summary"),
+    body: text("body").notNull(),
+    sourceLabel: text("source_label"),
+    type: text("type").notNull(),
+    idempotencyKey: text("idempotency_key"),
+    readAt: timestamp("read_at", { withTimezone: true }),
+    favoritedAt: timestamp("favorited_at", { withTimezone: true }),
+    expiresAt: timestamp("expires_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
+  },
+  (table) => ({
+    userIdempotencyUnique: uniqueIndex("mailbox_messages_user_idempotency_idx").on(
+      table.userId,
+      table.idempotencyKey,
+    ),
+  }),
+);
 
 export const mailboxAttachments = pgTable("mailbox_attachments", {
   id: text("id").primaryKey(),

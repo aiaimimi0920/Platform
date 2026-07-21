@@ -258,12 +258,12 @@ web/src/features/account-heavy-agent-chat/adapter.ts
 - Modify: `web/src/features/account-heavy-agent-chat/use-heavy-chat-thread-state.ts`
 - Modify: `web/src/features/account-heavy-agent-chat/heavy-chat-message-card.tsx`
 
-- [ ] Write failing tests proving `task` creates an owner task draft and `mailbox` creates a mailbox draft/delivery record exactly once.
-- [ ] Implement bridges through Task Hub and account mailbox service APIs, never direct cross-module repository imports.
-- [ ] Persist action status and target id on the chat message action record.
-- [ ] Return real target links; show success only after the target can be queried.
-- [ ] Run action, Task Hub, mailbox, and Web tests.
-- [ ] Commit `feat(platform): add real chat task and mailbox actions`.
+- [x] Write failing tests proving `task` creates an owner task draft and `mailbox` creates a mailbox draft/delivery record exactly once.
+- [x] Implement bridges through Task Hub and account mailbox service APIs, never direct cross-module repository imports.
+- [x] Persist action status and target id on the chat message action record.
+- [x] Return real target links; show success only after the target can be queried.
+- [x] Run action, Task Hub, mailbox, and Web tests.
+- [x] Commit `feat(platform): add real chat task and mailbox actions`.
 
 ## Phase 3: Product Truthfulness And Direct Work Surfaces
 

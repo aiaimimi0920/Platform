@@ -2,6 +2,7 @@ import type {
   AppendHeavyChatMessageInput,
   CreateHeavyChatSlotInput,
   HeavyChatAction,
+  HeavyChatActionType,
   HeavyChatMessageRole,
   HeavyChatMessageStatus,
   HeavyChatReference,
@@ -26,6 +27,7 @@ import {
   HEAVY_CHAT_DEFAULT_SLOT_KEY,
   HEAVY_CHAT_DEFAULT_SLOT_TITLE,
   HeavyChatAgentBindingConflictError,
+  HeavyChatActionConflictError,
   HeavyChatAttemptConflictError,
   HeavyChatInvalidTransitionError,
   HeavyChatOwnershipError,
@@ -70,6 +72,10 @@ export type TransitionHeavyChatMessageArgs = Omit<TransitionHeavyChatMessageInpu
 };
 
 export type ReserveHeavyChatMessageAttemptOptions = {
+  staleBefore?: Date;
+};
+
+export type ReserveHeavyChatMessageActionOptions = {
   staleBefore?: Date;
 };
 
@@ -726,6 +732,24 @@ function isRecoverableStaleMessage(message: HeavyChatMessageRecord, staleBefore:
   );
 }
 
+function actionIdentity(messageId: string, type: HeavyChatActionType) {
+  return `heavy-chat-action:${messageId}:${type}`;
+}
+
+function actionUpdatedAt(action: HeavyChatAction) {
+  const timestamp = Date.parse(action.updatedAt);
+  return Number.isFinite(timestamp) ? timestamp : 0;
+}
+
+function replaceMessageAction(
+  actions: HeavyChatAction[],
+  nextAction: HeavyChatAction,
+) {
+  const nextActions = actions.filter((action) => action.id !== nextAction.id && action.type !== nextAction.type);
+  nextActions.push(nextAction);
+  return nextActions;
+}
+
 const defaultLocalMutationLocks = new Map<string, Promise<void>>();
 
 async function withLocalMutationLock<T>(
@@ -1201,6 +1225,159 @@ export function createHeavyChatRepository(options: HeavyChatRepositoryOptions = 
       });
     },
 
+    async reserveMessageAction(
+      ownerUserId: string,
+      messageId: string,
+      type: HeavyChatActionType,
+      options: ReserveHeavyChatMessageActionOptions = {},
+    ) {
+      const owner = normalizeOwnerUserId(ownerUserId);
+      const normalizedMessageId = requireText(messageId, "Heavy chat message id");
+      if (type !== "task" && type !== "mailbox") {
+        throw new HeavyChatInvalidTransitionError("Unsupported heavy chat action type");
+      }
+      return runOwnerTransaction(owner, async (tx) => {
+        await tx.lockMessage?.(owner, normalizedMessageId);
+        const message = await tx.findMessageById(owner, normalizedMessageId);
+        if (!message) throw new HeavyChatOwnershipError("Heavy chat message does not belong to the owner");
+        if (message.role !== "assistant" || message.status !== "complete") {
+          throw new HeavyChatInvalidTransitionError(
+            "Heavy chat actions require a completed assistant message",
+          );
+        }
+
+        const existing = message.actions.find((action) => action.type === type);
+        if (existing?.status === "complete") {
+          return { message, action: existing, claimed: false as const };
+        }
+        if (
+          existing?.status === "pending" &&
+          (!options.staleBefore || actionUpdatedAt(existing) > options.staleBefore.getTime())
+        ) {
+          return { message, action: existing, claimed: false as const };
+        }
+
+        const updatedAt = now();
+        const action: HeavyChatAction = existing
+          ? {
+              ...existing,
+              status: "pending",
+              attemptNumber: existing.attemptNumber + 1,
+              errorMessage: null,
+              updatedAt: updatedAt.toISOString(),
+            }
+          : {
+              id: actionIdentity(message.id, type),
+              type,
+              status: "pending",
+              attemptNumber: 1,
+              targetId: null,
+              errorMessage: null,
+              updatedAt: updatedAt.toISOString(),
+            };
+        const updated = await tx.updateMessage(owner, message.id, {
+          actions: replaceMessageAction(message.actions, action),
+          updatedAt,
+        });
+        if (!updated) throw new HeavyChatOwnershipError("Heavy chat message does not belong to the owner");
+        await touchThread(tx, owner, updated.threadId, updatedAt);
+        return { message: updated, action, claimed: true as const };
+      });
+    },
+
+    async completeMessageAction(
+      ownerUserId: string,
+      messageId: string,
+      actionId: string,
+      expectedAttemptNumber: number,
+      targetId: string,
+    ) {
+      const owner = normalizeOwnerUserId(ownerUserId);
+      const normalizedMessageId = requireText(messageId, "Heavy chat message id");
+      const normalizedActionId = requireText(actionId, "Heavy chat action id");
+      const normalizedTargetId = requireText(targetId, "Heavy chat action target id");
+      return runOwnerTransaction(owner, async (tx) => {
+        await tx.lockMessage?.(owner, normalizedMessageId);
+        const message = await tx.findMessageById(owner, normalizedMessageId);
+        if (!message) throw new HeavyChatOwnershipError("Heavy chat message does not belong to the owner");
+        const current = message.actions.find((action) => action.id === normalizedActionId);
+        if (!current) throw new HeavyChatActionConflictError("Heavy chat action does not exist");
+        if (current.attemptNumber !== expectedAttemptNumber) {
+          throw new HeavyChatActionConflictError("Heavy chat action attempt changed before completion");
+        }
+        if (current.status === "complete") {
+          if (current.targetId !== normalizedTargetId) {
+            throw new HeavyChatActionConflictError("Heavy chat action already completed with another target");
+          }
+          return { message, action: current };
+        }
+        if (current.status !== "pending") {
+          throw new HeavyChatActionConflictError("Heavy chat action is not pending completion");
+        }
+        const updatedAt = now();
+        const action: HeavyChatAction = {
+          ...current,
+          status: "complete",
+          targetId: normalizedTargetId,
+          errorMessage: null,
+          updatedAt: updatedAt.toISOString(),
+        };
+        const updated = await tx.updateMessage(owner, message.id, {
+          actions: replaceMessageAction(message.actions, action),
+          updatedAt,
+        });
+        if (!updated) throw new HeavyChatOwnershipError("Heavy chat message does not belong to the owner");
+        await touchThread(tx, owner, updated.threadId, updatedAt);
+        return { message: updated, action };
+      });
+    },
+
+    async failMessageAction(
+      ownerUserId: string,
+      messageId: string,
+      actionId: string,
+      expectedAttemptNumber: number,
+      input: { errorMessage: string; targetId?: string | null },
+    ) {
+      const owner = normalizeOwnerUserId(ownerUserId);
+      const normalizedMessageId = requireText(messageId, "Heavy chat message id");
+      const normalizedActionId = requireText(actionId, "Heavy chat action id");
+      const errorMessage = requireText(input.errorMessage, "Heavy chat action error").slice(0, 1_000);
+      return runOwnerTransaction(owner, async (tx) => {
+        await tx.lockMessage?.(owner, normalizedMessageId);
+        const message = await tx.findMessageById(owner, normalizedMessageId);
+        if (!message) throw new HeavyChatOwnershipError("Heavy chat message does not belong to the owner");
+        const current = message.actions.find((action) => action.id === normalizedActionId);
+        if (!current) throw new HeavyChatActionConflictError("Heavy chat action does not exist");
+        if (current.attemptNumber !== expectedAttemptNumber) {
+          throw new HeavyChatActionConflictError("Heavy chat action attempt changed before failure persistence");
+        }
+        if (current.status === "complete") {
+          throw new HeavyChatActionConflictError("Completed heavy chat actions cannot fail");
+        }
+        if (current.status === "failed") {
+          return { message, action: current };
+        }
+        const updatedAt = now();
+        const action: HeavyChatAction = {
+          ...current,
+          status: "failed",
+          targetId: input.targetId === undefined
+            ? current.targetId
+            : input.targetId?.trim() || null,
+          errorMessage,
+          updatedAt: updatedAt.toISOString(),
+        };
+        const updated = await tx.updateMessage(owner, message.id, {
+          actions: replaceMessageAction(message.actions, action),
+          updatedAt,
+        });
+        if (!updated) throw new HeavyChatOwnershipError("Heavy chat message does not belong to the owner");
+        await touchThread(tx, owner, updated.threadId, updatedAt);
+        return { message: updated, action };
+      });
+    },
+
     async transitionMessage(
       ownerUserId: string,
       messageId: string,
@@ -1299,6 +1476,9 @@ export const bindAgentToSlot = defaultRepository.bindAgentToSlot;
 export const findAgentBindingForSlot = defaultRepository.findAgentBindingForSlot;
 export const appendMessage = defaultRepository.appendMessage;
 export const reserveMessageAttempt = defaultRepository.reserveMessageAttempt;
+export const reserveMessageAction = defaultRepository.reserveMessageAction;
+export const completeMessageAction = defaultRepository.completeMessageAction;
+export const failMessageAction = defaultRepository.failMessageAction;
 export const transitionMessage = defaultRepository.transitionMessage;
 export const findMessageById = defaultRepository.findMessageById;
 export const findMessageByIdempotencyKey = defaultRepository.findMessageByIdempotencyKey;

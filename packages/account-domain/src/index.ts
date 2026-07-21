@@ -165,6 +165,7 @@ export {
   dispatchDueMailboxOpsCampaigns,
   dispatchMailboxOpsCampaignForOperator,
   createMailboxMessage,
+  getMailboxMessageById,
   getMailboxSnapshot,
   listMailbox,
   listMailboxOpsCampaignDeliveriesForOperator,

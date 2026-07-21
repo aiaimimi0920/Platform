@@ -1,6 +1,8 @@
 import type {
   ApiErrorCode,
   CreateHeavyChatThreadRequest,
+  HeavyChatMessageActionRequest,
+  HeavyChatMessageActionResult,
   HeavyChatMessageAttemptResult,
   HeavyChatSendMessageResult,
   HeavyChatSnapshot,
@@ -150,6 +152,22 @@ export async function retryHeavyChatMessage(
 ): Promise<HeavyChatMessageAttemptResult> {
   const response = await heavyChatCoreRequest<{ result: HeavyChatMessageAttemptResult }>(
     `/v1/me/heavy-chat/messages/${encodeURIComponent(messageId)}/retry`,
+    {
+      method: "POST",
+      body: input,
+      userContext,
+    },
+  );
+  return response.result;
+}
+
+export async function runHeavyChatMessageAction(
+  userContext: InternalUserContext,
+  messageId: string,
+  input: HeavyChatMessageActionRequest,
+): Promise<HeavyChatMessageActionResult> {
+  const response = await heavyChatCoreRequest<{ result: HeavyChatMessageActionResult }>(
+    `/v1/me/heavy-chat/messages/${encodeURIComponent(messageId)}/actions`,
     {
       method: "POST",
       body: input,

@@ -3,3 +3,8 @@
 packages/contracts/src/*.d.ts
 packages/contracts/src/*.js
 packages/contracts/src/*.js.map
+
+# Local browser/e2e traces; acceptance evidence belongs under .runtime/.
+.playwright/
+.playwright-cli/
+.playwright-mcp/

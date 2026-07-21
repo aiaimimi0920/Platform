@@ -4,44 +4,85 @@ import { NtBadge } from "@/components/nt-primitives";
 import type { HeavyChatMessage } from "@/features/account-heavy-agent-chat/types";
 
 type HeavyChatMessageCardProps = {
+  mailboxActionEnabled: boolean;
   message: HeavyChatMessage;
   onAction: (action: "copy" | "retry" | "task" | "mailbox" | "edit") => void;
+  taskActionEnabled: boolean;
 };
 
+const actionControlClass = "nt-chip nt-chip--glass nt-chat-app-message__action-control";
+
 function ActionBar({
-  isAssistant,
+  message,
   onAction,
+  taskActionEnabled,
+  mailboxActionEnabled,
 }: {
-  isAssistant: boolean;
+  mailboxActionEnabled: boolean;
+  message: HeavyChatMessage;
   onAction: HeavyChatMessageCardProps["onAction"];
+  taskActionEnabled: boolean;
 }) {
+  const isAssistant = message.role === "assistant";
+  const workflowActions = message.actions;
+
+  function workflowAction(type: "task" | "mailbox") {
+    if (type === "task" && !taskActionEnabled) return null;
+    if (type === "mailbox" && !mailboxActionEnabled) return null;
+    const action = workflowActions.find((candidate) => candidate.type === type);
+    const label = type === "task" ? "转任务" : "投邮箱";
+    if (action?.status === "complete" && action.href) {
+      return (
+        <a className={actionControlClass} href={action.href}>
+          {type === "task" ? "查看任务草稿" : "查看邮箱草稿"}
+        </a>
+      );
+    }
+    if (action?.status === "pending") {
+      return (
+        <button className={actionControlClass} onClick={() => onAction(type)} type="button">
+          {type === "task" ? "检查任务进度" : "检查邮箱进度"}
+        </button>
+      );
+    }
+    return (
+      <span className="nt-chat-app-message__action-state">
+        <button className={actionControlClass} onClick={() => onAction(type)} type="button">
+          {action?.status === "failed" ? `重试${label}` : label}
+        </button>
+        {action?.status === "failed" && action.errorMessage ? <span>{action.errorMessage}</span> : null}
+      </span>
+    );
+  }
+
   return (
     <div className="nt-chat-app-message__actions">
-      <button className="nt-chip nt-chip--glass" onClick={() => onAction("copy")} type="button">
+      <button className={actionControlClass} onClick={() => onAction("copy")} type="button">
         复制
       </button>
-      {isAssistant ? (
+      {isAssistant && message.status !== "streaming" ? (
         <>
-          <button className="nt-chip nt-chip--glass" onClick={() => onAction("retry")} type="button">
+          <button className={actionControlClass} onClick={() => onAction("retry")} type="button">
             重试
           </button>
-          <button className="nt-chip nt-chip--glass" onClick={() => onAction("task")} type="button">
-            转任务
-          </button>
-          <button className="nt-chip nt-chip--glass" onClick={() => onAction("mailbox")} type="button">
-            投邮箱
-          </button>
+          {message.status === "complete" ? workflowAction("task") : null}
+          {message.status === "complete" ? workflowAction("mailbox") : null}
         </>
-      ) : (
-        <button className="nt-chip nt-chip--glass" onClick={() => onAction("edit")} type="button">
+      ) : !isAssistant ? (
+        <button className={actionControlClass} onClick={() => onAction("edit")} type="button">
           再次编辑
         </button>
-      )}
+      ) : null}
     </div>
   );
 }
 
-export function HeavyChatMessageCard({ message, onAction }: HeavyChatMessageCardProps) {
+export function HeavyChatMessageCard({
+  mailboxActionEnabled,
+  message,
+  onAction,
+  taskActionEnabled,
+}: HeavyChatMessageCardProps) {
   const isAssistant = message.role === "assistant";
 
   return (
@@ -106,7 +147,12 @@ export function HeavyChatMessageCard({ message, onAction }: HeavyChatMessageCard
           })}
         </div>
 
-        <ActionBar isAssistant={isAssistant} onAction={onAction} />
+        <ActionBar
+          mailboxActionEnabled={mailboxActionEnabled}
+          message={message}
+          onAction={onAction}
+          taskActionEnabled={taskActionEnabled}
+        />
       </div>
     </article>
   );

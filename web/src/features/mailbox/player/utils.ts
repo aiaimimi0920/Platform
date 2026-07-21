@@ -106,6 +106,35 @@ export function sortMailboxMessages(messages: MailboxMessageView[]) {
   });
 }
 
+export function selectMailboxMessages(
+  messages: MailboxMessageView[],
+  targetedMessageId?: string | null,
+) {
+  const inboxMessages = messages.filter((message) => message.folder === "inbox");
+  if (!targetedMessageId) return sortMailboxMessages(inboxMessages);
+  const targetedMessage = messages.find((message) => message.id === targetedMessageId) ?? null;
+  if (!targetedMessage || targetedMessage.folder !== "stash") {
+    return sortMailboxMessages(inboxMessages);
+  }
+  return sortMailboxMessages([...inboxMessages, targetedMessage]);
+}
+
+export function resolveSelectedMailboxMessageId(
+  visibleMessages: MailboxMessageView[],
+  currentSelectedMessageId: string | null,
+  targetedMessageId?: string | null,
+) {
+  if (currentSelectedMessageId && visibleMessages.some((message) => message.id === currentSelectedMessageId)) {
+    return currentSelectedMessageId;
+  }
+
+  if (targetedMessageId && visibleMessages.some((message) => message.id === targetedMessageId)) {
+    return targetedMessageId;
+  }
+
+  return visibleMessages[0]?.id ?? null;
+}
+
 export function getFirstAttachment(message: MailboxMessageView) {
   return message.attachments[0] ?? null;
 }

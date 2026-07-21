@@ -154,6 +154,46 @@ test("heavy chat service builds an owner-scoped snapshot after ensuring the defa
   assert.ok(calls.some((call) => call.method === "createOrGetDefaultSlot"));
 });
 
+test("P2-05: heavy chat service delegates owner-scoped message actions to the bridge", async () => {
+  const { repository } = buildFakeRepository();
+  let capturedOwner = "";
+  let capturedInput: { messageId: string; type: "task" | "mailbox" } | null = null;
+  const service = createHeavyChatService({
+    repository,
+    resolveManagedHeavyAgent: async () => validAgent(),
+    actionBridge: {
+      async runAction(ownerUserId, input) {
+        capturedOwner = ownerUserId;
+        capturedInput = input;
+        return {
+          action: {
+            id: "action-1",
+            type: input.type,
+            status: "complete" as const,
+            attemptNumber: 1,
+            targetId: "target-1",
+            errorMessage: null,
+            updatedAt: new Date("2026-07-20T08:00:00.000Z").toISOString(),
+          },
+          target: { id: "target-1", type: input.type, href: "/target/target-1" },
+          executed: true,
+          created: true,
+        };
+      },
+    },
+  });
+
+  const result = await service.runMessageAction("owner-a", {
+    messageId: "message-1",
+    type: "task",
+  });
+
+  assert.equal(capturedOwner, "owner-a");
+  assert.deepEqual(capturedInput, { messageId: "message-1", type: "task" });
+  assert.equal(result.action.targetId, "target-1");
+  assert.equal(result.created, true);
+});
+
 test("heavy chat service applies server-side entitlement and preserves repository idempotency", async () => {
   const { repository, calls } = buildFakeRepository();
   const service = createHeavyChatService({

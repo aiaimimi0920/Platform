@@ -9,6 +9,8 @@ import { getDailyMissionProgressCounts, getWeeklyMissionProgressCounts } from "@
 import { ensureDefaultProducts } from "@/modules/product-order-item/service";
 import { getReputationTaskStats } from "@/modules/reputation/repository";
 
+import { buildPublishedTaskCreatorFilter } from "./task-scope";
+
 type DbTx = NodePgDatabase<typeof schema>;
 
 type PlatformDailyMissionKey = Extract<DailyMissionKey, "taskApply" | "productPurchase">;
@@ -142,7 +144,7 @@ export async function getCoreAccountPlatformSummary(
       tx
         .select({ count: sql<number>`count(*)::int` })
         .from(schema.tasks)
-        .where(eq(schema.tasks.creatorUserId, userId)),
+        .where(buildPublishedTaskCreatorFilter(userId)),
       tx
         .select({ count: sql<number>`count(*)::int` })
         .from(schema.opinionTopics)

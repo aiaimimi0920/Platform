@@ -10,6 +10,12 @@ import type { PoolClient } from "pg";
 import * as schema from "@/db/schema";
 import { createHeavyChatRepository } from "@/modules/heavy-chat/repository";
 import {
+  buildTaskDraftRecord,
+  normalizeTaskDraftInput,
+  taskDraftPayloadMatches,
+} from "@/modules/task-hub/draft";
+import {
+  HeavyChatActionConflictError,
   HeavyChatAttemptConflictError,
   HeavyChatInvalidTransitionError,
   HeavyChatOwnershipError,
@@ -36,6 +42,12 @@ function hasErrorMessage(error: unknown, expected: string) {
     current = typeof current === "object" && current !== null && "cause" in current ? current.cause : null;
   }
   return false;
+}
+
+function databaseUrlForSchema(connectionString: string, schemaName: string) {
+  const url = new URL(connectionString);
+  url.searchParams.set("options", `-c search_path=${schemaName}`);
+  return url.toString();
 }
 
 async function waitForAdvisoryWaiters(
@@ -409,6 +421,126 @@ if (!databaseUrl) {
         (error: unknown) => error instanceof HeavyChatOwnershipError,
       );
 
+      const actionMessage = await repositoryA.appendMessage("owner-a", {
+        id: "message-actions",
+        threadId: ownerAThread.id,
+        role: "assistant",
+        status: "complete",
+        content: "Create a task draft and retain this result in the mailbox.",
+      });
+      const actionReservationResults = await runWithAdvisoryBarrier(
+        controlPool,
+        observerPool,
+        "owner-a",
+        repositoryApplications,
+        [
+          () => repositoryA.reserveMessageAction("owner-a", actionMessage.id, "task"),
+          () => repositoryB.reserveMessageAction("owner-a", actionMessage.id, "task"),
+        ],
+      );
+      const taskReservations = actionReservationResults.map((result) => {
+        assert.equal(result.status, "fulfilled");
+        return result.value;
+      });
+      assert.equal(taskReservations.filter((result) => result.claimed).length, 1);
+      assert.equal(taskReservations.filter((result) => !result.claimed).length, 1);
+      assert.equal(taskReservations[0]?.action.id, taskReservations[1]?.action.id);
+      assert.equal(taskReservations[0]?.action.attemptNumber, 1);
+
+      const taskAction = taskReservations[0]?.action;
+      assert.ok(taskAction);
+      const actionCompletionResults = await runWithAdvisoryBarrier(
+        controlPool,
+        observerPool,
+        "owner-a",
+        repositoryApplications,
+        [
+          () => repositoryA.completeMessageAction(
+            "owner-a",
+            actionMessage.id,
+            taskAction.id,
+            taskAction.attemptNumber,
+            "task-target-a",
+          ),
+          () => repositoryB.completeMessageAction(
+            "owner-a",
+            actionMessage.id,
+            taskAction.id,
+            taskAction.attemptNumber,
+            "task-target-b",
+          ),
+        ],
+      );
+      const actionCompletionWinner = actionCompletionResults.find((result) => result.status === "fulfilled");
+      const actionCompletionLoser = actionCompletionResults.find((result) => result.status === "rejected");
+      assert.ok(actionCompletionWinner);
+      assert.ok(actionCompletionLoser);
+      assert.ok(actionCompletionLoser.reason instanceof HeavyChatActionConflictError);
+      assert.equal(actionCompletionWinner.value.action.status, "complete");
+      assert.ok(["task-target-a", "task-target-b"].includes(actionCompletionWinner.value.action.targetId ?? ""));
+
+      const mailboxAttemptOne = await repositoryA.reserveMessageAction("owner-a", actionMessage.id, "mailbox");
+      assert.equal(mailboxAttemptOne.claimed, true);
+      assert.equal(mailboxAttemptOne.action.attemptNumber, 1);
+      const mailboxAttemptTwo = await repositoryB.reserveMessageAction(
+        "owner-a",
+        actionMessage.id,
+        "mailbox",
+        { staleBefore: new Date("2026-07-20T00:00:00.000Z") },
+      );
+      assert.equal(mailboxAttemptTwo.claimed, true);
+      assert.equal(mailboxAttemptTwo.action.attemptNumber, 2);
+      await assert.rejects(
+        () => repositoryA.completeMessageAction(
+          "owner-a",
+          actionMessage.id,
+          mailboxAttemptOne.action.id,
+          mailboxAttemptOne.action.attemptNumber,
+          "mailbox-stale-target",
+        ),
+        (error: unknown) => error instanceof HeavyChatActionConflictError,
+      );
+      await repositoryB.completeMessageAction(
+        "owner-a",
+        actionMessage.id,
+        mailboxAttemptTwo.action.id,
+        mailboxAttemptTwo.action.attemptNumber,
+        "mailbox-current-target",
+      );
+
+      const persistedActionMessage = await repositoryA.findMessageById("owner-a", actionMessage.id);
+      assert.ok(persistedActionMessage);
+      assert.equal(persistedActionMessage.actions.length, 2);
+      assert.deepEqual(
+        persistedActionMessage.actions
+          .map((action) => ({
+            attemptNumber: action.attemptNumber,
+            status: action.status,
+            targetId: action.targetId,
+            type: action.type,
+          }))
+          .sort((left, right) => left.type.localeCompare(right.type)),
+        [
+          {
+            attemptNumber: 2,
+            status: "complete",
+            targetId: "mailbox-current-target",
+            type: "mailbox",
+          },
+          {
+            attemptNumber: 1,
+            status: "complete",
+            targetId: actionCompletionWinner.value.action.targetId,
+            type: "task",
+          },
+        ],
+      );
+      const persistedActions = await poolA.query<{ actions: unknown }>(
+        "select actions from heavy_chat_messages where owner_user_id = $1 and id = $2",
+        ["owner-a", actionMessage.id],
+      );
+      assert.deepEqual(persistedActions.rows[0]?.actions, persistedActionMessage.actions);
+
       const orderingTime = new Date("2026-07-20T00:00:00.000Z");
       const projectOrderB = await repositoryB.createProject("owner-b", {
         id: "project-order-b",
@@ -561,6 +693,189 @@ if (!databaseUrl) {
       } finally {
         await cleanupPool.end();
       }
+    }
+  });
+
+  test("0139 task drafts are idempotent, owner-queryable, and excluded from the public list", { timeout: 30_000 }, async () => {
+    const schemaName = `task_draft_it_${crypto.randomUUID().replaceAll("-", "")}`;
+    const quotedSchema = `"${schemaName}"`;
+    const setupPool = new Pool({ connectionString: databaseUrl, max: 1 });
+    let taskHubPool: Pool | null = null;
+    const previousDatabaseUrl = process.env.DATABASE_URL;
+    const previousRedisUrl = process.env.REDIS_URL;
+    const previousInternalApiToken = process.env.INTERNAL_API_TOKEN;
+
+    try {
+      const migrationClient = await setupPool.connect();
+      try {
+        await migrationClient.query(`create schema ${quotedSchema}`);
+        await migrationClient.query(`set search_path = ${quotedSchema}, public`);
+        for (const migrationFile of [
+          "0001_init.sql",
+          "0003_task_hub_lifecycle.sql",
+          "0018_task_preferred_capabilities.sql",
+          "0021_arbitration_cases.sql",
+          "0121_task_market_pricing_and_modes.sql",
+          "0122_task_market_meter_quantity.sql",
+          "0139_task_draft_idempotency.sql",
+        ]) {
+          const migration = await readFile(path.resolve(__dirname, "../../../migrations", migrationFile), "utf8");
+          await migrationClient.query(migration);
+        }
+        await migrationClient.query(`
+          insert into users
+            (id, username, email, avatar_url, trust_level, created_at, updated_at, last_login_at)
+          values
+            ('owner-task', 'owner-task', 'owner-task@example.test', null, 0, now(), now(), now()),
+            ('other-owner', 'other-owner', 'other-owner@example.test', null, 0, now(), now(), now())
+        `);
+      } finally {
+        migrationClient.release();
+      }
+
+      process.env.DATABASE_URL = databaseUrlForSchema(databaseUrl, schemaName);
+      process.env.REDIS_URL ??= "redis://127.0.0.1:1";
+      process.env.INTERNAL_API_TOKEN ??= "heavy-chat-integration-token";
+      const taskHub = await import("@/modules/task-hub/repository");
+      ({ pgPool: taskHubPool } = await import("@/db/client"));
+      const taskPool = taskHubPool;
+      if (!taskPool) throw new Error("Task Hub integration pool was not initialized");
+
+      const draftInput = normalizeTaskDraftInput({
+        idempotencyKey: "heavy-chat:task-action:integration",
+        title: "Persist this task draft",
+        description: "Verify Task Hub target persistence.",
+        preferredCapabilityCodes: ["writing"],
+      });
+      const draftRecord = buildTaskDraftRecord({
+        id: "task-draft-integration",
+        ownerUserId: "owner-task",
+        input: draftInput,
+        createdAt: new Date("2026-07-19T00:00:00.000Z"),
+      });
+      const insertDraftSql = `
+        insert into tasks
+          (id, creator_user_id, assigned_user_id, title, description, preferred_capability_codes,
+           pricing_mode, billing_unit, meter_key, meter_quantity, operation_mode, reward_currency,
+           reward_amount, required_bond_amount, status, idempotency_key, created_at)
+        values
+          ($1, $2, $3, $4, $5, $6::jsonb, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
+        on conflict (creator_user_id, idempotency_key) do nothing
+        returning id
+      `;
+      const draftValues = [
+        draftRecord.id,
+        draftRecord.creatorUserId,
+        draftRecord.assignedUserId,
+        draftRecord.title,
+        draftRecord.description,
+        JSON.stringify(draftRecord.preferredCapabilityCodes),
+        draftRecord.pricingMode,
+        draftRecord.billingUnit,
+        draftRecord.meterKey,
+        draftRecord.meterQuantity,
+        draftRecord.operationMode,
+        draftRecord.rewardCurrency,
+        draftRecord.rewardAmount,
+        draftRecord.requiredBondAmount,
+        draftRecord.status,
+        draftRecord.idempotencyKey,
+        draftRecord.createdAt,
+      ];
+      const [draftInsertA, draftInsertB] = await Promise.all([
+        taskPool.query<{ id: string }>(insertDraftSql, draftValues),
+        taskPool.query<{ id: string }>(insertDraftSql, [
+          "task-draft-integration-race",
+          ...draftValues.slice(1),
+        ]),
+      ]);
+      assert.equal(
+        [draftInsertA, draftInsertB].filter((result) => result.rowCount === 1).length,
+        1,
+      );
+      const winningDraftId = [draftInsertA, draftInsertB]
+        .find((result) => result.rowCount === 1)
+        ?.rows[0]?.id;
+      assert.ok(winningDraftId);
+
+      const [storedDraft] = await taskPool.query<{
+        id: string;
+        title: string;
+        description: string;
+        preferred_capability_codes: string[];
+        idempotency_key: string | null;
+        status: string;
+      }>(
+        `select id, title, description, preferred_capability_codes, idempotency_key, status
+           from tasks
+          where creator_user_id = $1 and idempotency_key = $2`,
+        [draftRecord.creatorUserId, draftRecord.idempotencyKey],
+      ).then((result) => result.rows);
+      assert.ok(storedDraft);
+      assert.equal(storedDraft.id, winningDraftId);
+      const storedDraftPayload = {
+        title: storedDraft.title,
+        description: storedDraft.description,
+        preferredCapabilityCodes: storedDraft.preferred_capability_codes,
+        idempotencyKey: storedDraft.idempotency_key,
+        status: storedDraft.status,
+      };
+      assert.equal(
+        taskDraftPayloadMatches(storedDraftPayload, draftInput),
+        true,
+      );
+      assert.equal(
+        taskDraftPayloadMatches(
+          { ...storedDraftPayload, title: "different payload" },
+          draftInput,
+        ),
+        false,
+      );
+
+      await taskPool.query(
+        `insert into tasks
+          (id, creator_user_id, assigned_user_id, title, description, preferred_capability_codes,
+           pricing_mode, billing_unit, meter_key, meter_quantity, operation_mode, reward_currency,
+           reward_amount, required_bond_amount, status, idempotency_key, created_at)
+         values
+          ('task-public-integration', 'owner-task', null, 'Public task', 'Visible task', '[]'::jsonb,
+           'flat_task', null, null, null, 'manual', 'obsidian', 10, 0, 'open', null, now())`,
+      );
+      const publicRows = await taskHub.listTasksWithCounts();
+      assert.deepEqual(publicRows.map((entry) => entry.task.id), ["task-public-integration"]);
+      const ownerRows = await taskHub.listTasksWithCountsByUser("owner-task");
+      assert.deepEqual(
+        ownerRows.map((entry) => entry.task.id).sort(),
+        [winningDraftId, "task-public-integration"].sort(),
+      );
+      assert.equal(
+        (await taskHub.getTaskByOwnerAndId("owner-task", winningDraftId))?.id,
+        winningDraftId,
+      );
+      assert.equal(await taskHub.getTaskByOwnerAndId("other-owner", winningDraftId), null);
+      await assert.rejects(
+        taskPool.query(
+          `insert into tasks
+            (id, creator_user_id, assigned_user_id, title, description, preferred_capability_codes,
+             pricing_mode, billing_unit, meter_key, meter_quantity, operation_mode, reward_currency,
+             reward_amount, required_bond_amount, status, idempotency_key, created_at)
+           values
+            ('invalid-draft', 'owner-task', null, 'Invalid', 'Invalid', '[]'::jsonb,
+             'flat_task', null, null, null, 'manual', 'obsidian', 1, 0, 'draft',
+             'heavy-chat:invalid-draft', now())`,
+        ),
+        (error: unknown) => hasPostgresCode(error, "23514"),
+      );
+    } finally {
+      await taskHubPool?.end().catch(() => {});
+      await setupPool.query(`drop schema if exists ${quotedSchema} cascade`).catch(() => {});
+      await setupPool.end().catch(() => {});
+      if (previousDatabaseUrl === undefined) delete process.env.DATABASE_URL;
+      else process.env.DATABASE_URL = previousDatabaseUrl;
+      if (previousRedisUrl === undefined) delete process.env.REDIS_URL;
+      else process.env.REDIS_URL = previousRedisUrl;
+      if (previousInternalApiToken === undefined) delete process.env.INTERNAL_API_TOKEN;
+      else process.env.INTERNAL_API_TOKEN = previousInternalApiToken;
     }
   });
 }

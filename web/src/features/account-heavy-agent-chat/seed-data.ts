@@ -184,6 +184,7 @@ function seedAssistantMessage(
     createdAtLabel,
     meta,
     blocks,
+    actions: [],
   };
 }
 
@@ -205,6 +206,7 @@ export function createSeedThreads(displayName: string): HeavyChatThread[] {
           role: "user",
           status: "complete",
           createdAtLabel: "08:38",
+          actions: [],
           blocks: [
             textBlock("帮我把最近几封真实邮箱来信整理成可发单的工作单草稿。"),
             referenceBlock([createReference("mail", 1, "交付工作台"), createReference("task", 2, "交付工作台")]),

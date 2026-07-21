@@ -28,8 +28,10 @@ export type HeavyChatAction = {
   id: string;
   type: HeavyChatActionType;
   status: HeavyChatActionStatus;
-  targetId?: string | null;
-  errorMessage?: string | null;
+  attemptNumber: number;
+  targetId: string | null;
+  errorMessage: string | null;
+  updatedAt: string;
 };
 
 export type HeavyChatSlotView = {
@@ -133,6 +135,23 @@ export type SendHeavyChatMessageRequest = {
 export type RetryHeavyChatMessageRequest = {
   idempotencyKey: string;
   correlationId?: string;
+};
+
+export type HeavyChatMessageActionRequest = {
+  type: HeavyChatActionType;
+};
+
+export type HeavyChatActionTargetView = {
+  id: string;
+  type: HeavyChatActionType;
+  href: string;
+};
+
+export type HeavyChatMessageActionResult = {
+  action: HeavyChatAction;
+  target: HeavyChatActionTargetView | null;
+  executed: boolean;
+  created: boolean;
 };
 
 export type HeavyChatMessageAttemptResult = {

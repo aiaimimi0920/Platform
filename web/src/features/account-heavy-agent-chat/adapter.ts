@@ -1,4 +1,5 @@
 import type {
+  HeavyChatAction as ContractHeavyChatAction,
   HeavyChatMessageStatus,
   HeavyChatMessageView,
   HeavyChatReference as ContractHeavyChatReference,
@@ -7,6 +8,7 @@ import type {
 
 import type {
   HeavyChatMessage,
+  HeavyChatMessageAction,
   HeavyChatReference,
   HeavyChatThread,
   HeavyMessageBlock,
@@ -93,6 +95,20 @@ function adaptMessageStatus(status: HeavyChatMessageStatus): HeavyMessageStatus 
   return "complete";
 }
 
+function actionHref(action: ContractHeavyChatAction) {
+  if (action.status !== "complete" || !action.targetId) return null;
+  return action.type === "task"
+    ? `/my-tasks#task-${encodeURIComponent(action.targetId)}`
+    : `/mailbox?messageId=${encodeURIComponent(action.targetId)}`;
+}
+
+function adaptAction(action: ContractHeavyChatAction): HeavyChatMessageAction {
+  return {
+    ...action,
+    href: actionHref(action),
+  };
+}
+
 function adaptMessageBlocks(message: HeavyChatMessageView): HeavyMessageBlock[] {
   const blocks: HeavyMessageBlock[] = [];
   if (message.content.trim()) {
@@ -150,6 +166,7 @@ function adaptMessage(message: HeavyChatMessageView, now: Date): HeavyChatMessag
             : "服务端重度运行时 / streaming"
           : null,
     blocks: adaptMessageBlocks(message),
+    actions: message.actions.map(adaptAction),
   };
 }
 

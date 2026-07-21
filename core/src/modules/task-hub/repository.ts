@@ -1,4 +1,4 @@
-import { and, asc, count, desc, eq, inArray, or } from "drizzle-orm";
+import { and, asc, count, desc, eq, inArray, ne, or } from "drizzle-orm";
 
 import { db } from "@/db/client";
 import { arbitrationCases } from "@/modules/arbitration/schema";
@@ -13,7 +13,11 @@ import {
 } from "@/modules/task-hub/schema";
 
 export async function listTasksWithCounts() {
-  const rows = await db.select().from(tasks).orderBy(desc(tasks.createdAt));
+  const rows = await db
+    .select()
+    .from(tasks)
+    .where(ne(tasks.status, "draft"))
+    .orderBy(desc(tasks.createdAt));
   const counts = await db
     .select({
       taskId: taskApplications.taskId,
@@ -83,6 +87,14 @@ export async function listTasksWithCountsByUser(userId: string) {
 
 export async function getTaskById(taskId: string) {
   const [task] = await db.select().from(tasks).where(eq(tasks.id, taskId));
+  return task ?? null;
+}
+
+export async function getTaskByOwnerAndId(ownerUserId: string, taskId: string) {
+  const [task] = await db
+    .select()
+    .from(tasks)
+    .where(and(eq(tasks.creatorUserId, ownerUserId), eq(tasks.id, taskId)));
   return task ?? null;
 }
 

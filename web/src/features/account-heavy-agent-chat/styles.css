@@ -41,6 +41,11 @@
   gap: 12px;
 }
 
+.nt-chat-app-message__actions {
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
 .nt-chat-app__topbar-brand {
   min-width: 0;
 }
@@ -428,7 +433,7 @@
 .nt-chat-app__main {
   min-height: 0;
   display: grid;
-  grid-template-rows: minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr) auto;
   overflow: hidden;
 }
 
@@ -502,6 +507,43 @@
 .nt-chat-app-composer {
   display: grid;
   gap: 12px;
+}
+
+.nt-chat-app-composer__notice {
+  display: flex;
+  align-items: center;
+}
+
+.nt-chat-app-composer__notice-badge {
+  border-color: rgba(15, 23, 32, 0.18);
+  background: rgba(255, 255, 255, 0.94);
+  color: #0f1720;
+  text-transform: none;
+  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.08);
+}
+
+.nt-chat-app-composer__notice-badge--warning {
+  border-color: rgba(180, 83, 9, 0.28);
+  background: #fff7ed;
+  color: #7c2d12;
+}
+
+.nt-chat-app-composer__notice-badge--success {
+  border-color: rgba(21, 128, 61, 0.26);
+  background: #f0fdf4;
+  color: #14532d;
+}
+
+.nt-chat-app-composer__notice-badge--danger {
+  border-color: rgba(185, 28, 28, 0.26);
+  background: #fef2f2;
+  color: #7f1d1d;
+}
+
+.nt-chat-app-composer__notice-badge--cyan {
+  border-color: rgba(14, 116, 144, 0.26);
+  background: #ecfeff;
+  color: #164e63;
 }
 
 .nt-chat-app-composer__shell {
@@ -639,6 +681,7 @@
 .nt-chat-app-message__content {
   display: grid;
   gap: 10px;
+  min-width: 0;
 }
 
 .nt-chat-app-message--user .nt-chat-app-message__content {
@@ -655,9 +698,47 @@
   color: #0f1720;
 }
 
+.nt-chat-app-message__action-control {
+  border-color: rgba(15, 23, 32, 0.14);
+  background: rgba(255, 255, 255, 0.92);
+  color: #0f1720;
+  text-decoration: none;
+  box-shadow: 0 6px 16px rgba(15, 23, 42, 0.08);
+}
+
+.nt-chat-app-message__action-control:hover:not(:disabled) {
+  border-color: rgba(124, 92, 255, 0.4);
+  background: #ffffff;
+  color: #0f1720;
+}
+
+.nt-chat-app-message__action-control:focus-visible {
+  outline: 2px solid rgba(124, 92, 255, 0.58);
+  outline-offset: 2px;
+}
+
+.nt-chat-app-message__action-control:disabled {
+  color: rgba(71, 85, 105, 0.7);
+  cursor: progress;
+}
+
+.nt-chat-app-message__action-state {
+  display: flex;
+  flex-wrap: wrap;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+}
+
+.nt-chat-app-message__action-state > span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
 .nt-chat-app-message__bubble {
   display: grid;
   gap: 12px;
+  min-width: 0;
   padding: 18px 20px;
   border-radius: 26px;
 }

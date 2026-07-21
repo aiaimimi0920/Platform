@@ -1,5 +1,6 @@
 import type {
   CreateHeavyChatThreadRequest,
+  HeavyChatMessageActionRequest,
   HeavyChatSnapshot,
   InternalUserContext,
   RetryHeavyChatMessageRequest,
@@ -12,6 +13,7 @@ import {
   getHeavyChatSnapshot,
   HeavyChatWebClientError,
   retryHeavyChatMessage,
+  runHeavyChatMessageAction,
   sendHeavyChatMessage,
 } from "@/lib/heavy-chat-client";
 import { requirePlatformUserContext } from "@/lib/platform-session";
@@ -36,6 +38,10 @@ const retryRequestSchema = z.object({
   correlationId: z.string().trim().min(1).max(200).optional(),
 });
 
+const actionRequestSchema = z.object({
+  type: z.enum(["task", "mailbox"]),
+});
+
 type HeavyChatServerDependencies = {
   requireUserContext?: () => Promise<InternalUserContext>;
   getSnapshot?: (context: InternalUserContext) => Promise<HeavyChatSnapshot>;
@@ -49,6 +55,11 @@ type HeavyChatServerDependencies = {
     context: InternalUserContext,
     messageId: string,
     input: RetryHeavyChatMessageRequest,
+  ) => Promise<unknown>;
+  runAction?: (
+    context: InternalUserContext,
+    messageId: string,
+    input: HeavyChatMessageActionRequest,
   ) => Promise<unknown>;
 };
 
@@ -67,6 +78,7 @@ function defaultDependencies(): Required<HeavyChatServerDependencies> {
     createThread: createHeavyChatThread,
     sendMessage: sendHeavyChatMessage,
     retryMessage: retryHeavyChatMessage,
+    runAction: runHeavyChatMessageAction,
   };
 }
 
@@ -186,6 +198,29 @@ export async function handleHeavyChatRetryMessageRequest(
     const input = await parseJson(request, retryRequestSchema);
     const result = await resolved.retryMessage(context, messageId, input);
     return Response.json({ result }, { headers: noStoreHeaders });
+  } catch (error) {
+    if (error instanceof HeavyChatBrowserRequestError) {
+      return Response.json({ error: error.message }, { status: 400, headers: noStoreHeaders });
+    }
+    return errorResponse(error);
+  }
+}
+
+export async function handleHeavyChatMessageActionRequest(
+  messageId: string,
+  request: Request,
+  dependencies?: HeavyChatServerDependencies,
+) {
+  const resolved = mergeDependencies(dependencies);
+  try {
+    const context = await resolved.requireUserContext();
+    const input = await parseJson(request, actionRequestSchema);
+    const result = await resolved.runAction(context, messageId, input);
+    const status = result && typeof result === "object" && "action" in result
+      && (result as { action?: { status?: unknown } }).action?.status === "pending"
+      ? 202
+      : 200;
+    return Response.json({ result }, { status, headers: noStoreHeaders });
   } catch (error) {
     if (error instanceof HeavyChatBrowserRequestError) {
       return Response.json({ error: error.message }, { status: 400, headers: noStoreHeaders });

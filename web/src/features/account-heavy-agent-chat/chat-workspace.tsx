@@ -18,6 +18,7 @@ type HeavyAgentChatWorkspaceProps = {
   initialSlotId?: string | null;
   mailboxVisible: boolean;
   storeVisible: boolean;
+  taskVisible: boolean;
 };
 
 function MenuIcon() {
@@ -105,6 +106,7 @@ export function HeavyAgentChatWorkspace({
   initialSlotId = null,
   mailboxVisible,
   storeVisible,
+  taskVisible,
 }: HeavyAgentChatWorkspaceProps) {
   const threadState = useHeavyChatThreadState({
     initialError,
@@ -127,7 +129,8 @@ export function HeavyAgentChatWorkspace({
   const activeThread = threadState.threads.find((thread) => thread.id === directory.activeThreadId) ?? null;
   const activeProjectId = activeThread?.projectId ?? directory.activeProjectId;
   const activeProject = projects.find((project) => project.id === activeProjectId) ?? null;
-  const isStreaming = threadState.busy || (activeThread?.messages.some((message) => message.status === "streaming") ?? false);
+  const isStreaming = threadState.messageBusy
+    || (activeThread?.messages.some((message) => message.status === "streaming") ?? false);
 
   function handleSelectSlot(slotId: string) {
     directory.selectSlot(slotId);
@@ -253,8 +256,10 @@ export function HeavyAgentChatWorkspace({
                   {activeThread.messages.map((message) => (
                     <HeavyChatMessageCard
                       key={message.id}
+                      mailboxActionEnabled={mailboxVisible}
                       message={message}
                       onAction={(action) => void threadState.runMessageAction(activeThread.id, message.id, action)}
+                      taskActionEnabled={taskVisible}
                     />
                   ))}
                 </div>
