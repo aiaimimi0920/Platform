@@ -7,6 +7,11 @@ import type {
   UserSummary,
 } from "@neuro/contracts";
 
+import {
+  combineDependencyResults,
+  type DependencyResult,
+} from "@/lib/dependency-result";
+
 export type CommerceRouteMode = "official" | "marketplace";
 
 export type CommerceCenterProps = {
@@ -25,7 +30,59 @@ export type CommercePanelView = {
   products: ProductListItem[];
 };
 
+export type CommerceDependencyInputs = {
+  currentUser: DependencyResult<UserSummary | null>;
+  items: DependencyResult<ItemView[]>;
+  listings: DependencyResult<MarketplaceListingView[]>;
+  orders: DependencyResult<OrderView[]>;
+  products: DependencyResult<ProductListItem[]>;
+};
+
+export type CommerceDependencyBundle = {
+  dependency: DependencyResult<CommercePanelView>;
+  panel: CommercePanelView;
+};
+
+export const EMPTY_COMMERCE_PANEL: CommercePanelView = {
+  currentUser: null,
+  items: [],
+  listings: [],
+  orders: [],
+  products: [],
+};
+
+export function combineCommercePanelDependencies(inputs: CommerceDependencyInputs): CommerceDependencyBundle {
+  const panel: CommercePanelView = {
+    currentUser:
+      inputs.currentUser.state === "ready" || inputs.currentUser.state === "partial"
+        ? inputs.currentUser.data
+        : null,
+    items:
+      inputs.items.state === "ready" || inputs.items.state === "partial" ? inputs.items.data : [],
+    listings:
+      inputs.listings.state === "ready" || inputs.listings.state === "partial"
+        ? inputs.listings.data
+        : [],
+    orders:
+      inputs.orders.state === "ready" || inputs.orders.state === "partial" ? inputs.orders.data : [],
+    products:
+      inputs.products.state === "ready" || inputs.products.state === "partial"
+        ? inputs.products.data
+        : [],
+  };
+  const hasBusinessData = panel.items.length > 0 || panel.listings.length > 0 || panel.orders.length > 0 || panel.products.length > 0;
+  return {
+    panel,
+    dependency: combineDependencyResults({
+      data: panel,
+      empty: !hasBusinessData,
+      results: Object.values(inputs),
+    }),
+  };
+}
+
 export type CommercePanelPayload = {
+  dependency?: DependencyResult<CommercePanelView>;
   error?: string;
   panel?: CommercePanelView;
 };

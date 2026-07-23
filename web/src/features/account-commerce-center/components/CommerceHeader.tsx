@@ -16,8 +16,8 @@ export function CommerceHeader({
 }: {
   categoryTabs: RailSection[];
   listingComposerOpen: boolean;
-  miraBalance: number;
-  obsidianBalance: number;
+  miraBalance: number | null;
+  obsidianBalance: number | null;
   onSelectCategory: (key: string) => void;
   onToggleListingComposer: () => void;
   routeMode: "official" | "marketplace" | null;
@@ -64,11 +64,11 @@ export function CommerceHeader({
           <div className="app-commerce-header__wallet">
             <div className="app-commerce-header__currency-chip">
               <CurrencyIcon currency="obsidian" />
-              <span>{formatNumber(obsidianBalance)}</span>
+              <span>{obsidianBalance === null ? "—" : formatNumber(obsidianBalance)}</span>
             </div>
             <div className="app-commerce-header__currency-chip app-commerce-header__currency-chip--mira">
               <CurrencyIcon currency="mira" />
-              <span>{formatNumber(miraBalance)}</span>
+              <span>{miraBalance === null ? "—" : formatNumber(miraBalance)}</span>
             </div>
           </div>
         </div>

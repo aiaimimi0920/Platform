@@ -235,3 +235,98 @@ export function normalizeDependencyResult<T>(input: DependencyResultInput<T>): D
 export function createDependencyResult<T>(input: DependencyResultInput<T>): DependencyResult<T> {
   return normalizeDependencyResult(input);
 }
+
+export function createDependencyFailureResult<T>(args: {
+  error: unknown;
+  message: string;
+  source: string;
+  unauthorizedMessage?: string;
+}): DependencyResult<T> {
+  const errorRecord = typeof args.error === "object" && args.error !== null ? args.error : null;
+  const code = errorRecord && "code" in errorRecord && typeof errorRecord.code === "string" ? errorRecord.code : null;
+  const statusCode =
+    errorRecord && "statusCode" in errorRecord && typeof errorRecord.statusCode === "number"
+      ? errorRecord.statusCode
+      : errorRecord && "status" in errorRecord && typeof errorRecord.status === "number"
+        ? errorRecord.status
+        : null;
+  const errorMessage = args.error instanceof Error ? args.error.message : "";
+  const correlationId =
+    errorRecord && "correlationId" in errorRecord && (typeof errorRecord.correlationId === "string" || errorRecord.correlationId === null)
+      ? errorRecord.correlationId
+      : null;
+  const unauthorized =
+    code === "UNAUTHORIZED" ||
+    code === "FORBIDDEN" ||
+    code === "AUTHENTICATION_REQUIRED" ||
+    statusCode === 401 ||
+    statusCode === 403 ||
+    errorMessage === "Authentication required";
+  const retryable = !unauthorized && code !== "MODULE_DISABLED" && code !== "NOT_FOUND" && code !== "BAD_REQUEST";
+
+  return createDependencyResult({
+    state: unauthorized ? "unauthorized" : "unavailable",
+    correlationId,
+    failures: [
+      {
+        message: unauthorized ? args.unauthorizedMessage ?? args.message : args.message,
+        source: args.source,
+        code,
+        diagnostics: null,
+      },
+    ],
+    retry: retryable ? { retryable: true, retryAfterMs: null } : { retryable: false, retryAfterMs: null },
+  });
+}
+
+export function combineDependencyResults<T>(args: {
+  data: T;
+  empty: boolean;
+  results: readonly DependencyResult<unknown>[];
+}): DependencyResult<T> {
+  const failures = args.results.flatMap((result) => [...result.failures]);
+  const correlationId = args.results.find((result) => result.correlationId !== null)?.correlationId ?? null;
+
+  if (failures.length === 0) {
+    return args.empty
+      ? createDependencyResult({ state: "empty", correlationId })
+      : createDependencyResult({ state: "ready", data: args.data, correlationId });
+  }
+
+  const failureInputs = failures as [
+    (typeof failures)[number],
+    ...(typeof failures)[number][],
+  ];
+  let retryable = false;
+  let retryAfterMs: number | null = null;
+  for (const result of args.results) {
+    if (result.state === "ready" || result.state === "empty" || !result.retry.retryable) {
+      continue;
+    }
+    retryable = true;
+    retryAfterMs ??= result.retry.retryAfterMs;
+  }
+  const retry: DependencyRetryMetadata = retryable
+    ? { retryable: true, retryAfterMs }
+    : { retryable: false, retryAfterMs: null };
+  const allSourcesFailed =
+    args.results.length > 0 &&
+    args.results.every(
+      (result) => result.state === "unavailable" || result.state === "unauthorized",
+    );
+
+  if (allSourcesFailed) {
+    const state = args.results.every((result) => result.state === "unauthorized")
+      ? "unauthorized"
+      : "unavailable";
+    return createDependencyResult({ state, correlationId, failures: failureInputs, retry });
+  }
+
+  return createDependencyResult({
+    state: "partial",
+    data: args.data,
+    correlationId,
+    failures: failureInputs,
+    retry,
+  });
+}

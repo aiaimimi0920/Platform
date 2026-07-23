@@ -9,6 +9,7 @@ import type {
   TaskView,
 } from "@neuro/contracts";
 import { auth } from "@/auth";
+import { DependencyState } from "@/components/dependency-state";
 import { getBenefitPanel, listBenefitServiceModels } from "@/lib/account-client";
 import {
   AccountHomeSection,
@@ -26,8 +27,14 @@ import {
   formatAccountNumber,
 } from "@/lib/account-center";
 import {
+  combineDependencyResults,
+  createDependencyFailureResult,
+  createDependencyResult,
+  type DependencyResult,
+} from "@/lib/dependency-result";
+import {
   getFeatureSnapshot,
-  getPublicSurfaceSnapshot,
+  getPublicSurfaceSnapshotStrict,
   isFeatureSnapshotUnavailable,
   listAgentCapabilities,
   listAgentMarketplaceListings,
@@ -501,7 +508,25 @@ export default async function AgentCenterPage({ searchParams }: AgentCenterPageP
   if (!session?.user?.id) {
     redirect("/login");
   }
-  const publicSurfaces = await getPublicSurfaceSnapshot();
+  const [publicSurfaceResponse] = await Promise.allSettled([getPublicSurfaceSnapshotStrict()]);
+  if (publicSurfaceResponse.status === "rejected") {
+    return (
+      <main className="app-page">
+        <div className="nt-shell" style={{ paddingBlock: 32 }}>
+          <DependencyState
+            label="公开入口配置"
+            result={createDependencyFailureResult({
+              error: publicSurfaceResponse.reason,
+              message: "公开入口配置暂不可用。",
+              source: "public-surfaces",
+              unauthorizedMessage: "当前账户无权读取公开入口配置。",
+            })}
+          />
+        </div>
+      </main>
+    );
+  }
+  const publicSurfaces = publicSurfaceResponse.value;
   if (!isPublicSurfaceVisibleForViewer(publicSurfaces, "agents", session.user.id, session.user.providerUserId)) {
     redirect("/dashboard");
   }
@@ -537,11 +562,15 @@ export default async function AgentCenterPage({ searchParams }: AgentCenterPageP
   if (isFeatureSnapshotUnavailable(features)) {
     return (
       <main className="app-page">
-        <div className="mg-shell">
-          <Card className="app-stack">
-            <h1 className="mg-title">模块状态暂不可用</h1>
-            <p className="mg-copy">当前无法读取智能体模块状态，请稍后再试。</p>
-          </Card>
+        <div className="nt-shell" style={{ paddingBlock: 32 }}>
+          <DependencyState
+            label="智能体模块"
+            result={createDependencyFailureResult({
+              error: new Error("Feature snapshot unavailable"),
+              message: "当前无法读取智能体模块状态，请稍后再试。",
+              source: "core-features",
+            })}
+          />
         </div>
       </main>
     );
@@ -564,18 +593,119 @@ export default async function AgentCenterPage({ searchParams }: AgentCenterPageP
   const storeVisible = publicSurfaces.store.enabled && features.product.enabled;
   const mode: AgentCenterMode = requestedMode === "tasks" && !tasksVisible ? "roles" : requestedMode;
 
+  const dependencyResults: Array<DependencyResult<unknown>> = [];
+  const dependencyResultsBySource = new Map<string, DependencyResult<unknown>>();
+  function loadDependency<T>(
+    promise: Promise<T>,
+    args: { fallback: T; message: string; source: string; unauthorizedMessage: string },
+  ) {
+    return promise.then(
+      (value) => {
+        const result = createDependencyResult({ state: "ready", data: value });
+        dependencyResults.push(result);
+        dependencyResultsBySource.set(args.source, result);
+        return value;
+      },
+      (error: unknown) => {
+        const result = createDependencyFailureResult<T>({
+          error,
+          message: args.message,
+          source: args.source,
+          unauthorizedMessage: args.unauthorizedMessage,
+        });
+        dependencyResults.push(result);
+        dependencyResultsBySource.set(args.source, result);
+        return args.fallback;
+      },
+    );
+  }
+
+  const sourceFailed = (source: string) => {
+    const result = dependencyResultsBySource.get(source);
+    return result?.state === "unavailable" || result?.state === "unauthorized";
+  };
+
   const [agents, ownedListings, publicListings, supplierExecutions, tasks, benefitPanel] = await Promise.all([
-    listAgents(userContext),
-    listAgentMarketplaceListings(userContext, "owner").catch(() => []),
-    listAgentMarketplaceListings(userContext, "public", 12).catch(() => []),
-    listSuppliedAgentMarketplaceExecutions(userContext, MANAGED_LIGHT_SUMMARY_EXECUTION_LIMIT).catch(() => []),
-    tasksVisible ? listTasks(userContext).catch(() => [] as TaskView[]) : Promise.resolve([] as TaskView[]),
-    features.benefits.enabled ? getBenefitPanel(userContext).catch(() => null) : Promise.resolve(null),
+    loadDependency(listAgents(userContext), {
+      fallback: [],
+      message: "智能体目录暂不可用。",
+      unauthorizedMessage: "当前账户无权读取智能体目录。",
+      source: "agent-registry",
+    }),
+    loadDependency(listAgentMarketplaceListings(userContext, "owner"), {
+      fallback: [],
+      message: "我的智能体供给暂不可用。",
+      unauthorizedMessage: "当前账户无权读取我的智能体供给。",
+      source: "agent-marketplace-owner",
+    }),
+    loadDependency(listAgentMarketplaceListings(userContext, "public", 12), {
+      fallback: [],
+      message: "公开智能体供给暂不可用。",
+      unauthorizedMessage: "当前账户无权读取公开智能体供给。",
+      source: "agent-marketplace-public",
+    }),
+    loadDependency(listSuppliedAgentMarketplaceExecutions(userContext, MANAGED_LIGHT_SUMMARY_EXECUTION_LIMIT), {
+      fallback: [],
+      message: "智能体执行记录暂不可用。",
+      unauthorizedMessage: "当前账户无权读取智能体执行记录。",
+      source: "agent-marketplace-executions",
+    }),
+    tasksVisible
+      ? loadDependency(listTasks(userContext), {
+          fallback: [] as TaskView[],
+          message: "任务目录暂不可用。",
+          unauthorizedMessage: "当前账户无权读取任务目录。",
+          source: "task-hub",
+        })
+      : Promise.resolve([] as TaskView[]),
+    features.benefits.enabled
+      ? loadDependency(getBenefitPanel(userContext), {
+          fallback: null,
+          message: "权益目录暂不可用。",
+          unauthorizedMessage: "当前账户无权读取权益目录。",
+          source: "benefits",
+        })
+      : Promise.resolve(null),
   ]);
 
+  const agentRegistryUnavailable = sourceFailed("agent-registry");
+  const agentRegistryDependency = dependencyResultsBySource.get("agent-registry");
+  if (agentRegistryUnavailable && agentRegistryDependency) {
+    return (
+      <main className="app-page">
+        <div className="nt-shell" style={{ paddingBlock: 32 }}>
+          <DependencyState label="智能体目录" result={agentRegistryDependency} />
+        </div>
+      </main>
+    );
+  }
+
   const capabilityPairs = await Promise.all(
-    agents.map(async (agent) => [agent.id, await listAgentCapabilities(userContext, agent.id).catch(() => [])] as const),
+    agents.map(async (agent) => [
+      agent.id,
+      await loadDependency(listAgentCapabilities(userContext, agent.id), {
+        fallback: [],
+        message: "智能体能力目录暂不可用。",
+        unauthorizedMessage: "当前账户无权读取智能体能力目录。",
+        source: `agent-capabilities:${agent.id}`,
+      }),
+    ] as const),
   );
+
+  const agentCapabilityDependencyFailure = [...dependencyResultsBySource.entries()].find(
+    ([source, result]) =>
+      source.startsWith("agent-capabilities:") &&
+      (result.state === "unavailable" || result.state === "unauthorized"),
+  );
+  if (agentCapabilityDependencyFailure) {
+    return (
+      <main className="app-page">
+        <div className="nt-shell" style={{ paddingBlock: 32 }}>
+          <DependencyState label="智能体能力目录" result={agentCapabilityDependencyFailure[1]} />
+        </div>
+      </main>
+    );
+  }
 
   const capabilitiesByAgentId = new Map(capabilityPairs);
   const listingByCapabilityId = new Map(ownedListings.map((listing) => [listing.capabilityId, listing]));
@@ -601,7 +731,12 @@ export default async function AgentCenterPage({ searchParams }: AgentCenterPageP
           description: null,
           apiUrl: service.config.apiUrl,
           providerKey: service.providerKey,
-          modelOptions: (await listBenefitServiceModels(userContext, service.id).catch(() => []))
+          modelOptions: (await loadDependency(listBenefitServiceModels(userContext, service.id), {
+            fallback: [],
+            message: "权益服务模型目录暂不可用。",
+            unauthorizedMessage: "当前账户无权读取权益服务模型目录。",
+            source: `benefit-models:${service.id}`,
+          }))
             .map((modelId) => ({
               value: modelId,
               label: modelId,
@@ -616,7 +751,19 @@ export default async function AgentCenterPage({ searchParams }: AgentCenterPageP
         providerKey: service.providerKey,
         modelOptions: [],
       }));
-  const managedLightServiceOptions = localDebugManagedLightEnabled
+  const benefitDependencyUnavailable = sourceFailed("benefits");
+  const benefitDependencyResult = dependencyResultsBySource.get("benefits");
+  const benefitModelDependencyFailure = [...dependencyResultsBySource.entries()].find(
+    ([source, result]) =>
+      source.startsWith("benefit-models:") &&
+      (result.state === "unavailable" || result.state === "unauthorized"),
+  );
+  const benefitModelDependencyUnavailable = Boolean(benefitModelDependencyFailure);
+  const benefitFailureDependency = benefitModelDependencyFailure?.[1] ?? benefitDependencyResult;
+  const managedLightServiceOptions =
+    benefitDependencyUnavailable || benefitModelDependencyUnavailable
+      ? []
+      : localDebugManagedLightEnabled
     ? [
         buildLocalDebugManagedLightServiceOption(),
         ...resolvedManagedLightServiceOptions.filter((service) => service.id !== LOCAL_DEBUG_MANAGED_LIGHT_SERVICE_ID),
@@ -628,11 +775,21 @@ export default async function AgentCenterPage({ searchParams }: AgentCenterPageP
   const ownedAgentIds = new Set(agents.map((agent) => agent.id));
   const taskProposalPairs = tasksVisible
     ? await Promise.all(
-        tasks.map(async (task) => [task.id, await listTaskAgentProposals(userContext, task.id).catch(() => [])] as const),
+        tasks.map(async (task) => [
+          task.id,
+          await loadDependency(listTaskAgentProposals(userContext, task.id), {
+            fallback: [],
+            message: "任务提案目录暂不可用。",
+            unauthorizedMessage: "当前账户无权读取任务提案目录。",
+            source: `task-proposals:${task.id}`,
+          }),
+        ] as const),
       )
     : [];
   const taskProposalsByTaskId = new Map(taskProposalPairs);
+  const taskProposalFailed = (taskId: string) => sourceFailed(`task-proposals:${taskId}`);
   const proposalPipeline = tasks
+    .filter((task) => !taskProposalFailed(task.id))
     .map((task) => ({
       task,
       proposals: (taskProposalsByTaskId.get(task.id) ?? []).filter((proposal) => ownedAgentIds.has(proposal.agentId)),
@@ -640,6 +797,7 @@ export default async function AgentCenterPage({ searchParams }: AgentCenterPageP
     .filter((entry) => entry.proposals.length > 0)
     .sort((left, right) => Date.parse(right.task.createdAt) - Date.parse(left.task.createdAt));
   const autoMatchQueue = tasks
+    .filter((task) => !taskProposalFailed(task.id))
     .filter((task) => task.status === "open" || task.status === "applying")
     .map((task) => {
       const matchingListings = publishedOwnedListings
@@ -726,6 +884,37 @@ export default async function AgentCenterPage({ searchParams }: AgentCenterPageP
     return metrics;
   }, new Map<string, { completedTaskCount: number; totalRevenue: { obsidian: number; mira: number } }>());
 
+  const agentDependency = combineDependencyResults({
+    data: null,
+    empty:
+      dependencyResults.every((result) => result.failures.length === 0) &&
+      agents.length === 0 &&
+      ownedListings.length === 0 &&
+      publicListings.length === 0 &&
+      supplierExecutions.length === 0 &&
+      tasks.length === 0 &&
+      benefitPanel === null,
+    results: dependencyResults,
+  });
+  const marketplaceOwnerUnavailable = sourceFailed("agent-marketplace-owner");
+  const marketplacePublicUnavailable = sourceFailed("agent-marketplace-public");
+  const marketplaceExecutionsUnavailable = sourceFailed("agent-marketplace-executions");
+  const taskHubUnavailable = sourceFailed("task-hub");
+  const proposalDataUnavailable =
+    taskHubUnavailable ||
+    agentRegistryUnavailable ||
+    sourceFailed("agent-marketplace-owner") ||
+    tasks.some((task) => taskProposalFailed(task.id));
+  if (agentDependency.state === "unavailable" || agentDependency.state === "unauthorized") {
+    return (
+      <main className="app-page">
+        <div className="nt-shell" style={{ paddingBlock: 32 }}>
+          <DependencyState label="智能体数据" result={agentDependency} />
+        </div>
+      </main>
+    );
+  }
+
   return (
     <main className={cn("app-page", embedded && "app-agent-page--embedded")}>
         <div
@@ -758,6 +947,16 @@ export default async function AgentCenterPage({ searchParams }: AgentCenterPageP
           )}
         >
           <section className={cn("app-agent-shell", embedded && "app-agent-shell--embedded")} data-mode={mode}>
+            {agentDependency.state === "partial" ? (
+              <div style={{ gridColumn: "1 / -1", padding: "16px 20px 0" }}>
+                <DependencyState label="智能体数据" result={agentDependency} />
+              </div>
+            ) : null}
+            {(benefitDependencyUnavailable || benefitModelDependencyUnavailable) && benefitFailureDependency ? (
+              <div style={{ gridColumn: "1 / -1", padding: "16px 20px 0" }}>
+                <DependencyState label="权益目录" result={benefitFailureDependency} />
+              </div>
+            ) : null}
             <aside className="app-agent-rail">
               <div className="app-agent-rail__head">
                 <div className="app-agent-rail__mark" aria-hidden="true">
@@ -818,6 +1017,7 @@ export default async function AgentCenterPage({ searchParams }: AgentCenterPageP
                   embedded={embedded}
                   listingByCapabilityId={listingByCapabilityId}
                   managedLightServiceOptions={managedLightServiceOptions}
+                  serviceOptionsUnavailable={benefitDependencyUnavailable || benefitModelDependencyUnavailable}
                   managedLightServiceTitleById={managedLightServiceTitleById}
                   metricsByAgentId={metricsByAgentId}
                   batchMode={lightOverviewBatchMode}
@@ -902,7 +1102,9 @@ export default async function AgentCenterPage({ searchParams }: AgentCenterPageP
                 <details className="app-agent-center-fold app-agent-center-fold--section" open={mode === "tasks"}>
                   <summary>批量调用</summary>
                   <div className="app-agent-center-fold__body">
-                    {batchInvokeListings.length === 0 ? (
+                    {marketplaceOwnerUnavailable || marketplacePublicUnavailable ? (
+                      <DependencyState label="可调用供给" result={agentDependency} />
+                    ) : batchInvokeListings.length === 0 ? (
                       <p className="mg-copy">暂无可调用供给</p>
                     ) : (
                       <form action={invokeAgentMarketplaceListingBatchAction} className="app-agent-center-form">
@@ -991,7 +1193,9 @@ export default async function AgentCenterPage({ searchParams }: AgentCenterPageP
                 <details className="app-agent-center-fold app-agent-center-fold--section" open={mode === "tasks"}>
                   <summary>提案</summary>
                   <div className="app-agent-center-fold__body">
-                    {proposalPipeline.length === 0 && autoMatchQueue.length === 0 ? (
+                    {proposalDataUnavailable ? (
+                      <DependencyState label="任务与提案" result={agentDependency} />
+                    ) : proposalPipeline.length === 0 && autoMatchQueue.length === 0 ? (
                       <p className="mg-copy">暂无任务 / 提案</p>
                     ) : (
                       <div className="app-agent-center-cards">
@@ -1133,7 +1337,9 @@ export default async function AgentCenterPage({ searchParams }: AgentCenterPageP
                 <details className="app-agent-center-fold app-agent-center-fold--section" open={mode === "tasks"}>
                   <summary>公开供给</summary>
                   <div className="app-agent-center-fold__body">
-                    {supplierExecutions.length > 0 ? (
+                    {marketplaceExecutionsUnavailable && supplierExecutions.length === 0 ? (
+                      <DependencyState label="智能体执行记录" result={agentDependency} />
+                    ) : supplierExecutions.length > 0 ? (
                       <div className="app-agent-center-supplier-strip">
                     {supplierExecutions.map((execution) => (
                       <Card className="app-agent-center-card" key={`supplier-${execution.id}`}>
@@ -1178,7 +1384,9 @@ export default async function AgentCenterPage({ searchParams }: AgentCenterPageP
                     ))}
                       </div>
                     ) : null}
-                    {publicFeed.length === 0 ? (
+                    {marketplacePublicUnavailable ? (
+                      <DependencyState label="公开智能体供给" result={agentDependency} />
+                    ) : publicFeed.length === 0 ? (
                       <p className="mg-copy">暂无公开供给</p>
                     ) : (
                       <div className="app-agent-center-cards">

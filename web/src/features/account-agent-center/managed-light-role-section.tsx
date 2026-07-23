@@ -42,6 +42,7 @@ type ManagedLightRoleSectionProps = {
   capabilitiesByAgentId: Map<string, AgentCapabilityView[]>;
   listingByCapabilityId: Map<string, AgentMarketplaceListingView>;
   managedLightServiceOptions: ManagedLightServiceOption[];
+  serviceOptionsUnavailable?: boolean;
   managedLightServiceTitleById: Map<string, string>;
   metricsByAgentId: Map<string, ManagedLightAgentMetrics>;
   embedded: boolean;
@@ -201,6 +202,7 @@ export function ManagedLightRoleSection({
   capabilitiesByAgentId,
   listingByCapabilityId,
   managedLightServiceOptions,
+  serviceOptionsUnavailable = false,
   managedLightServiceTitleById,
   metricsByAgentId,
   embedded,
@@ -217,7 +219,9 @@ export function ManagedLightRoleSection({
   const showOverview = !showWorkbench;
   const editingServiceId = editingAgent?.managedServiceId ?? "";
   const serviceOptions =
-    editingServiceId && !managedLightServiceOptions.some((service) => service.id === editingServiceId)
+    serviceOptionsUnavailable
+      ? []
+      : editingServiceId && !managedLightServiceOptions.some((service) => service.id === editingServiceId)
       ? [
           {
             id: editingServiceId,

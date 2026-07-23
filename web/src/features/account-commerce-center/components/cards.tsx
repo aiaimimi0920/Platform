@@ -24,7 +24,7 @@ export function OfficialProductCard({
 }: {
   onRequestPurchase: (transaction: PendingCommerceTransaction) => void;
   product: CommerceProductExtras;
-  purchasedCount: number;
+  purchasedCount: number | null;
 }) {
   const accent = getProductAccent(product);
   const topTags = buildShelfTags(product, purchasedCount);
@@ -116,7 +116,7 @@ export function MarketplaceListingCard({
   listing: MarketplaceListingView;
   onRequestPurchase: (transaction: PendingCommerceTransaction) => void;
   product: CommerceProductExtras | null;
-  purchasedCount: number;
+  purchasedCount: number | null;
 }) {
   const mine = Boolean(currentUserId && listing.sellerUserId === currentUserId);
   const accent = getListingAccent(listing, product);

@@ -16,16 +16,23 @@ import type {
 } from "@neuro/contracts";
 import { auth } from "@/auth";
 import { PreparedAttachmentUpload } from "@/components/arbitration/prepared-attachment-upload";
+import { DependencyState } from "@/components/dependency-state";
 import { Badge } from "@/components/ui/badge";
 import { Card, Panel } from "@/components/ui/card";
 import { Input, Select, Textarea } from "@/components/ui/input";
+import {
+  combineDependencyResults,
+  createDependencyFailureResult,
+  createDependencyResult,
+  type DependencyResult,
+} from "@/lib/dependency-result";
 import * as coreClient from "@/lib/core-client";
 import {
   claimNextArbitrationCase,
   getArbitrationCaseWorkload,
   getArbitrationRemoteAttachmentCleanupQueue,
   getFeatureSnapshot,
-  getPublicSurfaceSnapshot,
+  getPublicSurfaceSnapshotStrict,
   isFeatureSnapshotUnavailable,
   listTasks,
 } from "@/lib/core-client";
@@ -782,7 +789,25 @@ export async function advanceArbitrationReviewRoundAction(formData: FormData) {
 export default async function ArbitrationsPage({ searchParams }: ArbitrationsPageProps) {
   const session = await auth();
   if (!session?.user?.id) redirect("/login");
-  const publicSurfaces = await getPublicSurfaceSnapshot();
+  const [publicSurfaceResponse] = await Promise.allSettled([getPublicSurfaceSnapshotStrict()]);
+  if (publicSurfaceResponse.status === "rejected") {
+    return (
+      <main className="app-page">
+        <div className="nt-shell" style={{ paddingBlock: 32 }}>
+          <DependencyState
+            label="公开入口配置"
+            result={createDependencyFailureResult({
+              error: publicSurfaceResponse.reason,
+              message: "公开入口配置暂不可用。",
+              source: "public-surfaces",
+              unauthorizedMessage: "当前账户无权读取公开入口配置。",
+            })}
+          />
+        </div>
+      </main>
+    );
+  }
+  const publicSurfaces = publicSurfaceResponse.value;
   if (!isPublicSurfaceVisibleForViewer(publicSurfaces, "arbitrations", session.user.id, session.user.providerUserId)) {
     redirect("/dashboard");
   }
@@ -808,10 +833,14 @@ export default async function ArbitrationsPage({ searchParams }: ArbitrationsPag
     return (
       <main className="app-page">
         <div className="mg-shell">
-          <Card className="app-stack">
-            <h1 className="mg-title">模块状态暂不可用</h1>
-            <p className="mg-copy">当前无法读取模块状态，请稍后再试。</p>
-          </Card>
+          <DependencyState
+            label="仲裁模块"
+            result={createDependencyFailureResult({
+              error: new Error("Feature snapshot unavailable"),
+              message: "当前无法读取仲裁模块状态，请稍后再试。",
+              source: "core-features",
+            })}
+          />
         </div>
       </main>
     );
@@ -838,21 +867,89 @@ export default async function ArbitrationsPage({ searchParams }: ArbitrationsPag
       arbitrationClient.addArbitrationEvidence,
   );
 
-  const tasks = await listTasks(userContext).catch(() => [] as TaskView[]);
-  const arbitrationCases = listArbitrationCases
-    ? await listArbitrationCases(userContext).catch(() => [] as ArbitrationCaseView[])
-    : [];
-  const arbitrationSummary = arbitrationClient.getArbitrationCaseSummary
-    ? await arbitrationClient.getArbitrationCaseSummary(userContext).catch(() => null)
-    : null;
-  const arbitrationWorkload =
+  const dependencyResults: Array<DependencyResult<unknown>> = [];
+  const dependencyResultsBySource = new Map<string, DependencyResult<unknown>>();
+  function loadDependency<T>(
+    promise: Promise<T>,
+    args: {
+      fallback: T;
+      message: string;
+      source: string;
+      unauthorizedMessage: string;
+    },
+  ) {
+    return promise.then(
+      (value) => {
+        const result = createDependencyResult({ state: "ready", data: value });
+        dependencyResults.push(result);
+        dependencyResultsBySource.set(args.source, result);
+        return value;
+      },
+      (error: unknown) => {
+        const result = createDependencyFailureResult<T>({
+          error,
+          message: args.message,
+          source: args.source,
+          unauthorizedMessage: args.unauthorizedMessage,
+        });
+        dependencyResults.push(result);
+        dependencyResultsBySource.set(args.source, result);
+        return args.fallback;
+      },
+    );
+  }
+
+  const tasksPromise = loadDependency(listTasks(userContext), {
+    fallback: [] as TaskView[],
+    message: "可申诉任务暂不可用。",
+    source: "core-tasks",
+    unauthorizedMessage: "当前账户无权读取可申诉任务。",
+  });
+  const arbitrationCasesPromise = listArbitrationCases
+    ? loadDependency(listArbitrationCases(userContext), {
+        fallback: [] as ArbitrationCaseView[],
+        message: "仲裁案件暂不可用。",
+        source: "arbitration-cases",
+        unauthorizedMessage: "当前账户无权读取仲裁案件。",
+      })
+    : Promise.resolve([] as ArbitrationCaseView[]);
+  const arbitrationSummaryPromise = arbitrationClient.getArbitrationCaseSummary
+    ? loadDependency<ArbitrationCaseSummaryView | null>(arbitrationClient.getArbitrationCaseSummary(userContext), {
+        fallback: null,
+        message: "仲裁摘要暂不可用。",
+        source: "arbitration-summary",
+        unauthorizedMessage: "当前账户无权读取仲裁摘要。",
+      })
+    : Promise.resolve(null as ArbitrationCaseSummaryView | null);
+  const arbitrationWorkloadPromise =
     isOperator && arbitrationClient.getArbitrationCaseWorkload
-      ? await arbitrationClient.getArbitrationCaseWorkload(userContext).catch(() => null)
-      : null;
-  const cleanupQueue: ArbitrationRemoteAttachmentCleanupQueueView | null =
+      ? loadDependency<ArbitrationWorkloadView | null>(arbitrationClient.getArbitrationCaseWorkload(userContext), {
+          fallback: null,
+          message: "仲裁工作负载暂不可用。",
+          source: "arbitration-workload",
+          unauthorizedMessage: "当前账户无权读取仲裁工作负载。",
+        })
+      : Promise.resolve(null as ArbitrationWorkloadView | null);
+  const cleanupQueuePromise =
     isOperator && arbitrationClient.getArbitrationRemoteAttachmentCleanupQueue
-      ? await arbitrationClient.getArbitrationRemoteAttachmentCleanupQueue(userContext, { limit: 20 }).catch(() => null)
-      : null;
+      ? loadDependency<ArbitrationRemoteAttachmentCleanupQueueView | null>(
+          arbitrationClient.getArbitrationRemoteAttachmentCleanupQueue(userContext, { limit: 20 }),
+          {
+            fallback: null,
+            message: "远程附件清理队列暂不可用。",
+            source: "arbitration-cleanup-queue",
+            unauthorizedMessage: "当前账户无权读取远程附件清理队列。",
+          },
+        )
+      : Promise.resolve(null as ArbitrationRemoteAttachmentCleanupQueueView | null);
+
+  const [tasks, arbitrationCases, arbitrationSummary, arbitrationWorkload, cleanupQueue] = await Promise.all([
+    tasksPromise,
+    arbitrationCasesPromise,
+    arbitrationSummaryPromise,
+    arbitrationWorkloadPromise,
+    cleanupQueuePromise,
+  ]);
   const filteredCases = arbitrationCases.filter((arbitrationCase) => {
     if (caseStatusFilter && arbitrationCase.status !== caseStatusFilter) return false;
     if (
@@ -872,6 +969,30 @@ export default async function ArbitrationsPage({ searchParams }: ArbitrationsPag
     if (assignmentFilter === "mine" && arbitrationCase.assignedOperatorUserId !== session.user.id) return false;
     return true;
   });
+  const arbitrationDependency = combineDependencyResults({
+    data: null,
+    empty:
+      tasks.length === 0 &&
+      arbitrationCases.length === 0 &&
+      arbitrationSummary === null &&
+      (!isOperator || arbitrationWorkload === null) &&
+      (!isOperator || cleanupQueue === null),
+    results: dependencyResults,
+  });
+  const tasksDependency = dependencyResultsBySource.get("core-tasks");
+  const casesDependency = dependencyResultsBySource.get("arbitration-cases");
+  const tasksUnavailable = tasksDependency?.state === "unavailable" || tasksDependency?.state === "unauthorized";
+  const casesUnavailable = casesDependency?.state === "unavailable" || casesDependency?.state === "unauthorized";
+
+  if (arbitrationDependency.state === "unavailable" || arbitrationDependency.state === "unauthorized") {
+    return (
+      <main className="app-page">
+        <div className="mg-shell" style={{ paddingBlock: 32 }}>
+          <DependencyState label="仲裁数据" result={arbitrationDependency} />
+        </div>
+      </main>
+    );
+  }
 
   return (
     <main className="app-page">
@@ -890,6 +1011,10 @@ export default async function ArbitrationsPage({ searchParams }: ArbitrationsPag
               {message}
             </p>
           </Card>
+        ) : null}
+
+        {arbitrationDependency.state === "partial" ? (
+          <DependencyState label="仲裁数据" result={arbitrationDependency} />
         ) : null}
 
         {!arbitrationApiReady ? (
@@ -924,7 +1049,13 @@ export default async function ArbitrationsPage({ searchParams }: ArbitrationsPag
               <Textarea name="reason" placeholder="填写仲裁理由，例如争议点、预期处理方式。" required rows={4} />
               <Textarea name="evidenceSummary" placeholder="证据摘要（可选）：提交聊天记录、日志、截图说明。" rows={3} />
               <button className="mg-btn mg-btn--primary" disabled={!arbitrationApiReady || tasks.length === 0} type="submit">
-                {tasks.length === 0 ? "暂无任务可选" : arbitrationApiReady ? "提交仲裁" : "当前环境未启用提交"}
+                {tasksUnavailable
+                  ? "任务数据暂不可用"
+                  : tasks.length === 0
+                    ? "暂无任务可选"
+                    : arbitrationApiReady
+                      ? "提交仲裁"
+                      : "当前环境未启用提交"}
               </button>
             </form>
           </Card>
@@ -1336,7 +1467,11 @@ export default async function ArbitrationsPage({ searchParams }: ArbitrationsPag
           <p className="mg-subtitle">案件</p>
           <h2 className="app-card-title">仲裁案件列表</h2>
           {filteredCases.length === 0 ? (
-            <p className="mg-copy">当前没有仲裁案件。</p>
+            casesUnavailable && casesDependency ? (
+              <DependencyState label="仲裁案件" result={casesDependency} />
+            ) : (
+              <p className="mg-copy">当前没有仲裁案件。</p>
+            )
           ) : (
             <div className="app-task-list">
               {filteredCases.map((arbitrationCase) => {

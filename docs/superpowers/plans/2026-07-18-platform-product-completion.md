@@ -289,12 +289,17 @@ web/src/features/account-heavy-agent-chat/adapter.ts
 - Modify: `web/src/app/ops/account/agents/page.tsx`
 - Modify: `web/src/app/arbitrations/page.tsx`
 - Modify: `web/src/features/account-opinion-center/opinion-center-page.tsx`
+- Modify: `web/src/lib/core-client.ts`
+- Modify: `web/src/features/account-project-center/project-center-page.tsx`
+- Modify: `web/src/features/account-agent-center/managed-light-role-section.tsx`
 - Add focused tests beside each feature/route
 
-- [ ] Add failing tests for dependency 5xx/timeout/401 and true empty responses.
-- [ ] Remove `PROJECT_FALLBACK_CATALOG`, broad `catch(() => []/null)`, and route-local `withFallback` from formal surfaces.
-- [ ] Render the typed dependency state and preserve partial data only when source results identify which section failed.
-- [ ] Run all affected Web tests and commit `fix(platform): stop masking dependency failures`.
+- [x] Add failing tests for dependency 5xx/timeout/401 and true empty responses, including filtered Opinion detail and wallet vote gating.
+- [x] Remove `PROJECT_FALLBACK_CATALOG`, broad `catch(() => []/null)`, and route-local `withFallback` from formal surfaces.
+- [x] Render the typed dependency state and preserve partial data only when source results identify which section failed; guard Agent/Operator primary and source-level failures.
+- [x] Add `getPublicSurfaceSnapshotStrict()` and migrate the formal P3-02 pages without breaking legacy compatibility callers.
+- [x] Run all affected Web tests, TypeScript, production build, and Platform-scoped diff checks. Web full suite: `264/264`.
+- [x] Commit `fix(platform): stop masking dependency failures`.
 
 ### Task P3-03: Mailbox, Benefits, And Owner Arbitration Workspaces
 

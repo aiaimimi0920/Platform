@@ -4,7 +4,14 @@ import type { OpinionTopicTag } from "@neuro/contracts";
 import type { CSSProperties } from "react";
 
 import { auth } from "@/auth";
-import { getPublicSurfaceSnapshot } from "@/lib/core-client";
+import { DependencyState } from "@/components/dependency-state";
+import { getPublicSurfaceSnapshotStrict } from "@/lib/core-client";
+import {
+  combineDependencyResults,
+  createDependencyFailureResult,
+  createDependencyResult,
+  type DependencyResult,
+} from "@/lib/dependency-result";
 import { isPublicSurfaceVisibleForViewer } from "@/lib/public-surface-visibility";
 
 import { OPINION_PAGE_SIZE, OPINION_TOPIC_TAG_LABELS, OPINION_TOPIC_TAG_OPTIONS } from "./constants";
@@ -384,10 +391,60 @@ function buildDiscussionThreads<
   }));
 }
 
+type OpinionDependencyOptions<T> = {
+  empty?: (value: T) => boolean;
+  message: string;
+  source: string;
+  unauthorizedMessage: string;
+};
+
+async function loadOpinionDependency<T>(
+  request: Promise<T>,
+  options: OpinionDependencyOptions<T>,
+): Promise<DependencyResult<T>> {
+  const [response] = await Promise.allSettled([request]);
+  if (response.status === "fulfilled") {
+    return options.empty?.(response.value)
+      ? createDependencyResult({ state: "empty" })
+      : createDependencyResult({ state: "ready", data: response.value });
+  }
+
+  return createDependencyFailureResult({
+    error: response.reason,
+    message: options.message,
+    source: options.source,
+    unauthorizedMessage: options.unauthorizedMessage,
+  });
+}
+
+function isDependencyFailure<T>(result: DependencyResult<T>) {
+  return result.state !== "ready" && result.state !== "empty";
+}
+
+function hasDependencyData<T>(
+  result: DependencyResult<T>,
+): result is Extract<DependencyResult<T>, { state: "ready" | "partial" }> {
+  return result.state === "ready" || result.state === "partial";
+}
+
 export default async function OpinionCenterPage({ searchParams }: OpinionsPageProps) {
   const session = await auth();
   if (!session?.user?.id) redirect("/login");
-  const publicSurfaces = await getPublicSurfaceSnapshot();
+  const publicSurfaceDependency = await loadOpinionDependency(getPublicSurfaceSnapshotStrict(), {
+    message: "公开入口配置暂不可用。",
+    source: "public-surfaces",
+    unauthorizedMessage: "当前账户无权读取公开入口配置。",
+  });
+  if (!hasDependencyData(publicSurfaceDependency)) {
+    return (
+      <main className="app-page">
+        <div className="nt-shell" style={{ paddingBlock: 32 }}>
+          <DependencyState label="公开入口配置" result={publicSurfaceDependency} />
+        </div>
+      </main>
+    );
+  }
+  const publicSurfaces = publicSurfaceDependency.data;
   if (!isPublicSurfaceVisibleForViewer(publicSurfaces, "opinions", session.user.id, session.user.providerUserId)) {
     redirect("/dashboard");
   }
@@ -416,29 +473,119 @@ export default async function OpinionCenterPage({ searchParams }: OpinionsPagePr
 
   const features = await getFeatureSnapshot();
   if (isFeatureSnapshotUnavailable(features)) {
-    return <main className="app-page"><div className="mg-shell"><p className="mg-copy">模块状态暂不可用，请稍后再试。</p></div></main>;
+    const dependency = createDependencyFailureResult<null>({
+      error: new Error("Feature snapshot unavailable"),
+      message: "议题模块状态暂不可用，请稍后再试。",
+      source: "feature-snapshot",
+      unauthorizedMessage: "当前账户无权读取议题模块状态。",
+    });
+    return (
+      <main className="app-page">
+        <div className="nt-shell" style={{ paddingBlock: 32 }}>
+          <DependencyState label="议题模块状态" result={dependency} />
+        </div>
+      </main>
+    );
   }
   if (!features.opinionHub.enabled) {
     return <main className="app-page"><div className="mg-shell"><p className="mg-copy">议题模块已关闭。</p></div></main>;
   }
 
   const walletEnabled = features.wallet.enabled && features.ledger.enabled;
-  const [wallet, currentUser, collection, supportSummaries, opposeSummaries] = await Promise.all([
-      walletEnabled ? getWalletSummary(userContext).catch(() => null) : Promise.resolve(null),
-      features.userProgression.enabled ? getCurrentUser(userContext).catch(() => null) : Promise.resolve(null),
-      getOpinionTopicCollection(userContext, {
+  const [walletDependency, currentUserDependency, collectionDependency, supportDependency, opposeDependency] =
+    await Promise.all([
+      walletEnabled
+        ? loadOpinionDependency(getWalletSummary(userContext), {
+            message: "议题票余额暂不可用。",
+            source: "opinion-wallet",
+            unauthorizedMessage: "当前账户无权读取议题票余额。",
+          })
+        : Promise.resolve(
+            createDependencyResult<Awaited<ReturnType<typeof getWalletSummary>>>({ state: "empty" }),
+          ),
+      features.userProgression.enabled
+        ? loadOpinionDependency(getCurrentUser(userContext), {
+            empty: (value) => value === null,
+            message: "账户等级信息暂不可用。",
+            source: "account-user-progression",
+            unauthorizedMessage: "当前账户无权读取账户等级信息。",
+          })
+        : Promise.resolve(
+            createDependencyResult<Awaited<ReturnType<typeof getCurrentUser>>>({ state: "empty" }),
+          ),
+      loadOpinionDependency(getOpinionTopicCollection(userContext, {
         page,
         pageSize: OPINION_PAGE_SIZE,
         sort: selectedSort,
         topicTag: tagFilter,
+      }), {
+        message: "议题目录暂不可用。",
+        source: "opinion-topic-collection",
+        unauthorizedMessage: "当前账户无权读取议题目录。",
       }),
-    listOpinionTopicSupportSummaries(userContext).catch(() => []),
-    listOpinionTopicOpposeSummaries(userContext).catch(() => []),
-  ]);
+      loadOpinionDependency(listOpinionTopicSupportSummaries(userContext), {
+        message: "议题支持记录暂不可用。",
+        source: "opinion-support-summary",
+        unauthorizedMessage: "当前账户无权读取议题支持记录。",
+      }),
+      loadOpinionDependency(listOpinionTopicOpposeSummaries(userContext), {
+        message: "议题反对记录暂不可用。",
+        source: "opinion-oppose-summary",
+        unauthorizedMessage: "当前账户无权读取议题反对记录。",
+      }),
+    ]);
 
+  if (!hasDependencyData(collectionDependency)) {
+    const dependency = collectionDependency;
+    return (
+      <main className="app-page">
+        <div className="nt-shell" style={{ paddingBlock: 32 }}>
+          <DependencyState label="议题目录" result={dependency} />
+        </div>
+      </main>
+    );
+  }
+
+  const collection = collectionDependency.data;
+  const currentUser = hasDependencyData(currentUserDependency) ? currentUserDependency.data : null;
+  const supportSummaries = hasDependencyData(supportDependency) ? supportDependency.data : [];
+  const opposeSummaries = hasDependencyData(opposeDependency) ? opposeDependency.data : [];
+  const dependencyResults: Array<DependencyResult<unknown>> = [
+    collectionDependency,
+    supportDependency,
+    opposeDependency,
+  ];
+  if (walletEnabled) dependencyResults.push(walletDependency);
+  if (features.userProgression.enabled) dependencyResults.push(currentUserDependency);
+
+  const walletDependencyFailure = isDependencyFailure(walletDependency);
+  const supportDependencyFailure = isDependencyFailure(supportDependency);
+  const opposeDependencyFailure = isDependencyFailure(opposeDependency);
+  const progressionDependencyFailure =
+    features.userProgression.enabled && isDependencyFailure(currentUserDependency);
   const progression = currentUser?.snapshot?.progression ?? null;
   const createTopicAccess = progression?.access.find((rule) => rule.key === "createOpinionTopic") ?? null;
-  const canCreateTopic = walletEnabled && (features.userProgression.enabled ? createTopicAccess?.satisfied === true : true);
+  const canCreateTopic =
+    walletEnabled &&
+    walletDependency.state === "ready" &&
+    (features.userProgression.enabled
+      ? currentUserDependency.state === "ready" && createTopicAccess?.satisfied === true
+      : true);
+  const createTopicUnavailableReason = !walletEnabled
+    ? "议题票功能当前未启用。"
+    : walletDependencyFailure
+      ? "议题票余额暂不可用，请稍后再试。"
+      : walletDependency.state !== "ready"
+        ? "议题票余额暂无数据。"
+        : !features.userProgression.enabled
+          ? null
+          : progressionDependencyFailure
+            ? "账户等级信息暂不可用，请稍后再试。"
+            : currentUserDependency.state !== "ready"
+              ? "账户等级信息暂无数据。"
+              : createTopicAccess?.satisfied === true
+                ? null
+                : "需满足 Lv.2。";
   const supportedTopicSummaries = [...supportSummaries]
     .filter((item) => item.ticketAmount > 0)
     .sort((left, right) => new Date(right.lastSupportedAt).getTime() - new Date(left.lastSupportedAt).getTime());
@@ -462,26 +609,30 @@ export default async function OpinionCenterPage({ searchParams }: OpinionsPagePr
         ? opposedTopicIdSet
         : null;
   const supportedTopicPageById = new Map(
-      supportedTopicSummaries.map((item, index) => [item.topicId, Math.floor(index / OPINION_PAGE_SIZE) + 1]),
-    );
-    const opposedTopicPageById = new Map(
-      opposedTopicSummaries.map((item, index) => [item.topicId, Math.floor(index / OPINION_PAGE_SIZE) + 1]),
-    );
-  const filteredTopicCandidates =
+    supportedTopicSummaries.map((item, index) => [item.topicId, Math.floor(index / OPINION_PAGE_SIZE) + 1]),
+  );
+  const opposedTopicPageById = new Map(
+    opposedTopicSummaries.map((item, index) => [item.topicId, Math.floor(index / OPINION_PAGE_SIZE) + 1]),
+  );
+  const filteredTopicDetailPairs =
     topicFilter !== "all" && filteredTopicSummaries.length > 0
-      ? (
-          await Promise.all(
-            filteredTopicSummaries.map(async (summary) => {
-              try {
-                const response = await getOpinionTopicDetail(userContext, summary.topicId);
-                return response?.topic ?? null;
-              } catch {
-                return null;
-              }
+      ? await Promise.all(
+          filteredTopicSummaries.map(async (summary) => [
+            summary.topicId,
+            await loadOpinionDependency(getOpinionTopicDetail(userContext, summary.topicId), {
+              empty: (value) => value === null,
+              message: "部分议题详情暂不可用。",
+              source: `opinion-topic-filter-detail:${summary.topicId}`,
+              unauthorizedMessage: "当前账户无权读取部分议题详情。",
             }),
-          )
-        ).filter((topic): topic is NonNullable<typeof topic> => topic !== null)
+          ] as const),
+        )
       : [];
+  const filteredTopicDependencyById = new Map(filteredTopicDetailPairs);
+  dependencyResults.push(...filteredTopicDetailPairs.map(([, result]) => result));
+  const filteredTopicCandidates = filteredTopicDetailPairs.flatMap(([, result]) =>
+    hasDependencyData(result) && result.data ? [result.data.topic] : [],
+  );
   const tagFilteredTopicCandidates =
     topicFilter !== "all" && tagFilter !== "all"
       ? filteredTopicCandidates.filter((topic) => topic.tags.includes(tagFilter))
@@ -498,20 +649,20 @@ export default async function OpinionCenterPage({ searchParams }: OpinionsPagePr
       : -1;
   const effectiveFilteredTopicTotalCount = topicFilter !== "all" ? effectiveFilteredTopicSummaries.length : 0;
   const effectiveFilteredTopicTotalPages =
-      topicFilter !== "all" ? Math.max(1, Math.ceil(Math.max(1, effectiveFilteredTopicTotalCount) / OPINION_PAGE_SIZE)) : 1;
-    const effectiveTopicPageWithTag =
-      topicFilter !== "all"
-        ? requestedEffectiveFilteredTopicIndex >= 0
-          ? Math.floor(requestedEffectiveFilteredTopicIndex / OPINION_PAGE_SIZE) + 1
-          : Math.min(page, effectiveFilteredTopicTotalPages)
-        : page;
-    const filteredTopicPageSummaries =
-      topicFilter !== "all"
-        ? effectiveFilteredTopicSummaries.slice(
-            (effectiveTopicPageWithTag - 1) * OPINION_PAGE_SIZE,
-            effectiveTopicPageWithTag * OPINION_PAGE_SIZE,
-          )
-        : [];
+    topicFilter !== "all" ? Math.max(1, Math.ceil(Math.max(1, effectiveFilteredTopicTotalCount) / OPINION_PAGE_SIZE)) : 1;
+  const effectiveTopicPageWithTag =
+    topicFilter !== "all"
+      ? requestedEffectiveFilteredTopicIndex >= 0
+        ? Math.floor(requestedEffectiveFilteredTopicIndex / OPINION_PAGE_SIZE) + 1
+        : Math.min(page, effectiveFilteredTopicTotalPages)
+      : page;
+  const filteredTopicPageSummaries =
+    topicFilter !== "all"
+      ? effectiveFilteredTopicSummaries.slice(
+          (effectiveTopicPageWithTag - 1) * OPINION_PAGE_SIZE,
+          effectiveTopicPageWithTag * OPINION_PAGE_SIZE,
+        )
+      : [];
   const filteredPageTopics =
     topicFilter !== "all"
       ? tagFilteredTopicCandidates.filter((topic) =>
@@ -519,11 +670,56 @@ export default async function OpinionCenterPage({ searchParams }: OpinionsPagePr
         )
       : [];
   const visibleTopics = topicFilter === "all" ? collection.topics : filteredPageTopics;
+  const topicFilterDependency: DependencyResult<unknown> | null =
+    topicFilter === "supported" ? supportDependency : topicFilter === "opposed" ? opposeDependency : null;
+  const topicFilterDependencyLabel = topicFilter === "supported" ? "支持记录" : "反对记录";
+  const topicFilterDependencyFailure =
+    topicFilter === "supported" ? supportDependencyFailure : topicFilter === "opposed" ? opposeDependencyFailure : false;
+  const topicFilterDetailDependency =
+    topicFilter !== "all" && filteredTopicDetailPairs.length > 0
+      ? combineDependencyResults({
+          data: null,
+          empty: filteredTopicCandidates.length === 0,
+          results: filteredTopicDetailPairs.map(([, result]) => result),
+        })
+      : null;
+  const topicFilterDetailDependencyFailure =
+    topicFilterDetailDependency !== null && isDependencyFailure(topicFilterDetailDependency);
+  const topicFilterDependencyBlocksList =
+    topicFilterDependency?.state === "unavailable" || topicFilterDependency?.state === "unauthorized";
+  const topicFilterDetailDependencyBlocksList =
+    topicFilterDetailDependency?.state === "unavailable" ||
+    topicFilterDetailDependency?.state === "unauthorized";
   const activeTopicId =
     topicId && (topicFilter === "all" || filteredTopicIdSet?.has(topicId))
       ? topicId
       : visibleTopics[0]?.id ?? null;
-  const detail = activeTopicId ? await getOpinionTopicDetail(userContext, activeTopicId).catch(() => null) : null;
+  const filteredDetailDependency = activeTopicId ? filteredTopicDependencyById.get(activeTopicId) : undefined;
+  const detailDependency = activeTopicId
+    ? filteredDetailDependency ??
+      await loadOpinionDependency(getOpinionTopicDetail(userContext, activeTopicId), {
+        empty: (value) => value === null,
+        message: "议题详情暂不可用。",
+        source: `opinion-topic-detail:${activeTopicId}`,
+        unauthorizedMessage: "当前账户无权读取议题详情。",
+      })
+    : createDependencyResult<Awaited<ReturnType<typeof getOpinionTopicDetail>>>({ state: "empty" });
+  if (activeTopicId && !filteredDetailDependency) dependencyResults.push(detailDependency);
+  const detail = hasDependencyData(detailDependency) ? detailDependency.data : null;
+  const dependency = combineDependencyResults({
+    data: null,
+    empty: collection.topics.length === 0 && supportSummaries.length === 0 && opposeSummaries.length === 0,
+    results: dependencyResults,
+  });
+  if (dependency.state === "unavailable" || dependency.state === "unauthorized") {
+    return (
+      <main className="app-page">
+        <div className="nt-shell" style={{ paddingBlock: 32 }}>
+          <DependencyState label="议题数据" result={dependency} />
+        </div>
+      </main>
+    );
+  }
   const currentHref = buildOpinionHref({
     leaderFilter,
     page: topicFilter === "all" ? page : effectiveTopicPageWithTag,
@@ -559,6 +755,7 @@ export default async function OpinionCenterPage({ searchParams }: OpinionsPagePr
     .filter((value): value is string => Boolean(value))
     .sort((left, right) => new Date(right).getTime() - new Date(left).getTime())[0] ?? null;
   const activeTopicVoteLockedToday = latestActiveTopicVoteAt ? isSameShanghaiDay(latestActiveTopicVoteAt) : false;
+  const activeTopicVoteUnavailable = walletDependency.state !== "ready";
   const activeTopicVoteDirection =
     activeTopicVoteLockedToday && activeTopicSupport?.lastSupportedAt === latestActiveTopicVoteAt
       ? "support"
@@ -597,64 +794,69 @@ export default async function OpinionCenterPage({ searchParams }: OpinionsPagePr
               </div>
             </div>
 
-            <div style={{ display: "flex", justifyContent: "space-between", gap: 14, alignItems: "center", padding: "0 8px" }}>
-              <div
-                style={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: 12,
-                  minWidth: 0,
-                  padding: "12px 16px",
-                  borderRadius: 22,
-                  border: "1px solid rgba(255,255,255,0.08)",
-                  background:
-                    "linear-gradient(180deg, rgba(31,34,40,0.92), rgba(17,20,26,0.92)), radial-gradient(circle at 0 0, rgba(217,255,56,0.04), transparent 24%)",
-                  boxShadow: "inset 0 1px 0 rgba(255,255,255,0.04)",
-                }}
-              >
-                <span
-                  aria-hidden="true"
+            <div style={{ display: "grid", gap: 10, padding: "0 8px" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", gap: 14, alignItems: "center" }}>
+                <div
                   style={{
-                    display: "inline-grid",
-                    placeItems: "center",
-                    width: 44,
-                    height: 44,
-                    borderRadius: 14,
-                    background: "rgba(255,196,72,0.1)",
-                    border: "1px solid rgba(255,196,72,0.18)",
-                    flex: "0 0 auto",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 12,
+                    minWidth: 0,
+                    padding: "12px 16px",
+                    borderRadius: 22,
+                    border: "1px solid rgba(255,255,255,0.08)",
+                    background:
+                      "linear-gradient(180deg, rgba(31,34,40,0.92), rgba(17,20,26,0.92)), radial-gradient(circle at 0 0, rgba(217,255,56,0.04), transparent 24%)",
+                    boxShadow: "inset 0 1px 0 rgba(255,255,255,0.04)",
                   }}
                 >
-                  <img
-                    alt=""
+                  <span
                     aria-hidden="true"
-                    decoding="async"
-                    draggable={false}
-                    height="26"
-                    loading="lazy"
-                    src="/assets/currency/opinion-tickets.png"
-                    style={{ display: "block", width: 26, height: 26, objectFit: "contain" }}
-                    width="26"
-                  />
-                </span>
-                <strong style={{ color: "rgba(248,250,252,0.96)", fontSize: "1.15rem", lineHeight: 1 }}>
-                  {wallet?.balances.opinionTickets.available ?? 0}
-                </strong>
-              </div>
+                    style={{
+                      display: "inline-grid",
+                      placeItems: "center",
+                      width: 44,
+                      height: 44,
+                      borderRadius: 14,
+                      background: "rgba(255,196,72,0.1)",
+                      border: "1px solid rgba(255,196,72,0.18)",
+                      flex: "0 0 auto",
+                    }}
+                  >
+                    <img
+                      alt=""
+                      aria-hidden="true"
+                      decoding="async"
+                      draggable={false}
+                      height="26"
+                      loading="lazy"
+                      src="/assets/currency/opinion-tickets.png"
+                      style={{ display: "block", width: 26, height: 26, objectFit: "contain" }}
+                      width="26"
+                    />
+                  </span>
+                  <strong style={{ color: "rgba(248,250,252,0.96)", fontSize: "1.15rem", lineHeight: 1 }}>
+                    {walletDependency.state === "ready" ? walletDependency.data.balances.opinionTickets.available : "—"}
+                  </strong>
+                </div>
 
-              <Link
-                className="mg-btn mg-btn--glass"
-                href={composerHref}
-                style={{
-                  ...buildOpinionToggleStyle(composerMode),
-                  minHeight: 60,
-                  paddingInline: 28,
-                  borderRadius: 22,
-                  whiteSpace: "nowrap",
-                }}
-              >
-                提出议题
-              </Link>
+                <Link
+                  className="mg-btn mg-btn--glass"
+                  href={composerHref}
+                  style={{
+                    ...buildOpinionToggleStyle(composerMode),
+                    minHeight: 60,
+                    paddingInline: 28,
+                    borderRadius: 22,
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  提出议题
+                </Link>
+              </div>
+              {walletDependencyFailure ? (
+                <DependencyState label="议题票余额" result={walletDependency} />
+              ) : null}
             </div>
 
             <div
@@ -850,7 +1052,13 @@ export default async function OpinionCenterPage({ searchParams }: OpinionsPagePr
               </div>
 
               <div className="mg-terminal-list" style={{ minHeight: 0, overflow: "auto", paddingRight: 6 }}>
-                {visibleTopics.length === 0 ? (
+                {topicFilterDependencyFailure && topicFilterDependency ? (
+                  <DependencyState label={topicFilterDependencyLabel} result={topicFilterDependency} />
+                ) : null}
+                {topicFilterDetailDependencyFailure && topicFilterDetailDependency ? (
+                  <DependencyState label={`${topicFilterDependencyLabel}议题详情`} result={topicFilterDetailDependency} />
+                ) : null}
+                {topicFilterDependencyBlocksList || topicFilterDetailDependencyBlocksList ? null : visibleTopics.length === 0 ? (
                   <p className="mg-copy" style={{ margin: 0 }}>
                     {topicFilter === "supported"
                       ? "暂无已支持议题。"
@@ -977,6 +1185,9 @@ export default async function OpinionCenterPage({ searchParams }: OpinionsPagePr
             <Link aria-label="关闭议题中心" className="app-honor-close" href="/dashboard"><CloseIcon /></Link>
 
             <div className="app-honor__body" style={{ display: "grid", gap: 12 }}>
+              {dependency.state === "partial" ? (
+                <DependencyState label="议题数据" result={dependency} />
+              ) : null}
               <section
                 className="mg-terminal-section"
                 style={{
@@ -998,6 +1209,9 @@ export default async function OpinionCenterPage({ searchParams }: OpinionsPagePr
 
                 {composerMode ? (
                   <div className="mg-terminal-rail-card" style={{ display: "grid", gap: 14 }}>
+                    {features.userProgression.enabled && currentUserDependency.state !== "ready" ? (
+                      <DependencyState label="账户等级信息" result={currentUserDependency} />
+                    ) : null}
                     <form action={createOpinionTopicAction} style={{ display: "grid", gap: 12 }}>
                       <input name="redirectTo" type="hidden" value={currentHref} />
                       <input className="mg-input" name="title" placeholder="议题标题" type="text" />
@@ -1048,8 +1262,14 @@ export default async function OpinionCenterPage({ searchParams }: OpinionsPagePr
                         </button>
                       </div>
                     </form>
-                    {!canCreateTopic ? <p className="mg-copy" style={{ margin: 0 }}>需满足 Lv.2。</p> : null}
+                    {createTopicUnavailableReason ? (
+                      <p className="mg-copy" style={{ margin: 0 }}>{createTopicUnavailableReason}</p>
+                    ) : null}
                   </div>
+                ) : detailDependency.state === "unavailable" || detailDependency.state === "unauthorized" ? (
+                  <DependencyState label="议题详情" result={detailDependency} />
+                ) : activeTopicId && detailDependency.state === "empty" ? (
+                  <DependencyState label="议题详情" result={detailDependency} />
                 ) : detail ? (
                   <>
                     <div
@@ -1099,7 +1319,7 @@ export default async function OpinionCenterPage({ searchParams }: OpinionsPagePr
                               <button
                                 aria-label="赞同"
                                 className="mg-btn"
-                                disabled={!detail.topic.canSupport || activeTopicVoteLockedToday}
+                                disabled={activeTopicVoteUnavailable || !detail.topic.canSupport || activeTopicVoteLockedToday}
                                 style={buildOpinionVoteButtonStyle(activeTopicVoteDirection === "support")}
                                 title={activeTopicVoteLockedToday ? "当前议题今天已经投过票" : "赞同"}
                                 type="submit"
@@ -1114,7 +1334,7 @@ export default async function OpinionCenterPage({ searchParams }: OpinionsPagePr
                               <button
                                 aria-label="反对"
                                 className="mg-btn"
-                                disabled={!detail.topic.canOppose || activeTopicVoteLockedToday}
+                                disabled={activeTopicVoteUnavailable || !detail.topic.canOppose || activeTopicVoteLockedToday}
                                 style={buildOpinionVoteButtonStyle(activeTopicVoteDirection === "oppose")}
                                 title={activeTopicVoteLockedToday ? "当前议题今天已经投过票" : "反对"}
                                 type="submit"

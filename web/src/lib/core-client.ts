@@ -594,10 +594,14 @@ export async function getFeatureSnapshot(): Promise<FeatureSnapshot> {
   }
 }
 
+export async function getPublicSurfaceSnapshotStrict(): Promise<PublicSurfaceSnapshot> {
+  const response = await coreRequest<{ surfaces: PublicSurfaceSnapshot }>("/internal/public-surfaces");
+  return response.surfaces;
+}
+
 export async function getPublicSurfaceSnapshot(): Promise<PublicSurfaceSnapshot> {
   try {
-    const response = await coreRequest<{ surfaces: PublicSurfaceSnapshot }>("/internal/public-surfaces");
-    return response.surfaces;
+    return await getPublicSurfaceSnapshotStrict();
   } catch {
     return availablePublicSurfaceSnapshot();
   }

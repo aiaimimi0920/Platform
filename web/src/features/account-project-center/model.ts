@@ -1,4 +1,17 @@
-import type { HonorProjectMembershipStatus, HonorProjectShowcaseView, UserSummary } from "@neuro/contracts";
+import type {
+  HonorProjectMembershipStatus,
+  HonorProjectPanelView,
+  HonorProjectShowcaseView,
+  UserSummary,
+} from "@neuro/contracts";
+
+import {
+  combineDependencyResults,
+  createDependencyFailureResult,
+  createDependencyResult,
+  type DependencyResult,
+  type DependencyFailureInput,
+} from "@/lib/dependency-result";
 
 export const PROJECT_PANEL_UNAVAILABLE_MESSAGE = "项目面板暂时不可用。";
 
@@ -79,117 +92,85 @@ export type ProjectCardView = HonorProjectShowcaseView & {
 
 export type ProjectCenterPanelView = {
   currentUser: UserSummary | null;
+  dependency: DependencyResult<ProjectCenterDependencyData>;
   hotProjects: ProjectCardView[];
   myProjects: ProjectCardView[];
   ownerDirectory: ProjectOwnerDirectoryEntry[];
 };
 
-export const PROJECT_FALLBACK_CATALOG: HonorProjectShowcaseView[] = [
-  {
-    id: "project-demo-1",
-    name: "论文美化软件",
-    summary: "面向学术论文的排版与图表增强工具。",
-    publicHref: "/projects/paper-polish",
-    ownerHandle: "zhiwei",
-    ownerLabel: "知微",
-    categoryLabel: "人工智能",
-    stageLabel: "原型打磨",
-    progressPercent: 48,
-    progressLabel: "排版引擎与图表美化链路已联通，当前在做批量模板与审阅工作流。",
-    rewardShareLabel: "成功上线后 8% 净收益回流支持者",
-    sponsorOpen: true,
-    sponsorStatusLabel: "开放赞助",
-    joinOpen: true,
-    joinStatusLabel: "接收协作者",
-    collaborationLabel: "设计 / Prompt / Python 工具链协作",
-    fundingTargetAmount: 12000,
-    workspaceHref: "https://github.com/neuroloom-labs/paper-polish",
-    workspaceLabel: "GitHub 工作目录",
-    detailBody:
-      "该项目面向论文写作与投稿流程，核心目标是把排版、图表增强、引用整理与审稿反馈整合成一个可复用的 AI 工具链。当前阶段重点不是公开大规模获客，而是先把编辑、模板与批处理体验打磨到稳定可交付。",
-    sponsorCount: 18,
-    sponsoredAmount: 6400,
-    sponsoredCurrencyLabel: "MIRA",
-  },
-  {
-    id: "project-demo-2",
-    name: "终端协作工作台",
-    summary: "为小团队提供的本地优先协作终端。",
-    publicHref: "/projects/terminal-collab",
-    ownerHandle: "sora",
-    ownerLabel: "空川",
-    categoryLabel: "网络搜索",
-    stageLabel: "协作验证",
-    progressPercent: 73,
-    progressLabel: "多终端协作与权限同步正在小范围验证，当前在压缩冷启动与同步延迟。",
-    rewardShareLabel: "正式商用后 12% 收益分成",
-    sponsorOpen: true,
-    sponsorStatusLabel: "开放赞助",
-    joinOpen: true,
-    joinStatusLabel: "接收开发者",
-    collaborationLabel: "前端终端壳 / 同步引擎 / 文档编排",
-    fundingTargetAmount: 15000,
-    workspaceHref: "https://github.com/neuroloom-labs/terminal-collab",
-    workspaceLabel: "GitHub 工作目录",
-    detailBody:
-      "终端协作工作台希望把“轻协作 + 本地优先 + 指令式面板”整合成一个适合小团队的工作区。项目当前已经能跑通账户终端、任务、审计与基础同步，正在补齐更稳定的多人协作体验。",
-    sponsorCount: 26,
-    sponsoredAmount: 9800,
-    sponsoredCurrencyLabel: "MIRA",
-  },
-  {
-    id: "project-demo-3",
-    name: "智能体训练仪表盘",
-    summary: "可视化训练与回放路径管理。",
-    publicHref: "/projects/agent-training",
-    ownerHandle: "dax",
-    ownerLabel: "达西",
-    categoryLabel: "人工智能",
-    stageLabel: "训练回放",
-    progressPercent: 36,
-    progressLabel: "训练回放与评估板已能展示主链，当前在补全指标聚类与失败重放。",
-    rewardShareLabel: "成功结项后 10% 阶段性收益回馈",
-    sponsorOpen: true,
-    sponsorStatusLabel: "开放赞助",
-    joinOpen: false,
-    joinStatusLabel: "核心成员制",
-    collaborationLabel: "评估指标 / 训练批次 / 回放分析",
-    fundingTargetAmount: 10000,
-    workspaceHref: "https://github.com/neuroloom-labs/agent-training-dashboard",
-    workspaceLabel: "GitHub 工作目录",
-    detailBody:
-      "智能体训练仪表盘用于把训练批次、失败重放、指标波动和人工接管记录收成一套可以持续迭代的训练视图。当前阶段重点是把实验数据串起来，而不是先做广义平台化发布。",
-    sponsorCount: 11,
-    sponsoredAmount: 4200,
-    sponsoredCurrencyLabel: "MIRA",
-  },
-  {
-    id: "project-demo-4",
-    name: "合规模块验证器",
-    summary: "对外接口与隐私规则自动巡检。",
-    publicHref: "/projects/compliance-check",
-    ownerHandle: "mei",
-    ownerLabel: "梅时",
-    categoryLabel: "网络代理",
-    stageLabel: "规则校核",
-    progressPercent: 29,
-    progressLabel: "当前完成最小规则扫描与告警编排，后续继续接入更完整的策略集。",
-    rewardShareLabel: "项目结项后按 6% 回报支持者",
-    sponsorOpen: false,
-    sponsorStatusLabel: "暂不接收赞助",
-    joinOpen: true,
-    joinStatusLabel: "接收规则维护者",
-    collaborationLabel: "策略模板 / 风险标签 / 审计规则",
-    fundingTargetAmount: 8000,
-    workspaceHref: "https://github.com/neuroloom-labs/compliance-check",
-    workspaceLabel: "GitHub 工作目录",
-    detailBody:
-      "合规模块验证器面向接口规则、隐私边界与发布前巡检场景。项目目标不是替代完整的安全平台，而是先把最常用的上线前校核、异常告警与策略演练接入账户终端。",
-    sponsorCount: 9,
-    sponsoredAmount: 3100,
-    sponsoredCurrencyLabel: "MIRA",
-  },
-];
+export type ProjectCenterDependencyData = {
+  currentUser: UserSummary | null;
+  projectPanel: HonorProjectPanelView;
+};
+
+export type ProjectCenterDependencyInputs = {
+  currentUser: DependencyResult<UserSummary | null>;
+  projectPanel: DependencyResult<HonorProjectPanelView>;
+};
+
+export function createProjectDependencyFailure<T>(args: {
+  error: unknown;
+  message: string;
+  source: string;
+  unauthorizedMessage?: string;
+}): DependencyResult<T> {
+  return createDependencyFailureResult({
+    error: args.error,
+    message: args.message,
+    source: args.source,
+    unauthorizedMessage: args.unauthorizedMessage,
+  });
+}
+
+export const EMPTY_HONOR_PROJECT_PANEL: HonorProjectPanelView = {
+  investmentProjectCatalog: [],
+  memberships: [],
+  projectCatalog: [],
+};
+
+function hasProjectData(panel: HonorProjectPanelView) {
+  return panel.projectCatalog.length > 0 || panel.investmentProjectCatalog.length > 0 || panel.memberships.length > 0;
+}
+
+export function combineProjectCenterDependencies(
+  inputs: ProjectCenterDependencyInputs,
+): DependencyResult<ProjectCenterDependencyData> {
+  if (
+    inputs.projectPanel.state === "unavailable" ||
+    inputs.projectPanel.state === "unauthorized"
+  ) {
+    const secondaryFailures = inputs.currentUser.failures;
+    if (secondaryFailures.length === 0) {
+      return inputs.projectPanel;
+    }
+    const failures = [
+      ...inputs.projectPanel.failures,
+      ...secondaryFailures,
+    ] as [DependencyFailureInput, ...DependencyFailureInput[]];
+    const base = {
+      correlationId: inputs.projectPanel.correlationId ?? inputs.currentUser.correlationId,
+      failures,
+      retry: inputs.projectPanel.retry,
+    };
+    return inputs.projectPanel.state === "unavailable"
+      ? createDependencyResult<ProjectCenterDependencyData>({ state: "unavailable", ...base })
+      : createDependencyResult<ProjectCenterDependencyData>({ state: "unauthorized", ...base });
+  }
+
+  const currentUser =
+    inputs.currentUser.state === "ready" || inputs.currentUser.state === "partial"
+      ? inputs.currentUser.data
+      : null;
+  const projectPanel =
+    inputs.projectPanel.state === "ready" || inputs.projectPanel.state === "partial"
+      ? inputs.projectPanel.data
+      : EMPTY_HONOR_PROJECT_PANEL;
+  return combineDependencyResults({
+    data: { currentUser, projectPanel },
+    empty: !hasProjectData(projectPanel),
+    results: [inputs.currentUser, inputs.projectPanel],
+  });
+}
 
 export const PROJECT_PRESENTATION_LIBRARY: Record<string, ProjectPresentationProfile> = {
   "paper-polish": {

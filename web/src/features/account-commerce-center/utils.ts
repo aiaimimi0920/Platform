@@ -188,14 +188,14 @@ export function getProductCardLabel(product: ProductListItem | null) {
   return product ? getCategoryLabel(product.category) : "流转货架";
 }
 
-export function buildShelfTags(product: ProductListItem | null, purchasedCount: number) {
+export function buildShelfTags(product: ProductListItem | null, purchasedCount: number | null) {
   if (!product) {
     return [{ key: "transfer", label: "可流转", title: "该商品支持进入小巴扎流转", tone: "accent" as const }];
   }
 
   return [
     ...getAvailabilityTag(product),
-    ...getPurchaseLimitTags(product, purchasedCount),
+    ...(purchasedCount === null ? [] : getPurchaseLimitTags(product, purchasedCount)),
     ...getTransferTag(product),
     ...getWarrantyTag(product),
     ...getOwnershipTag(product),

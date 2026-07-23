@@ -14,6 +14,7 @@ import type {
   AgentRecentCallbackView,
 } from "@neuro/contracts";
 import { auth } from "@/auth";
+import { DependencyState } from "@/components/dependency-state";
 import {
   NtBadge as Badge,
   NtCard as Card,
@@ -29,6 +30,12 @@ import {
   formatAgentCallbackReplayFallbackProfile,
   mergeAgentCallbackPolicyCatalog,
 } from "@/lib/agent-callback-policies";
+import {
+  combineDependencyResults,
+  createDependencyFailureResult,
+  createDependencyResult,
+  type DependencyResult,
+} from "@/lib/dependency-result";
 import {
   getFeatureSnapshot,
   getAgentExecutionRuntimeCatalog,
@@ -305,6 +312,10 @@ function formatCount(value: number) {
   return new Intl.NumberFormat("zh-CN", { maximumFractionDigits: 0 }).format(
     value,
   );
+}
+
+function formatDependencyCount(value: number | null) {
+  return value === null ? "—" : formatCount(value);
 }
 
 function formatRate(numerator: number, denominator: number) {
@@ -1218,13 +1229,16 @@ export default async function AgentsOpsPage({
   if (isFeatureSnapshotUnavailable(features)) {
     return (
       <main className="app-page">
-        <div className="mg-shell">
-          <Card className="app-stack">
-            <h1 className="mg-title">模块状态暂不可用</h1>
-            <p className="mg-copy">
-              当前无法读取智能体模块状态，请稍后再试。
-            </p>
-          </Card>
+        <div className="nt-shell" style={{ paddingBlock: 32 }}>
+          <DependencyState
+            diagnostics
+            label="智能体运营模块"
+            result={createDependencyFailureResult({
+              error: new Error("Feature snapshot unavailable"),
+              message: "当前无法读取智能体模块状态，请稍后再试。",
+              source: "core-features",
+            })}
+          />
         </div>
       </main>
     );
@@ -1242,6 +1256,38 @@ export default async function AgentsOpsPage({
     );
   }
 
+  const dependencyResults: Array<DependencyResult<unknown>> = [];
+  const dependencyResultsBySource = new Map<string, DependencyResult<unknown>>();
+  function loadDependency<T>(
+    promise: Promise<T>,
+    args: { fallback: T; message: string; source: string; unauthorizedMessage: string },
+  ) {
+    return promise.then(
+      (value) => {
+        const result = createDependencyResult({ state: "ready", data: value });
+        dependencyResults.push(result);
+        dependencyResultsBySource.set(args.source, result);
+        return value;
+      },
+      (error: unknown) => {
+        const result = createDependencyFailureResult<T>({
+          error,
+          message: args.message,
+          source: args.source,
+          unauthorizedMessage: args.unauthorizedMessage,
+        });
+        dependencyResults.push(result);
+        dependencyResultsBySource.set(args.source, result);
+        return args.fallback;
+      },
+    );
+  }
+
+  const sourceFailed = (source: string) => {
+    const result = dependencyResultsBySource.get(source);
+    return result?.state === "unavailable" || result?.state === "unauthorized";
+  };
+
   const [
     agents,
     executions,
@@ -1250,14 +1296,54 @@ export default async function AgentsOpsPage({
     runtimeCatalog,
   ] =
     await Promise.all([
-      listAgents(userContext).catch(() => [] as AgentView[]),
-      listAgentExecutions(userContext).catch(() => [] as AgentExecutionView[]),
-      listAgentCallbackHealthSummaries(userContext).catch(
-        () => [] as AgentCallbackHealthSummaryView[],
-      ),
-      listAgentCallbackRemediationPolicies(userContext).catch(() => []),
-      getAgentExecutionRuntimeCatalog(userContext).catch(() => null),
+      loadDependency(listAgents(userContext), {
+        fallback: [] as AgentView[],
+        message: "智能体目录暂不可用。",
+        unauthorizedMessage: "当前运营账户无权读取智能体目录。",
+        source: "agent-registry",
+      }),
+      loadDependency(listAgentExecutions(userContext), {
+        fallback: [] as AgentExecutionView[],
+        message: "智能体执行目录暂不可用。",
+        unauthorizedMessage: "当前运营账户无权读取智能体执行目录。",
+        source: "agent-executions",
+      }),
+      loadDependency(listAgentCallbackHealthSummaries(userContext), {
+        fallback: [] as AgentCallbackHealthSummaryView[],
+        message: "回调健康摘要暂不可用。",
+        unauthorizedMessage: "当前运营账户无权读取回调健康摘要。",
+        source: "agent-callback-health",
+      }),
+      loadDependency(listAgentCallbackRemediationPolicies(userContext), {
+        fallback: [],
+        message: "回调补救策略暂不可用。",
+        unauthorizedMessage: "当前运营账户无权读取回调补救策略。",
+        source: "agent-remediation-policies",
+      }),
+      loadDependency(getAgentExecutionRuntimeCatalog(userContext), {
+        fallback: null,
+        message: "执行运行时目录暂不可用。",
+        unauthorizedMessage: "当前运营账户无权读取执行运行时目录。",
+        source: "agent-runtime-catalog",
+      }),
     ]);
+
+  const agentRegistryUnavailable = sourceFailed("agent-registry");
+  const agentRegistryDependency = dependencyResultsBySource.get("agent-registry");
+  if (agentRegistryUnavailable && agentRegistryDependency) {
+    return (
+      <main className="app-page">
+        <div className="nt-shell" style={{ paddingBlock: 32 }}>
+          <DependencyState label="智能体目录" result={agentRegistryDependency} />
+        </div>
+      </main>
+    );
+  }
+
+  const agentExecutionsUnavailable = sourceFailed("agent-executions");
+  const callbackHealthUnavailable = sourceFailed("agent-callback-health");
+  const remediationPoliciesUnavailable = sourceFailed("agent-remediation-policies");
+  const runtimeCatalogUnavailable = sourceFailed("agent-runtime-catalog");
 
   const healthByAgentId = new Map(
     callbackHealthSummaries.map((summary) => [summary.agentId, summary]),
@@ -1407,29 +1493,78 @@ export default async function AgentsOpsPage({
     AgentRecentCallbackView[],
   ] = selectedAgent
     ? await Promise.all([
-        listAgentCapabilities(userContext, selectedAgent.id).catch(
-          () => [] as AgentCapabilityView[],
-        ),
+        loadDependency(listAgentCapabilities(userContext, selectedAgent.id), {
+          fallback: [] as AgentCapabilityView[],
+          message: "智能体能力目录暂不可用。",
+          unauthorizedMessage: "当前运营账户无权读取智能体能力目录。",
+          source: `agent-capabilities:${selectedAgent.id}`,
+        }),
         selectedAgent.sourceType === "external"
-          ? listOperatorAgentCallbackHistory(
-              userContext,
-              selectedAgent.id,
-              6,
-            ).catch(() => [] as AgentCallbackConfigHistoryView[])
+          ? loadDependency(listOperatorAgentCallbackHistory(userContext, selectedAgent.id, 6), {
+              fallback: [] as AgentCallbackConfigHistoryView[],
+              message: "回调配置历史暂不可用。",
+              unauthorizedMessage: "当前运营账户无权读取回调配置历史。",
+              source: `agent-callback-history:${selectedAgent.id}`,
+            })
           : Promise.resolve([] as AgentCallbackConfigHistoryView[]),
         selectedAgent.sourceType === "external"
-          ? listAgentRecentCallbacks(userContext, selectedAgent.id, 6).catch(
-              () => [] as AgentRecentCallbackView[],
-            )
+          ? loadDependency(listAgentRecentCallbacks(userContext, selectedAgent.id, 6), {
+              fallback: [] as AgentRecentCallbackView[],
+              message: "近期回调审计暂不可用。",
+              unauthorizedMessage: "当前运营账户无权读取近期回调审计。",
+              source: `agent-recent-callbacks:${selectedAgent.id}`,
+            })
           : Promise.resolve([] as AgentRecentCallbackView[]),
       ])
     : [[], [], []];
   const selectedRuntimeSessionSummary = selectedAgent
-    ? await getAgentExecutionRuntimeSessionSummary(userContext, {
-        agentId: selectedAgent.id,
-        ownerUserId: selectedAgent.ownerUserId,
-      }).catch(() => null)
+    ? await loadDependency(
+        getAgentExecutionRuntimeSessionSummary(userContext, {
+          agentId: selectedAgent.id,
+          ownerUserId: selectedAgent.ownerUserId,
+        }),
+        {
+          fallback: null,
+          message: "运行时会话摘要暂不可用。",
+          unauthorizedMessage: "当前运营账户无权读取运行时会话摘要。",
+          source: `agent-runtime-session:${selectedAgent.id}`,
+        },
+      )
     : null;
+  const selectedCapabilityUnavailable = selectedAgent
+    ? sourceFailed(`agent-capabilities:${selectedAgent.id}`)
+    : false;
+  const selectedCallbackHistoryUnavailable = selectedAgent
+    ? sourceFailed(`agent-callback-history:${selectedAgent.id}`)
+    : false;
+  const selectedRecentCallbacksUnavailable = selectedAgent
+    ? sourceFailed(`agent-recent-callbacks:${selectedAgent.id}`)
+    : false;
+  const selectedRuntimeSessionUnavailable = selectedAgent
+    ? sourceFailed(`agent-runtime-session:${selectedAgent.id}`)
+    : false;
+  const selectedCapabilityDependency = selectedAgent
+    ? dependencyResultsBySource.get(`agent-capabilities:${selectedAgent.id}`)
+    : undefined;
+  const selectedCallbackHistoryDependency = selectedAgent
+    ? dependencyResultsBySource.get(`agent-callback-history:${selectedAgent.id}`)
+    : undefined;
+  const selectedRecentCallbacksDependency = selectedAgent
+    ? dependencyResultsBySource.get(`agent-recent-callbacks:${selectedAgent.id}`)
+    : undefined;
+  const selectedRuntimeSessionDependency = selectedAgent
+    ? dependencyResultsBySource.get(`agent-runtime-session:${selectedAgent.id}`)
+    : undefined;
+  const agentExecutionsDependency = dependencyResultsBySource.get("agent-executions");
+  const callbackHealthDependency = dependencyResultsBySource.get("agent-callback-health");
+  const remediationPoliciesDependency = dependencyResultsBySource.get("agent-remediation-policies");
+  const runtimeCatalogDependency = dependencyResultsBySource.get("agent-runtime-catalog");
+  const operatorActionsUnavailable =
+    agentExecutionsUnavailable ||
+    runtimeCatalogUnavailable ||
+    selectedRuntimeSessionUnavailable ||
+    (selectedAgent?.sourceType === "external" &&
+      (callbackHealthUnavailable || remediationPoliciesUnavailable || selectedRecentCallbacksUnavailable));
 
   const selectedHealth = selectedAgent
     ? (healthByAgentId.get(selectedAgent.id) ?? null)
@@ -1498,16 +1633,16 @@ export default async function AgentsOpsPage({
     "recent-callback-audits",
   );
 
-  const callbackPolicyRecommendation = selectedAgent
+  const callbackPolicyRecommendation = selectedAgent && !callbackHealthUnavailable && !remediationPoliciesUnavailable
     ? buildAgentCallbackPolicyRecommendation(selectedAgent, selectedHealth)
     : null;
-  const callbackRecommendations = selectedAgent
+  const callbackRecommendations = selectedAgent && !callbackHealthUnavailable
     ? buildCallbackHealthRecommendations(selectedAgent.id, selectedHealth)
     : [];
-  const selectedHealthPosture = selectedAgent
+  const selectedHealthPosture = selectedAgent && !callbackHealthUnavailable
     ? buildHealthPosture(selectedAgent, selectedHealth)
     : null;
-  const selectedOperatorPlaybook = selectedAgent
+  const selectedOperatorPlaybook = selectedAgent && !callbackHealthUnavailable && !agentExecutionsUnavailable
     ? buildOperatorPlaybook({
         agent: selectedAgent,
         currentOpsHref,
@@ -1544,15 +1679,15 @@ export default async function AgentsOpsPage({
   const selectedOverviewFocusMetrics: FocusMetricItem[] = [
     {
       label: "能力",
-      value: formatCount(selectedCapabilities.length),
+      value: selectedCapabilityUnavailable ? "—" : formatCount(selectedCapabilities.length),
     },
     {
       label: "执行",
-      value: formatCount(selectedAgentExecutionPool.length),
+      value: agentExecutionsUnavailable ? "—" : formatCount(selectedAgentExecutionPool.length),
     },
     {
       label: "被拒绝",
-      value: formatCount(selectedHealth?.rejectedCallbacks ?? 0),
+      value: callbackHealthUnavailable ? "—" : formatCount(selectedHealth?.rejectedCallbacks ?? 0),
     },
     {
       label: "策略",
@@ -1588,7 +1723,7 @@ export default async function AgentsOpsPage({
         },
       ]
     : [];
-  const selectedOverviewStatusActions = selectedAgent ? (
+  const selectedOverviewStatusActions = selectedAgent && !agentExecutionsUnavailable ? (
     <>
       {EXECUTION_STATUS_ORDER.map((status) => (
         <Link
@@ -1618,6 +1753,8 @@ export default async function AgentsOpsPage({
         <Badge variant="glass">show all</Badge>
       </Link>
     </>
+  ) : selectedAgent && agentExecutionsDependency ? (
+    <DependencyState label="智能体执行目录" result={agentExecutionsDependency} />
   ) : null;
   const selectedExternalGovernanceRows: DetailListRow[] =
     selectedAgent?.sourceType === "external"
@@ -2199,7 +2336,7 @@ export default async function AgentsOpsPage({
       </div>
     ) : null;
   const selectedRuntimePlaybookPrimaryActions =
-    selectedRuntimePlaybook && selectedAgent ? (
+    !operatorActionsUnavailable && selectedRuntimePlaybook && selectedAgent ? (
       selectedRuntimePlaybook.shouldRecoverThenRun ? (
         <form
           action={recoverThenRunPlatformExecutorAction}
@@ -2330,7 +2467,7 @@ export default async function AgentsOpsPage({
       )
     ) : null;
   const selectedRuntimePlaybookSecondaryActions =
-    selectedRuntimePlaybook && selectedAgent ? (
+    !operatorActionsUnavailable && selectedRuntimePlaybook && selectedAgent ? (
       <div className="app-inline-actions" style={{ flexWrap: "wrap" }}>
         <Link className="nt-btn nt-btn--secondary" href={selectedRuntimePressureHref}>
           运行压力
@@ -2419,7 +2556,9 @@ export default async function AgentsOpsPage({
     ),
   }));
   const selectedActionDeckItems =
-    !selectedAgent
+    operatorActionsUnavailable
+      ? []
+      : !selectedAgent
       ? []
       : selectedAgent.sourceType === "external"
       ? hasExternalCallbackBacklog
@@ -2753,26 +2892,59 @@ export default async function AgentsOpsPage({
       </div>
     ) : null;
 
-  const runningCount = executions.filter(
-    (execution) => execution.status === "running",
-  ).length;
-  const queuedCount = executions.filter(
-    (execution) => execution.status === "queued",
-  ).length;
+  const opsDependency = combineDependencyResults({
+    data: null,
+    empty:
+      dependencyResults.every((result) => result.failures.length === 0) &&
+      agents.length === 0 &&
+      executions.length === 0 &&
+      callbackHealthSummaries.length === 0 &&
+      remediationPolicies.length === 0 &&
+      runtimeCatalog === null,
+    results: dependencyResults,
+  });
+
+  if (
+    opsDependency.state === "unavailable" ||
+    opsDependency.state === "unauthorized"
+  ) {
+    return (
+      <main className="app-page">
+        <div className="nt-shell" style={{ paddingBlock: 32 }}>
+          <DependencyState
+            diagnostics
+            label="智能体运营数据"
+            result={opsDependency}
+          />
+        </div>
+      </main>
+    );
+  }
+
+  const runningCount = agentExecutionsUnavailable
+    ? null
+    : executions.filter((execution) => execution.status === "running").length;
+  const queuedCount = agentExecutionsUnavailable
+    ? null
+    : executions.filter((execution) => execution.status === "queued").length;
   const openProtocolCount = agents.filter(
     (agent) =>
       agent.hostingMode === "open_protocol" ||
       agent.hostingMode === "external_runtime" ||
       agent.sourceType === "external",
   ).length;
-  const attentionAgentCount = agents.filter((agent) => {
+  const attentionAgentCount = callbackHealthUnavailable
+    ? null
+    : agents.filter((agent) => {
     const summary = healthByAgentId.get(agent.id);
     return summary
       ? summary.rejectedCallbacks > 0 ||
           summary.previousProtocolHits > 0 ||
           summary.previousSecretHits > 0
       : false;
-  }).length;
+    }).length;
+  const healthyOpenProtocolCount =
+    attentionAgentCount === null ? null : Math.max(0, openProtocolCount - attentionAgentCount);
 
   return (
     <main className="app-page">
@@ -2804,6 +2976,16 @@ export default async function AgentsOpsPage({
             </Link>
           </div>
         </Panel>
+
+        {opsDependency.state === "partial" ? (
+          <div style={{ paddingInline: 20 }}>
+            <DependencyState
+              diagnostics
+              label="智能体运营数据"
+              result={opsDependency}
+            />
+          </div>
+        ) : null}
 
         {alertStatus && params.message ? (
           <Card className="app-stack">
@@ -2861,20 +3043,20 @@ export default async function AgentsOpsPage({
                 </div>
               </div>
               <div className="app-currency-card__value">
-                {formatCount(runningCount)}
+                {formatDependencyCount(runningCount)}
               </div>
               <div className="app-currency-meta">
                 <div className="app-currency-meta__row">
                   <span>排队中</span>
-                  <span>{formatCount(queuedCount)}</span>
+                  <span>{formatDependencyCount(queuedCount)}</span>
                 </div>
                 <div className="app-currency-meta__row">
                   <span>待验收</span>
                   <span>
-                    {formatCount(
-                      executions.filter(
-                        (execution) => execution.status === "submitted",
-                      ).length,
+                    {formatDependencyCount(
+                      agentExecutionsUnavailable
+                        ? null
+                        : executions.filter((execution) => execution.status === "submitted").length,
                     )}
                   </span>
                 </div>
@@ -2888,19 +3070,17 @@ export default async function AgentsOpsPage({
                 </div>
               </div>
               <div className="app-currency-card__value">
-                {formatCount(attentionAgentCount)}
+                {formatDependencyCount(attentionAgentCount)}
               </div>
               <div className="app-currency-meta">
                 <div className="app-currency-meta__row">
                   <span>有被拒绝 / 兼容命中</span>
-                  <span>{formatCount(attentionAgentCount)}</span>
+                  <span>{formatDependencyCount(attentionAgentCount)}</span>
                 </div>
                 <div className="app-currency-meta__row">
                   <span>健康 OpenAgent</span>
                   <span>
-                    {formatCount(
-                      Math.max(0, openProtocolCount - attentionAgentCount),
-                    )}
+                    {formatDependencyCount(healthyOpenProtocolCount)}
                   </span>
                 </div>
               </div>
@@ -3242,7 +3422,13 @@ export default async function AgentsOpsPage({
                   />
                 ) : null}
 
-                {selectedRuntimeSessionSummary ? (
+                {runtimeCatalogUnavailable && runtimeCatalogDependency ? (
+                  <DependencyState label="执行运行时目录" result={runtimeCatalogDependency} />
+                ) : selectedRuntimeSessionUnavailable && selectedRuntimeSessionDependency ? (
+                  <DependencyState label="运行时会话摘要" result={selectedRuntimeSessionDependency} />
+                ) : null}
+
+                {!runtimeCatalogUnavailable && !selectedRuntimeSessionUnavailable && selectedRuntimeSessionSummary ? (
                   <SelectedAgentRuntimeBridgeCard
                     id="runtime-bridge"
                     oldestOpenLabel={formatShanghaiDateTime(
@@ -3376,10 +3562,11 @@ export default async function AgentsOpsPage({
                               recentWindow: "15m",
                               fragment: "runtime-session-watch",
                             })}
-                            <button
-                              className="nt-btn nt-btn--secondary"
-                              type="submit"
-                            >
+                                <button
+                                  className="nt-btn nt-btn--secondary"
+                                  disabled={operatorActionsUnavailable}
+                                  type="submit"
+                                >
                               {selectedRuntimeRecommendation.actionLabel}
                             </button>
                           </form>
@@ -3465,10 +3652,11 @@ export default async function AgentsOpsPage({
                               type="hidden"
                               value={currentOpsHref}
                             />
-                            <button
-                              className="nt-btn nt-btn--secondary"
-                              type="submit"
-                            >
+                                <button
+                                  className="nt-btn nt-btn--secondary"
+                                  disabled={remediationPoliciesUnavailable}
+                                  type="submit"
+                                >
                               切到{" "}
                               {remediationPolicies.find(
                                 (policy) =>
@@ -3490,6 +3678,10 @@ export default async function AgentsOpsPage({
                           </Badge>
                         }
                       />
+                    ) : null}
+
+                    {remediationPoliciesUnavailable && remediationPoliciesDependency ? (
+                      <DependencyState label="回调补救策略" result={remediationPoliciesDependency} />
                     ) : null}
 
                     <div
@@ -3535,6 +3727,7 @@ export default async function AgentsOpsPage({
                             </Select>
                             <button
                               className="nt-btn nt-btn--secondary"
+                              disabled={remediationPoliciesUnavailable}
                               type="submit"
                             >
                               应用策略
@@ -3628,22 +3821,26 @@ export default async function AgentsOpsPage({
                       />
                     </div>
 
-                    <SelectedAgentCallbackHealthCard
-                      detailRows={selectedCallbackHealthRows}
-                      emptyState={
-                        <p className="app-note">
-                          该 agent 当前还没有 callback 观测数据。
-                        </p>
-                      }
-                      recommendations={selectedCallbackRecommendationItems}
-                      windowBadge={
-                        <Badge variant="cyan">
-                          {selectedHealth
-                            ? `${selectedHealth.windowHours}h`
-                            : "no data"}
-                        </Badge>
-                      }
-                    />
+                    {callbackHealthUnavailable && callbackHealthDependency ? (
+                      <DependencyState label="回调健康摘要" result={callbackHealthDependency} />
+                    ) : (
+                      <SelectedAgentCallbackHealthCard
+                        detailRows={selectedCallbackHealthRows}
+                        emptyState={
+                          <p className="app-note">
+                            该 agent 当前还没有 callback 观测数据。
+                          </p>
+                        }
+                        recommendations={selectedCallbackRecommendationItems}
+                        windowBadge={
+                          <Badge variant="cyan">
+                            {selectedHealth
+                              ? `${selectedHealth.windowHours}h`
+                              : "no data"}
+                          </Badge>
+                        }
+                      />
+                    )}
 
                     <div
                       style={{
@@ -3652,30 +3849,38 @@ export default async function AgentsOpsPage({
                         gap: "14px",
                       }}
                     >
-                      <SelectedAgentTimelineCard
-                        badge={
-                          <Badge variant="violet">
-                            {formatCount(selectedCallbackHistory.length)}
-                          </Badge>
-                        }
-                        emptyState={
-                          <p className="app-note">暂无 callback 配置历史。</p>
-                        }
-                        items={selectedCallbackHistoryItems}
-                        subtitle="回调历史"
-                        title="配置时间线"
-                      />
-                      <SelectedAgentRecentCallbacksCard
-                        badge={
-                          <Badge variant="warning">
-                            {formatCount(selectedRecentCallbackAudits.length)}
-                          </Badge>
-                        }
-                        emptyState={
-                          <p className="app-note">当前没有最近回调审计。</p>
-                        }
-                        items={selectedRecentCallbackAuditItems}
-                      />
+                      {selectedCallbackHistoryUnavailable && selectedCallbackHistoryDependency ? (
+                        <DependencyState label="回调配置历史" result={selectedCallbackHistoryDependency} />
+                      ) : (
+                        <SelectedAgentTimelineCard
+                          badge={
+                            <Badge variant="violet">
+                              {formatCount(selectedCallbackHistory.length)}
+                            </Badge>
+                          }
+                          emptyState={
+                            <p className="app-note">暂无 callback 配置历史。</p>
+                          }
+                          items={selectedCallbackHistoryItems}
+                          subtitle="回调历史"
+                          title="配置时间线"
+                        />
+                      )}
+                      {selectedRecentCallbacksUnavailable && selectedRecentCallbacksDependency ? (
+                        <DependencyState label="近期回调审计" result={selectedRecentCallbacksDependency} />
+                      ) : (
+                        <SelectedAgentRecentCallbacksCard
+                          badge={
+                            <Badge variant="warning">
+                              {formatCount(selectedRecentCallbackAudits.length)}
+                            </Badge>
+                          }
+                          emptyState={
+                            <p className="app-note">当前没有最近回调审计。</p>
+                          }
+                          items={selectedRecentCallbackAuditItems}
+                        />
+                      )}
                     </div>
                   </>
                 ) : (
@@ -3732,71 +3937,79 @@ export default async function AgentsOpsPage({
                   />
                 </div>
 
-                <SelectedAgentCapabilitiesCard
-                  badge={
-                    <Badge variant="fuchsia">
-                      {formatCount(selectedCapabilities.length)}
-                    </Badge>
-                  }
-                  capabilities={selectedCapabilityItems}
-                  emptyState={
-                    <p className="app-note">当前还没有登记能力。</p>
-                  }
-                  form={
-                    <form
-                      action={addAgentCapabilityAction}
-                      className="app-form-grid"
-                    >
-                      <input
-                        name="agentId"
-                        type="hidden"
-                        value={selectedAgent.id}
-                      />
-                      <input
-                        name="redirectTo"
-                        type="hidden"
-                        value={currentOpsHref}
-                      />
-                      <Input
-                        name="code"
-                        placeholder="能力代码，例如 text-summarize"
-                        required
-                      />
-                      <Input name="title" placeholder="能力标题" required />
-                      <Textarea
-                        name="description"
-                        placeholder="说明输入输出和适用任务。"
-                        rows={3}
-                      />
-                      <Input
-                        name="pricingNote"
-                        placeholder="定价或成本说明（可选）"
-                      />
-                      <button className="nt-btn nt-btn--outline" type="submit">
-                        添加能力
-                      </button>
-                    </form>
-                  }
-                />
+                {selectedCapabilityUnavailable && selectedCapabilityDependency ? (
+                  <DependencyState label="智能体能力目录" result={selectedCapabilityDependency} />
+                ) : (
+                  <SelectedAgentCapabilitiesCard
+                    badge={
+                      <Badge variant="fuchsia">
+                        {formatCount(selectedCapabilities.length)}
+                      </Badge>
+                    }
+                    capabilities={selectedCapabilityItems}
+                    emptyState={
+                      <p className="app-note">当前还没有登记能力。</p>
+                    }
+                    form={
+                      <form
+                        action={addAgentCapabilityAction}
+                        className="app-form-grid"
+                      >
+                        <input
+                          name="agentId"
+                          type="hidden"
+                          value={selectedAgent.id}
+                        />
+                        <input
+                          name="redirectTo"
+                          type="hidden"
+                          value={currentOpsHref}
+                        />
+                        <Input
+                          name="code"
+                          placeholder="能力代码，例如 text-summarize"
+                          required
+                        />
+                        <Input name="title" placeholder="能力标题" required />
+                        <Textarea
+                          name="description"
+                          placeholder="说明输入输出和适用任务。"
+                          rows={3}
+                        />
+                        <Input
+                          name="pricingNote"
+                          placeholder="定价或成本说明（可选）"
+                        />
+                        <button className="nt-btn nt-btn--outline" type="submit">
+                          添加能力
+                        </button>
+                      </form>
+                    }
+                  />
+                )}
 
-                <SelectedAgentExecutionsCard
-                  badge={
-                    <Badge variant="warning">
-                      {formatCount(selectedExecutions.length)}
-                    </Badge>
-                  }
-                  detail={`当前筛选：${
-                    executionStatusFilter === "all"
-                      ? "全部状态"
-                      : executionStatusFilter
-                  }。这里只保留当前智能体的最小流转入口，更复杂的执行编排不再开放独立执行台。`}
-                  emptyState={
-                    <p className="app-note">
-                      当前筛选条件下没有匹配的执行记录。
-                    </p>
-                  }
-                  items={selectedExecutionItems}
-                />
+                {agentExecutionsUnavailable && agentExecutionsDependency ? (
+                  <DependencyState label="智能体执行目录" result={agentExecutionsDependency} />
+                ) : (
+                  <SelectedAgentExecutionsCard
+                    badge={
+                      <Badge variant="warning">
+                        {formatCount(selectedExecutions.length)}
+                      </Badge>
+                    }
+                    detail={`当前筛选：${
+                      executionStatusFilter === "all"
+                        ? "全部状态"
+                        : executionStatusFilter
+                    }。这里只保留当前智能体的最小流转入口，更复杂的执行编排不再开放独立执行台。`}
+                    emptyState={
+                      <p className="app-note">
+                        当前筛选条件下没有匹配的执行记录。
+                      </p>
+                    }
+                    items={selectedExecutionItems}
+                  />
+                )}
               </Card>
             )}
           </section>

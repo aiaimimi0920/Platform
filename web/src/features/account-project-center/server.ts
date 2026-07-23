@@ -1,13 +1,16 @@
 import "server-only";
 
-import type { HonorProjectShowcaseView } from "@neuro/contracts";
+import type { HonorProjectPanelView, HonorProjectShowcaseView, UserSummary } from "@neuro/contracts";
 
 import { getCurrentUser, getHonorProjectPanel } from "@/lib/account-client";
+import { createDependencyResult, type DependencyResult } from "@/lib/dependency-result";
 import { requirePlatformUserContext } from "@/lib/platform-session";
 
 import {
-  PROJECT_FALLBACK_CATALOG,
+  EMPTY_HONOR_PROJECT_PANEL,
   PROJECT_PRESENTATION_LIBRARY,
+  combineProjectCenterDependencies,
+  createProjectDependencyFailure,
   type ProjectCardView,
   type ProjectCenterPanelView,
   type ProjectCenterScope,
@@ -208,12 +211,34 @@ export function buildProjectHref(args: {
 
 export async function getProjectCenterPanel(): Promise<ProjectCenterPanelView> {
   const userContext = await requirePlatformUserContext();
-  const currentUser = await getCurrentUser(userContext).catch(() => null);
-  const projectPanel = await getHonorProjectPanel(userContext).catch(() => ({
-    projectCatalog: PROJECT_FALLBACK_CATALOG,
-    investmentProjectCatalog: [],
-    memberships: [],
-  }));
+  const [currentUserResponse, projectPanelResponse] = await Promise.allSettled([
+    getCurrentUser(userContext),
+    getHonorProjectPanel(userContext),
+  ]);
+  const currentUserResult: DependencyResult<UserSummary | null> =
+    currentUserResponse.status === "fulfilled"
+      ? createDependencyResult({ state: "ready", data: currentUserResponse.value })
+      : createProjectDependencyFailure<UserSummary | null>({
+          error: currentUserResponse.reason,
+          message: "账户信息暂不可用。",
+          source: "account-user",
+          unauthorizedMessage: "当前账户无权读取账户信息。",
+        });
+  const projectPanelResult =
+    projectPanelResponse.status === "fulfilled"
+      ? createDependencyResult({ state: "ready", data: projectPanelResponse.value })
+      : createProjectDependencyFailure<HonorProjectPanelView>({
+          error: projectPanelResponse.reason,
+          message: "项目目录暂不可用。",
+          source: "honor-projects",
+          unauthorizedMessage: "当前账户无权读取项目目录。",
+        });
+  const dependency = combineProjectCenterDependencies({
+    currentUser: currentUserResult,
+    projectPanel: projectPanelResult,
+  });
+  const currentUser = currentUserResult.state === "ready" ? currentUserResult.data : null;
+  const projectPanel = projectPanelResult.state === "ready" ? projectPanelResult.data : EMPTY_HONOR_PROJECT_PANEL;
 
   const currentUserHandle = normalizeToken(currentUser?.username ?? userContext.username ?? null) || null;
   const investmentAmountByProjectId = new Map(
@@ -259,6 +284,7 @@ export async function getProjectCenterPanel(): Promise<ProjectCenterPanelView> {
 
   return {
     currentUser,
+    dependency,
     hotProjects,
     myProjects,
     ownerDirectory: buildOwnerDirectory(hotProjects),

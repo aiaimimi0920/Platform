@@ -4,7 +4,9 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { auth } from "@/auth";
-import { getPublicSurfaceSnapshot } from "@/lib/core-client";
+import { DependencyState } from "@/components/dependency-state";
+import { getPublicSurfaceSnapshotStrict } from "@/lib/core-client";
+import { createDependencyFailureResult } from "@/lib/dependency-result";
 import { isPublicSurfaceVisibleForViewer } from "@/lib/public-surface-visibility";
 
 import { ProjectJoinPanel } from "./components/ProjectJoinPanel";
@@ -61,14 +63,6 @@ const projectBadgeStyles: Record<string, CSSProperties> = {
 export type ProjectsPageProps = {
   searchParams?: Promise<ProjectCenterQueryParams>;
 };
-
-function assertProjectSurfaceVisible(userId: string, providerUserId?: string | null) {
-  return getPublicSurfaceSnapshot().then((publicSurfaces) => {
-    if (!isPublicSurfaceVisibleForViewer(publicSurfaces, "projects", userId, providerUserId)) {
-      redirect("/dashboard");
-    }
-  });
-}
 
 function CloseIcon() {
   return (
@@ -295,11 +289,47 @@ export default async function ProjectCenterPage({ searchParams }: ProjectsPagePr
   if (!session?.user?.id) {
     redirect("/login");
   }
-  await assertProjectSurfaceVisible(session.user.id, session.user.providerUserId);
+  const [publicSurfaceResponse] = await Promise.allSettled([getPublicSurfaceSnapshotStrict()]);
+  if (publicSurfaceResponse.status === "rejected") {
+    return (
+      <main className="app-page">
+        <div className="nt-shell" style={{ paddingBlock: 32 }}>
+          <DependencyState
+            label="公开入口配置"
+            result={createDependencyFailureResult({
+              error: publicSurfaceResponse.reason,
+              message: "公开入口配置暂不可用。",
+              source: "public-surfaces",
+              unauthorizedMessage: "当前账户无权读取公开入口配置。",
+            })}
+          />
+        </div>
+      </main>
+    );
+  }
+  if (
+    !isPublicSurfaceVisibleForViewer(
+      publicSurfaceResponse.value,
+      "projects",
+      session.user.id,
+      session.user.providerUserId,
+    )
+  ) {
+    redirect("/dashboard");
+  }
 
   const query = (await searchParams) ?? {};
   const scope = resolveProjectScope(query.scope);
   const panel = await getProjectCenterPanel();
+  if (panel.dependency.state === "unavailable" || panel.dependency.state === "unauthorized") {
+    return (
+      <main className="app-page">
+        <div className="nt-shell" style={{ paddingBlock: 32 }}>
+          <DependencyState label="项目目录" result={panel.dependency} />
+        </div>
+      </main>
+    );
+  }
   const collection = resolveProjectCollection({
     ownerParam: query.owner,
     panel,
@@ -382,6 +412,11 @@ export default async function ProjectCenterPage({ searchParams }: ProjectsPagePr
         ) : null}
 
         <section className="app-project-shell">
+          {panel.dependency.state === "partial" ? (
+            <div style={{ gridColumn: "1 / -1", padding: "16px 20px 0" }}>
+              <DependencyState label="项目目录" result={panel.dependency} />
+            </div>
+          ) : null}
           <aside className="app-project-rail">
             <div className="app-project-rail__head">
               <div className="app-honor__rail-mark" aria-hidden="true">

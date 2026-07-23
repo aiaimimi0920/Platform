@@ -5,6 +5,8 @@ import type { ItemView, ProductCurrency } from "@neuro/contracts";
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 
 import { useAppToast } from "@/components/app-toast-center";
+import { DependencyState } from "@/components/dependency-state";
+import { createDependencyFailureResult, type DependencyResult } from "@/lib/dependency-result";
 import { acquireBodyOverlayLock } from "@/lib/overlay-lock";
 
 import { MarketplaceListingCard, OfficialProductCard } from "./components/cards";
@@ -62,6 +64,7 @@ export function CommerceCenter({
   const defaultRoute = productEnabled ? "/products" : "/marketplace";
   const triggerLabel = productEnabled ? "商城" : "小集市";
   const [panel, setPanel] = useState<CommercePanelView | null>(null);
+  const [dependency, setDependency] = useState<DependencyResult<CommercePanelView> | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedCurrency, setSelectedCurrency] = useState<ProductCurrency>("obsidian");
@@ -88,13 +91,22 @@ export function CommerceCenter({
         cache: "no-store",
       });
       const payload = (await response.json()) as CommercePanelPayload;
-      if (!response.ok || !payload.panel) {
+      if (!payload.dependency || !payload.panel) {
         throw new Error(payload.error || COMMERCE_PANEL_UNAVAILABLE_MESSAGE);
       }
       setPanel(payload.panel);
+      setDependency(payload.dependency);
       setError(null);
     } catch (fetchError) {
-      setError(fetchError instanceof Error ? fetchError.message : COMMERCE_PANEL_UNAVAILABLE_MESSAGE);
+      const normalizedError = fetchError instanceof Error ? fetchError : new Error(COMMERCE_PANEL_UNAVAILABLE_MESSAGE);
+      setDependency(
+        createDependencyFailureResult({
+          error: normalizedError,
+          message: COMMERCE_PANEL_UNAVAILABLE_MESSAGE,
+          source: "commerce-api",
+        }),
+      );
+      setError(normalizedError.message);
     } finally {
       if (!silent) {
         setLoading(false);
@@ -282,8 +294,18 @@ export function CommerceCenter({
     () => (selectedListingItem ? (getItemProduct(selectedListingItem, productsById, productsByTitle) as CommerceProductExtras | null) : null),
     [productsById, productsByTitle, selectedListingItem],
   );
-  const obsidianBalance = panel?.currentUser?.snapshot?.wallet?.balances.obsidian.available ?? 0;
-  const miraBalance = panel?.currentUser?.snapshot?.wallet?.balances.mira.available ?? 0;
+  const failedSources = new Set(dependency?.failures.map((failure) => failure.source) ?? []);
+  const currentUserUnavailable = failedSources.has("account-user");
+  const itemsUnavailable = failedSources.has("core-items");
+  const listingsUnavailable = failedSources.has("core-marketplace");
+  const ordersUnavailable = failedSources.has("core-orders");
+  const productsUnavailable = failedSources.has("core-products");
+  const obsidianBalance = currentUserUnavailable
+    ? null
+    : panel?.currentUser?.snapshot?.wallet?.balances.obsidian.available ?? null;
+  const miraBalance = currentUserUnavailable
+    ? null
+    : panel?.currentUser?.snapshot?.wallet?.balances.mira.available ?? null;
 
   useEffect(() => {
     if (!listingComposerOpen) {
@@ -365,6 +387,10 @@ export function CommerceCenter({
   }
 
   const content = (() => {
+    if (dependency?.state === "unavailable" || dependency?.state === "unauthorized") {
+      return <DependencyState label="商城数据" result={dependency} />;
+    }
+
     if (loading && !panel) {
       return <CommerceEmptyState message="商城正在同步货架，请稍后…" />;
     }
@@ -378,8 +404,11 @@ export function CommerceCenter({
         return <CommerceEmptyState actionHref="/products" actionLabel="切到大商场" message="当前只保留大商场入口。" />;
       }
 
-      if (listingComposerOpen) {
-        return (
+          if (listingComposerOpen) {
+            if (itemsUnavailable) {
+              return dependency ? <DependencyState label="可流转资产" result={dependency} /> : null;
+            }
+            return (
           <CommerceListingComposer
             listableItems={listableItems}
             listingCurrency={listingCurrency}
@@ -395,9 +424,13 @@ export function CommerceCenter({
             resolveItemProduct={(item, byId, byTitle) => getItemProduct(item, byId, byTitle) as CommerceProductExtras | null}
           />
         );
-      }
+          }
 
-      if (filteredListings.length === 0) {
+          if (listingsUnavailable) {
+            return dependency ? <DependencyState label="市场挂单" result={dependency} /> : null;
+          }
+
+          if (filteredListings.length === 0) {
         return <CommerceEmptyState message="暂无商品" />;
       }
 
@@ -415,7 +448,13 @@ export function CommerceCenter({
                   setConfirmSubmitting(false);
                 }}
                 product={resolvedProduct}
-                purchasedCount={resolvedProduct ? (purchasedCountByProductId.get(resolvedProduct.id) ?? 0) : 0}
+                    purchasedCount={
+                      ordersUnavailable
+                        ? null
+                        : resolvedProduct
+                          ? (purchasedCountByProductId.get(resolvedProduct.id) ?? 0)
+                          : 0
+                    }
               />
             );
           })}
@@ -423,11 +462,15 @@ export function CommerceCenter({
       );
     }
 
-    if (!productEnabled) {
+        if (!productEnabled) {
       return <CommerceEmptyState actionHref="/marketplace" actionLabel="切到小巴扎" message="当前只保留小巴扎入口。" />;
-    }
+        }
 
-    if (filteredProducts.length === 0) {
+        if (productsUnavailable) {
+          return dependency ? <DependencyState label="商品目录" result={dependency} /> : null;
+        }
+
+        if (filteredProducts.length === 0) {
       return <CommerceEmptyState message="暂无商品" />;
     }
 
@@ -441,7 +484,7 @@ export function CommerceCenter({
               setConfirmSubmitting(false);
             }}
             product={product}
-            purchasedCount={purchasedCountByProductId.get(product.id) ?? 0}
+                purchasedCount={ordersUnavailable ? null : (purchasedCountByProductId.get(product.id) ?? 0)}
           />
         ))}
       </div>
@@ -507,7 +550,14 @@ export function CommerceCenter({
               />
 
               <div className="app-commerce-board">
-                <div className="app-commerce-board__scroll">{content}</div>
+                <div className="app-commerce-board__scroll">
+                  {dependency?.state === "partial" ? (
+                    <div style={{ marginBottom: 16 }}>
+                      <DependencyState label="商城数据" result={dependency} />
+                    </div>
+                  ) : null}
+                  {content}
+                </div>
               </div>
             </div>
           </section>
