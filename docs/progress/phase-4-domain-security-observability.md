@@ -2,7 +2,7 @@
 
 - [x] `P4-01` identity, wallet, commerce, task invariants。
 - [x] `P4-02` agent, mailbox, governance, arbitration, executor contracts。
-- [ ] `P4-03` required PostgreSQL/Valkey/S3 fixture and OAuth contract。
+- [x] `P4-03` required PostgreSQL/Valkey/S3 fixture and OAuth contract。
 - [ ] `P4-04` correlation IDs, dependency taxonomy, secret redaction。
 
 Acceptance: required integration has no skipped suite and every error evidence contains service/category/time/correlation id without secrets.
@@ -53,3 +53,26 @@ Acceptance: required integration has no skipped suite and every error evidence c
   - `npm run test:integration --workspace @neuro/core`
   - `npm run test:integration --workspace @neuro/account-domain`
   - `npm run test --workspace @neuro/executor`
+
+## P4-03 完成记录
+
+- 新增 required integration fixture 与 acceptance contract：
+  - `scripts/acceptance/integration-fixture.mjs`
+  - `scripts/acceptance/tests/integration-fixture.test.mjs`
+- root acceptance gate 现在显式依赖 `test:integration:required`，并把 `PLATFORM_ACCEPTANCE_RUN_ID` 传入 required environment；`scripts/acceptance/run-required.mjs` 不再以 root `test:integration` 的 `--if-present` 模式作为正式验收入口。
+- 为全部 workspace 显式声明 `test:integration:required`：
+  - 有真实 suite 的 workspace（`@neuro/ai-gateway-domain`、`@neuro/account-domain`、`@neuro/core`）直接执行 required 套件。
+  - 当前没有 required integration suite 的 workspace（contracts / backend-foundation / account-api / account-worker / executor / worker / web）显式 no-op，而不是通过缺脚本隐式跳过。
+- 新增 OAuth contract 覆盖：
+  - `web/src/auth.test.ts`
+  - 覆盖 callback 缺失 state 拒绝、Linux.do callback identity -> local JWT/session mapping、重复 account-linking 幂等，以及未登录 session contract。
+- 为 clean worktree 下的重复验证补齐最小修复：
+  - `packages/account-domain/package.json`：增加 `pretest:integration`，先 build `@neuro/contracts` 与 `@neuro/backend-foundation`，避免 `backend-foundation/dist/db/factories` 缺失。
+  - `packages/ai-gateway-domain/src/modules/gateway/response-cache.ts`：Redis client 改为懒建，避免只测 TTL helper 时因顶层连接句柄导致 required suite 挂住。
+  - `packages/ai-gateway-domain/package.json`：`test:integration:required` 改为无 gate 的直接命令，避免把 required suite 伪装成 gated optional shortcut。
+- `P4-03` 通过验证：
+  - `node --test scripts/acceptance/tests/integration-fixture.test.mjs scripts/acceptance/tests/run-required.test.mjs`
+  - `node --test --import tsx src/auth.test.ts`（`web/`）
+  - `npm run test:integration:required --workspace @neuro/account-domain`
+  - `npm run test:integration:required --workspace @neuro/core`
+  - 一次 production `runRequiredIntegrationFixture(...)` full summary：`10 discovered / 10 executed / 10 passed / 0 failed / 0 skipped`

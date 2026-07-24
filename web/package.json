@@ -8,6 +8,7 @@
     "start": "next start",
     "test": "node --test --import tsx \"src/**/*.test.ts\" \"src/**/*.test.tsx\"",
     "test:live": "node --test --import tsx src/lib/tea-real-core-smoke.live.ts",
+    "test:integration:required": "node -e \"console.log('No required integration suites for @neuro/web')\"",
     "typecheck": "next build"
   },
   "dependencies": {

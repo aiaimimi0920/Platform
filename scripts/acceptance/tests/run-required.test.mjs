@@ -274,11 +274,11 @@ test("required inventory rejects missing root acceptance scripts", async () => {
 
   assert.throws(
     () => createRequiredInventory({ platformRoot: temporaryRoot }),
-    /missing.*(?:test:vitest|test:debt|test:integration|typecheck|build)/i,
+    /missing.*(?:test:vitest|test:debt|test:integration:required|typecheck|build)/i,
   );
   assert.throws(
     () => validateRequiredInventory(createRequiredInventory(), { platformRoot: temporaryRoot }),
-    /missing.*(?:test:vitest|test:debt|test:integration|typecheck|build)/i,
+    /missing.*(?:test:vitest|test:debt|test:integration:required|typecheck|build)/i,
   );
 });
 
@@ -290,6 +290,9 @@ test("required npm inventory invokes root scripts without silent if-present flag
     assert.ok(suite);
     assert.equal(suite.args.includes("--if-present"), false, `${id} must not silently skip a root script`);
   }
+  const integrationSuite = inventory.find((item) => item.id === "integration-required");
+  assert.equal(integrationSuite.args.at(-2), "run");
+  assert.equal(integrationSuite.args.at(-1), "test:integration:required");
 });
 
 test("required npm suites use a shell-free Windows invocation that can spawn", async () => {

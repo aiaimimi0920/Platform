@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 
-import { redis } from "@/db/redis";
+import { env } from "@/env";
+import { createRedisClient } from "@neuro/backend-foundation/db/factories";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -46,6 +47,14 @@ export type GatewayResponseCacheScope = {
 // ---------------------------------------------------------------------------
 
 const CACHE_KEY_PREFIX = "gw:rcache:";
+let gatewayResponseCacheRedis: ReturnType<typeof createRedisClient> | null = null;
+
+function getGatewayResponseCacheRedis() {
+  if (!gatewayResponseCacheRedis) {
+    gatewayResponseCacheRedis = createRedisClient(env.redisUrl);
+  }
+  return gatewayResponseCacheRedis;
+}
 
 // Endpoint-specific TTL overrides (in seconds)
 const ENDPOINT_TTL_OVERRIDES: Record<string, number> = {
@@ -130,6 +139,7 @@ export function buildResponseCacheKey(args: {
 export async function getGatewayCachedResponse(
   cacheKey: string,
 ): Promise<GatewayResponseCacheResult> {
+  const redis = getGatewayResponseCacheRedis();
   const data = await redis.hgetall(cacheKey);
 
   if (!data || Object.keys(data).length === 0) {
@@ -195,6 +205,7 @@ export async function setGatewayCachedResponse(args: {
     hits: "0",
   };
 
+  const redis = getGatewayResponseCacheRedis();
   await redis.hset(args.cacheKey, fields);
   await redis.expire(args.cacheKey, ttl);
 
@@ -208,6 +219,7 @@ export async function setGatewayCachedResponse(args: {
 export async function invalidateGatewayResponseCache(
   pattern?: string,
 ): Promise<number> {
+  const redis = getGatewayResponseCacheRedis();
   const scanPattern = pattern ?? `${CACHE_KEY_PREFIX}*`;
   let deleted = 0;
   let cursor = "0";
@@ -240,6 +252,7 @@ export async function getGatewayResponseCacheStats(): Promise<{
   totalHits: number;
   estimatedSizeBytes: number;
 }> {
+  const redis = getGatewayResponseCacheRedis();
   const scanPattern = `${CACHE_KEY_PREFIX}*`;
   let totalKeys = 0;
   let totalHits = 0;

@@ -38,7 +38,7 @@ export const REQUIRED_ROOT_SCRIPTS = Object.freeze({
   unit: "test",
   vitest: "test:vitest",
   debt: "test:debt",
-  "integration-required": "test:integration",
+  "integration-required": "test:integration:required",
   typecheck: "typecheck",
   build: "build",
 });
@@ -102,6 +102,7 @@ export function createRequiredInventory({
   const requiredEnvironment = {
     ...process.env,
     PLATFORM_ACCEPTANCE_MODE: "required",
+    PLATFORM_ACCEPTANCE_RUN_ID: runId,
   };
   const npmSuite = (id, args, timeoutMs) => {
     const invocation = npmInvocation(args);
@@ -136,7 +137,7 @@ export function createRequiredInventory({
       ["run", "test:node-mock:debt", "--workspace", "@neuro/ai-gateway-domain"],
       10 * 60 * 1000,
     ),
-    npmSuite("integration-required", ["run", "test:integration"], 30 * 60 * 1000),
+    npmSuite("integration-required", ["run", "test:integration:required"], 30 * 60 * 1000),
     npmSuite("typecheck", ["run", "typecheck"], 30 * 60 * 1000),
     npmSuite("build", ["run", "build"], 30 * 60 * 1000),
     {

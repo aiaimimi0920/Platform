@@ -11,7 +11,9 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "db:migrate": "node dist/scripts/migrate.js",
     "test": "node --test --import tsx src/modules/email-native/model.test.ts src/modules/email-ingress/model.test.ts src/modules/mailbox/player/idempotency.test.ts src/modules/user-progression/task-scope.test.ts",
+    "pretest:integration": "npm run build --workspace @neuro/contracts && npm run build --workspace @neuro/backend-foundation",
     "test:integration": "npm run test:integration:mailbox-player && npm run test:integration:reputation",
+    "test:integration:required": "npm run test:integration",
     "test:integration:mailbox-player": "node --import tsx ../../scripts/testing/run-domain-integration.ts --test-file src/modules/mailbox/player/idempotency.integration.test.ts",
     "test:integration:reputation": "node --import tsx ../../scripts/testing/run-domain-integration.ts --test-file src/modules/reputation/tests/invariants.integration.test.ts --extra-migration migrations/20260324_00_account_schema_bootstrap.sql --extra-migration migrations/20260324_01_account_read_indexes.sql"
   },
