@@ -35,6 +35,7 @@ type MailboxDetailProps = {
   selectedMessage: MailboxMessageView | null;
   selectedMessageHasAttachments: boolean;
   togglingFavorite: boolean;
+  showClose?: boolean;
 };
 
 function MailboxAttachmentCard({ attachment }: { attachment: MailboxAttachmentView }) {
@@ -85,10 +86,11 @@ export function MailboxDetail({
   selectedMessage,
   selectedMessageHasAttachments,
   togglingFavorite,
+  showClose = true,
 }: MailboxDetailProps) {
   return (
     <article className="app-mailbox__content">
-      <button
+      {showClose ? <button
         aria-label="关闭邮箱面板"
         className="app-mailbox-close"
         onClick={onClose}
@@ -96,7 +98,7 @@ export function MailboxDetail({
         type="button"
       >
         <CloseIcon />
-      </button>
+      </button> : null}
 
       {selectedMessage ? (
         <>

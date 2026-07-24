@@ -17,7 +17,7 @@ import { HeavyAgentChatEntry } from "@/features/account-heavy-agent-chat";
 import { CommerceCenter, getCommerceRouteMode } from "@/features/account-commerce-center";
 import { MissionCenter } from "@/features/account-mission-center";
 import { ProjectEntry } from "@/features/account-project-center";
-import { isMailboxRouteOpen, MailboxCenter } from "@/features/mailbox";
+import { isMailboxRouteOpen, isMailboxWorkspaceRoute, MailboxCenter } from "@/features/mailbox";
 import { cn } from "@/lib/cn";
 
 type AppShellProps = {
@@ -48,6 +48,7 @@ const ACCOUNT_TERMINAL_PREFIXES = [
   "/inventory",
   "/my-tasks",
   "/my-agents",
+  "/my-arbitrations",
 ];
 
 function isNavLinkActive(pathname: string | null, href: string): boolean {
@@ -62,6 +63,10 @@ function isNavLinkActive(pathname: string | null, href: string): boolean {
   return pathname === href || pathname.startsWith(`${href}/`);
 }
 
+function isBenefitsWorkspaceRoute(pathname: string | null | undefined) {
+  return Boolean(pathname && (pathname === "/benefits" || pathname.startsWith("/benefits/")));
+}
+
 export function AppShell({ authActionSlot, children, currentUserId, features, publicSurfaces }: AppShellProps) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -71,6 +76,8 @@ export function AppShell({ authActionSlot, children, currentUserId, features, pu
   const isEmbeddedAgentRoute =
     (pathname === "/agents" || pathname?.startsWith("/agents/")) && searchParams?.get("embedded") === "1";
   const commerceRouteMode = getCommerceRouteMode(pathname);
+  const benefitsWorkspaceRoute = isBenefitsWorkspaceRoute(pathname);
+  const mailboxWorkspaceRoute = isMailboxWorkspaceRoute(pathname);
   const isAccountTerminal = pathname
     ? ACCOUNT_TERMINAL_PREFIXES.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`))
     : false;
@@ -149,7 +156,7 @@ export function AppShell({ authActionSlot, children, currentUserId, features, pu
                       userId={currentUserId}
                     />
                   ) : null}
-                  {isAccountTerminal ? (
+                  {isAccountTerminal && !benefitsWorkspaceRoute ? (
                     <BenefitCenter
                       enabled={publicSurfaces.benefits.enabled && features.benefits.enabled}
                       routeOpen={pathname === "/benefits" || pathname?.startsWith("/benefits/")}
@@ -167,7 +174,7 @@ export function AppShell({ authActionSlot, children, currentUserId, features, pu
                   {isAccountTerminal ? (
                     <MissionCenter enabled={publicSurfaces.missions.enabled && features.personalMissions.enabled} userId={currentUserId} />
                   ) : null}
-                  {isAccountTerminal ? (
+                  {isAccountTerminal && !mailboxWorkspaceRoute ? (
                     <MailboxCenter
                       enabled={publicSurfaces.mailbox.enabled && features.mailbox.enabled}
                       routeOpen={isMailboxRouteOpen(pathname)}

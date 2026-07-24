@@ -52,6 +52,7 @@ type MailboxListProps = {
   archivingRead: boolean;
   claimingAll: boolean;
   currentInboxCount: number;
+  errorMessage?: string | null;
   inboxMessages: MailboxMessageView[];
   loading: boolean;
   onArchiveRead: () => void;
@@ -67,6 +68,7 @@ export function MailboxList({
   archivingRead,
   claimingAll,
   currentInboxCount,
+  errorMessage,
   inboxMessages,
   loading,
   onArchiveRead,
@@ -91,7 +93,8 @@ export function MailboxList({
       <div className="app-mailbox__list">
         {loading && inboxMessages.length === 0 ? <p className="app-mailbox__empty-note">邮箱加载中…</p> : null}
 
-        {!loading && inboxMessages.length === 0 ? <p className="app-mailbox__empty-note">当前收件箱暂无邮件。</p> : null}
+        {!loading && errorMessage ? <p className="app-mailbox__empty-note">{errorMessage}</p> : null}
+        {!loading && !errorMessage && inboxMessages.length === 0 ? <p className="app-mailbox__empty-note">当前收件箱暂无邮件。</p> : null}
 
         {inboxMessages.map((message) => {
           const previewAttachment = getFirstAttachment(message);

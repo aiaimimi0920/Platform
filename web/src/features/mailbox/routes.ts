@@ -1,15 +1,23 @@
 export const MAILBOX_ROUTE_PATH = "/mailbox";
 
-export const MAILBOX_ROUTE_NOTICE = {
-  title: "邮箱终端已切换为弹窗面板",
-  description:
-    "当前 `/mailbox` 用作邮箱弹窗的深链接入口。若面板尚未自动打开，请返回控制台后重新点击导航中的“邮箱”。",
-} as const;
-
 export function isMailboxRouteOpen(pathname: string | null | undefined) {
-  if (!pathname) {
-    return false;
-  }
+  return isMailboxWorkspaceRoute(pathname);
+}
 
-  return pathname === MAILBOX_ROUTE_PATH || pathname.startsWith(`${MAILBOX_ROUTE_PATH}/`);
+export function isMailboxWorkspaceRoute(pathname: string | null | undefined) {
+  return Boolean(pathname && (pathname === MAILBOX_ROUTE_PATH || pathname.startsWith(`${MAILBOX_ROUTE_PATH}/`)));
+}
+
+export function buildMailboxRouteHref(
+  currentSearchParams: { toString(): string } | null | undefined,
+  messageId?: string | null,
+) {
+  const params = new URLSearchParams(currentSearchParams?.toString() ?? "");
+  if (messageId?.trim()) {
+    params.set("messageId", messageId.trim());
+  } else {
+    params.delete("messageId");
+  }
+  const query = params.toString();
+  return query ? `${MAILBOX_ROUTE_PATH}?${query}` : MAILBOX_ROUTE_PATH;
 }

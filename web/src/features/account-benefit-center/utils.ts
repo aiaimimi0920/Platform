@@ -72,6 +72,67 @@ export type SanitizedBenefitFamily = {
   productLines: SanitizedProductLine[];
 };
 
+export function resolveBenefitServiceSelection<
+  T extends { id: string; productLineId?: string | null; config: { apiDeliveryMode: string } },
+>(services: T[], targetedServiceId: string | null | undefined) {
+  const targetedService = services.find((service) => service.id === targetedServiceId) ?? null;
+  const defaultProductLineId = services[0]?.productLineId ?? null;
+  const selectedProductLineId = targetedService?.productLineId ?? defaultProductLineId;
+  const lineServices = services.filter(
+    (service) => (service.productLineId ?? null) === selectedProductLineId,
+  );
+  const firstRefillService = lineServices.find((service) => service.config.apiDeliveryMode !== "service_proxy") ?? null;
+  const firstApiService = lineServices.find((service) => service.config.apiDeliveryMode === "service_proxy") ?? null;
+
+  return {
+    targetedService,
+    refillService:
+      targetedService && targetedService.config.apiDeliveryMode !== "service_proxy"
+        ? targetedService
+        : firstRefillService,
+    apiService:
+      targetedService?.config.apiDeliveryMode === "service_proxy"
+        ? targetedService
+        : firstApiService,
+  };
+}
+
+export function resolveBenefitFamilySelection<
+  T extends { key: string; services: Array<{ id: string }> },
+>(
+  families: T[],
+  currentFamilyKey: string | null | undefined,
+  targetedFamilyKey: string | null | undefined,
+  targetedServiceId: string | null | undefined,
+) {
+  return (
+    families.find((family) => family.key === targetedFamilyKey)?.key ??
+    families.find((family) => family.services.some((service) => service.id === targetedServiceId))?.key ??
+    families.find((family) => family.key === currentFamilyKey)?.key ??
+    families[0]?.key ??
+    null
+  );
+}
+
+export function resolveBenefitServiceDependency<T>(args: {
+  ok: boolean;
+  value?: T | null;
+  error?: string | null;
+  fallbackMessage: string;
+}) {
+  if (!args.ok || args.value == null) {
+    return {
+      data: null,
+      error: args.error?.trim() || args.fallbackMessage,
+    };
+  }
+
+  return {
+    data: args.value,
+    error: null,
+  };
+}
+
 function mapSanitizedService(service: BenefitPanelFamilyView["services"][number]): SanitizedBenefitService {
   return {
     id: service.id,

@@ -135,6 +135,24 @@ export function resolveSelectedMailboxMessageId(
   return visibleMessages[0]?.id ?? null;
 }
 
+export function resolveMailboxSyncSelection(
+  messages: MailboxMessageView[],
+  currentSelectedMessageId: string | null,
+  targetedMessageId?: string | null,
+  targetChanged = false,
+) {
+  const visibleMessages = selectMailboxMessages(messages, targetedMessageId);
+  if (targetChanged && targetedMessageId && visibleMessages.some((message) => message.id === targetedMessageId)) {
+    return targetedMessageId;
+  }
+
+  return resolveSelectedMailboxMessageId(
+    visibleMessages,
+    currentSelectedMessageId,
+    targetedMessageId,
+  );
+}
+
 export function getFirstAttachment(message: MailboxMessageView) {
   return message.attachments[0] ?? null;
 }

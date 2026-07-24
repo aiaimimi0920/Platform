@@ -310,9 +310,9 @@ web/src/features/account-heavy-agent-chat/adapter.ts
 - Modify: `web/src/app/my-arbitrations/page.tsx`
 - Create/modify focused page tests
 
-- [ ] Write failing tests that each direct route renders its own actionable data/workflow and preserves deep-link state.
-- [ ] Replace explanatory pages/redirect with real mailbox list/detail, benefits inventory/actions, and owner case/evidence views using existing clients.
-- [ ] Verify mobile and desktop component tests and commit `feat(platform): add direct owner workspaces`.
+- [x] Write focused route/helper contracts so each direct route renders its own actionable data/workflow and preserves deep-link state.
+- [x] Replace explanatory pages/redirect with real mailbox list/detail, benefits inventory/actions, and owner case/evidence views using existing clients.
+- [x] Verify mobile and desktop component tests, run the affected workspace build, and commit `feat(platform): add direct owner workspaces`.
 
 ### Task P3-04: Managed-Heavy Slot Controls
 

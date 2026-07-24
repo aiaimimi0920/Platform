@@ -9,9 +9,10 @@ import { useAppToast } from "@/components/app-toast-center";
 import { acquireBodyOverlayLock } from "@/lib/overlay-lock";
 
 import { MAILBOX_POLL_INTERVAL_MS } from "./constants";
+import { buildMailboxRouteHref } from "../routes";
 import {
   isMessageExpired,
-  resolveSelectedMailboxMessageId,
+  resolveMailboxSyncSelection,
   selectMailboxMessages,
   sortMailboxMessages,
 } from "./utils";
@@ -19,10 +20,11 @@ import {
 type UseMailboxCenterOptions = {
   enabled: boolean;
   routeOpen: boolean;
+  workspace?: boolean;
   userId: string | null;
 };
 
-export function useMailboxCenter({ enabled, routeOpen, userId }: UseMailboxCenterOptions) {
+export function useMailboxCenter({ enabled, routeOpen, workspace = false, userId }: UseMailboxCenterOptions) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { pushToast } = useAppToast();
@@ -32,11 +34,13 @@ export function useMailboxCenter({ enabled, routeOpen, userId }: UseMailboxCente
   const panelErrorToastRef = useRef<string | null>(null);
   const pendingReadIdsRef = useRef(new Set<string>());
   const appliedTargetedMessageIdRef = useRef<string | null>(null);
+  const targetedMessageIdRef = useRef<string | null>(null);
   const titleId = useId();
 
   const [messages, setMessages] = useState<MailboxMessageView[]>([]);
   const [loading, setLoading] = useState(false);
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(workspace);
+  const [error, setError] = useState<string | null>(null);
   const [selectedMessageId, setSelectedMessageId] = useState<string | null>(null);
   const [claimingSelected, setClaimingSelected] = useState(false);
   const [claimingAll, setClaimingAll] = useState(false);
@@ -45,6 +49,7 @@ export function useMailboxCenter({ enabled, routeOpen, userId }: UseMailboxCente
   const [deletingSelected, setDeletingSelected] = useState(false);
 
   const targetedMessageId = searchParams?.get("messageId")?.trim() || null;
+  targetedMessageIdRef.current = targetedMessageId;
   const inboxMessages = selectMailboxMessages(messages, targetedMessageId);
   const actualInboxMessages = sortMailboxMessages(messages.filter((message) => message.folder === "inbox"));
   const selectedMessage =
@@ -73,9 +78,8 @@ export function useMailboxCenter({ enabled, routeOpen, userId }: UseMailboxCente
 
   function syncMailboxState(nextMessages: MailboxMessageView[]) {
     setMessages(nextMessages);
-    const nextInboxMessages = selectMailboxMessages(nextMessages, targetedMessageId);
     setSelectedMessageId((current) =>
-      resolveSelectedMailboxMessageId(nextInboxMessages, current, targetedMessageId),
+      resolveMailboxSyncSelection(nextMessages, current, targetedMessageIdRef.current),
     );
   }
 
@@ -99,9 +103,11 @@ export function useMailboxCenter({ enabled, routeOpen, userId }: UseMailboxCente
       }
 
       syncMailboxState(payload.messages);
+      setError(null);
       panelErrorToastRef.current = null;
     } catch (error) {
       const message = error instanceof Error ? error.message : "邮箱暂时不可用。";
+      setError(message);
       if (panelErrorToastRef.current !== message) {
         pushToast({
           tone: "error",
@@ -116,6 +122,9 @@ export function useMailboxCenter({ enabled, routeOpen, userId }: UseMailboxCente
   }
 
   function handleClose() {
+    if (workspace) {
+      return;
+    }
     if (routeOpen) {
       router.push("/dashboard");
       return;
@@ -356,9 +365,8 @@ export function useMailboxCenter({ enabled, routeOpen, userId }: UseMailboxCente
     }
 
     appliedTargetedMessageIdRef.current = targetedMessageId;
-    const visibleMessages = selectMailboxMessages(messages, targetedMessageId);
     setSelectedMessageId((current) =>
-      resolveSelectedMailboxMessageId(visibleMessages, current, targetedMessageId),
+      resolveMailboxSyncSelection(messages, current, targetedMessageId, true),
     );
   }, [messages, targetedMessageId]);
 
@@ -388,21 +396,23 @@ export function useMailboxCenter({ enabled, routeOpen, userId }: UseMailboxCente
   }, [enabled, userId]);
 
   useEffect(() => {
-    if (!routeOpen || !enabled || !userId) {
+    if ((!routeOpen && !workspace) || !enabled || !userId) {
       return;
     }
 
     setOpen(true);
-    void refreshMailbox();
-  }, [enabled, routeOpen, userId]);
+  }, [enabled, routeOpen, userId, workspace]);
 
   useEffect(() => {
     if (!open) {
       return;
     }
 
+    if (workspace) {
+      return;
+    }
     return acquireBodyOverlayLock();
-  }, [open]);
+  }, [open, workspace]);
 
   useEffect(() => {
     if (open) {
@@ -418,7 +428,7 @@ export function useMailboxCenter({ enabled, routeOpen, userId }: UseMailboxCente
   }, [open]);
 
   useEffect(() => {
-    if (!open) {
+    if (!open || workspace) {
       return;
     }
 
@@ -432,7 +442,7 @@ export function useMailboxCenter({ enabled, routeOpen, userId }: UseMailboxCente
     return () => {
       window.removeEventListener("keydown", handleKeyDown);
     };
-  }, [open, routeOpen]);
+  }, [open, routeOpen, workspace]);
 
   useEffect(() => {
     if (!open || !selectedMessage || selectedMessage.readAt || pendingReadIdsRef.current.has(selectedMessage.id)) {
@@ -490,6 +500,7 @@ export function useMailboxCenter({ enabled, routeOpen, userId }: UseMailboxCente
         : "确认删除这封邮件？"
       : "",
     deletingSelected,
+    error,
     handleArchiveRead,
     handleClaimAll,
     handleClaimSelectedMessage,
@@ -507,7 +518,12 @@ export function useMailboxCenter({ enabled, routeOpen, userId }: UseMailboxCente
     selectedMessage,
     selectedMessageHasAttachments,
     selectedMessageId,
-    setSelectedMessageId,
+    setSelectedMessageId: (messageId: string) => {
+      setSelectedMessageId(messageId);
+      if (workspace) {
+        router.replace(buildMailboxRouteHref(searchParams, messageId), { scroll: false });
+      }
+    },
     titleId,
     togglingFavorite,
     totalPendingAttachmentCount,

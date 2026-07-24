@@ -1026,3 +1026,25 @@
 .mailboxScope :global(.app-mailbox__confirm-btn--danger:hover) {
   box-shadow: 0 8px 20px rgba(244, 63, 94, 0.24);
 }
+
+/* Workspace mode must win over the modal geometry above, including mobile rules. */
+.mailboxScope :global(.app-mailbox.app-mailbox--workspace) {
+  width: 100%;
+  height: min(78vh, 860px);
+  max-height: none;
+  margin: 0;
+}
+
+@media (max-width: 1080px) {
+  .mailboxScope :global(.app-mailbox.app-mailbox--workspace) {
+    height: auto;
+    min-height: 0;
+  }
+}
+
+@media (max-width: 720px) {
+  .mailboxScope :global(.app-mailbox.app-mailbox--workspace) {
+    width: 100%;
+    margin: 0;
+  }
+}

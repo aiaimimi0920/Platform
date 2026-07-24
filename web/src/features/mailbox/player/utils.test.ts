@@ -50,6 +50,35 @@ test("P2-05 RED: mailbox polling resolves selection from the latest React state"
   assert.doesNotMatch(syncFunction, /resolveSelectedMailboxMessageId\([^)]*selectedMessageId/);
 });
 
+test("P3-03: mailbox polling follows the latest deep-link target after the query changes", async () => {
+  const utils = await import("./utils");
+  const resolveSyncSelection = (utils as unknown as {
+    resolveMailboxSyncSelection?: (
+      messages: MailboxMessageView[],
+      currentSelectedMessageId: string | null,
+      targetedMessageId: string | null,
+      targetChanged?: boolean,
+    ) => string | null;
+  }).resolveMailboxSyncSelection;
+
+  assert.equal(typeof resolveSyncSelection, "function");
+  if (!resolveSyncSelection) return;
+
+  const messages = [message("inbox-1", "inbox"), message("stash-1", "stash"), message("stash-2", "stash")];
+  const firstSelection = resolveSyncSelection(messages, null, "stash-1");
+  assert.equal(firstSelection, "stash-1");
+  assert.equal(resolveSyncSelection(messages, firstSelection, "stash-2"), "stash-2");
+  assert.equal(resolveSyncSelection(messages, "inbox-1", "stash-2", true), "stash-2");
+  assert.equal(resolveSyncSelection(messages, "inbox-1", "stash-2", false), "inbox-1");
+
+  const hookSource = readFileSync(new URL("./use-mailbox-center.ts", import.meta.url), "utf8");
+  assert.match(hookSource, /targetedMessageIdRef\.current/);
+  assert.match(
+    hookSource,
+    /resolveMailboxSyncSelection\(messages, current, targetedMessageId, true\)/,
+  );
+});
+
 test("P2-05: long mailbox titles wrap before the expiry column", () => {
   const styles = readFileSync(new URL("./mailbox-center.module.css", import.meta.url), "utf8");
 
@@ -61,4 +90,9 @@ test("P2-05: long mailbox titles wrap before the expiry column", () => {
     styles,
     /\.mailboxScope\s+:global\(\.app-mailbox__hero-side\)\s*\{[^}]*min-width:\s*0;[^}]*\}/s,
   );
+  const genericMailboxRule = styles.lastIndexOf(".mailboxScope :global(.app-mailbox) {");
+  const workspaceMailboxRule = styles.lastIndexOf(".mailboxScope :global(.app-mailbox.app-mailbox--workspace) {");
+  assert.ok(workspaceMailboxRule > genericMailboxRule);
+  assert.match(styles, /\.mailboxScope\s+:global\(\.app-mailbox\.app-mailbox--workspace\)[\s\S]*margin:\s*0;/);
+  assert.match(styles, /@media \(max-width: 720px\)[\s\S]*\.app-mailbox\.app-mailbox--workspace[\s\S]*margin:\s*0;/);
 });

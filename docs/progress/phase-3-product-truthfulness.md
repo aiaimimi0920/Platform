@@ -2,7 +2,7 @@
 
 - [x] `P3-01` typed dependency result envelope and shared states。
 - [x] `P3-02` remove demo catalog and silent empty fallbacks。
-- [ ] `P3-03` direct mailbox/benefits/my-arbitrations workspaces。
+- [x] `P3-03` direct mailbox/benefits/my-arbitrations workspaces。
 - [ ] `P3-04` real managed-heavy slot controls。
 
 Acceptance: dependency failure is visibly unavailable/error, true empty remains empty, and every successful action has a queryable side effect.
@@ -26,4 +26,15 @@ P3-01 is complete. P3-02 evidence follows.
 - Added `getPublicSurfaceSnapshotStrict()` for formal P3-02 pages. Opinion, Agent, Project, Arbitration, and Commerce no longer treat a failed public-surface read as all surfaces enabled; legacy callers retain the compatibility wrapper until their own migration tasks.
 - TDD evidence: focused RED/GREEN cycles cover filtered Opinion detail aggregation, wallet vote gating, Agent/Operator registry and source guards, and strict public-surface reads. Web full suite passed `264/264`; `npx tsc --noEmit --pretty false -p tsconfig.json` exited `0`; `npm run build` completed successfully; `git diff --check -- Platform` passed.
 
-P3-02 is complete. P3-03 and P3-04 remain; Platform is not complete and release generation is still prohibited.
+P3-02 is complete. P3-03 evidence follows.
+
+## P3-03 Evidence
+
+- `/mailbox` no longer renders a placeholder page. It now mounts the real `MailboxCenter` in workspace mode, preserves `messageId` deep links, updates the URL when the owner changes the selected message, and keeps dependency failures visible instead of redirecting to fake empty UI.
+- `/benefits` no longer acts as a popup explainer route. It now mounts the real `BenefitCenter` in workspace mode, resolves `family` and `serviceId` from the current query string, highlights the targeted dual-service row, and keeps refill/API/prompt-cache dependency failures explicit instead of silently dropping those details.
+- `/my-arbitrations` no longer redirects to the operator console. It now reuses the main arbitration workspace in `ownerOnly` mode so owners can review only their related cases, filter by `caseId` and status, add evidence, and keep operator-only workload, assignment, remote-storage, and status-mutation controls hidden.
+- The account shell now recognizes `/mailbox`, `/benefits`, and `/my-arbitrations` as direct workspaces and suppresses duplicate overlay launchers while those routes are active.
+- Added focused route and helper contracts for the new direct surfaces: `src/app/p3-03-workspaces.test.ts`, `src/app/arbitrations/presentation.test.ts`, `src/features/account-benefit-center/utils.test.ts`, and the mailbox deep-link/workspace regressions in `src/features/mailbox/player/utils.test.ts`.
+- Verification evidence: `npm run test --workspace @neuro/web` passed `273/273`; `npm run typecheck --workspace @neuro/web` completed successfully via `next build`; `git diff --check -- Platform` exited `0` with only Git LF/CRLF normalization warnings.
+
+P3-01, P3-02, and P3-03 are complete. P3-04 remains; Platform is not complete and release generation is still prohibited.
