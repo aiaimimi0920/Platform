@@ -54,7 +54,10 @@ import type {
 } from "@neuro/contracts";
 import { and, asc, count, desc, eq, gte, inArray, lte, sql, type SQL } from "drizzle-orm";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
-import { deductBalance, refundBalance } from "@neuro/account-domain";
+import {
+  deductBalance,
+  refundBalance,
+} from "../../../../packages/account-domain/dist/modules/wallet-ledger/service.js";
 
 import { db } from "@/db/client";
 import * as schema from "@/db/schema";

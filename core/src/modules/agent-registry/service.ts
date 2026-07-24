@@ -1,6 +1,9 @@
 import { and, count, desc, eq, inArray, or, sql } from "drizzle-orm";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
-import { getUserProgressionAccessRule, getUserProgressionSnapshot } from "@neuro/account-domain";
+import {
+  getUserProgressionAccessRule,
+  getUserProgressionSnapshot,
+} from "../../../../packages/account-domain/dist/modules/user-progression/service.js";
 
 import { db } from "@/db/client";
 import { env } from "@/env";

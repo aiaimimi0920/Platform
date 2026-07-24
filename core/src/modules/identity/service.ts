@@ -7,7 +7,7 @@ import {
 } from "@neuro/contracts";
 import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
-import { getUserProgressionSnapshot } from "@neuro/account-domain";
+import { getUserProgressionSnapshot } from "../../../../packages/account-domain/dist/modules/user-progression/service.js";
 
 import { db } from "@/db/client";
 import * as schema from "@/db/schema";
@@ -43,85 +43,69 @@ async function loadUserSnapshot(
   tx: DbTx = db,
   features?: FeatureSnapshot | null,
 ) {
-  const [
-    walletAccounts,
-    recentEntryRow,
-    mailboxMessageRow,
-    unreadMailboxMessageRow,
-    pendingAttachmentRow,
-    totalAgentRow,
-    enabledAgentRow,
-    externalAgentRow,
-    capabilityRow,
-    activeExecutionRow,
-    totalItemRow,
-    activeItemRow,
-    listedItemRow,
-  ] = await Promise.all([
-    tx.query.ledgerAccounts.findMany({
-      where: (row, operators) => operators.eq(row.userId, user.id),
-      columns: {
-        currency: true,
-        availableBalance: true,
-        frozenBalance: true,
-      },
-    }),
-    tx
-      .select({ count: sql<number>`count(*)::int` })
-      .from(schema.ledgerEntries)
-      .where(eq(schema.ledgerEntries.userId, user.id)),
-    tx
-      .select({ count: sql<number>`count(*)::int` })
-      .from(schema.mailboxMessages)
-      .where(eq(schema.mailboxMessages.userId, user.id)),
-    tx
-      .select({ count: sql<number>`count(*)::int` })
-      .from(schema.mailboxMessages)
-      .where(and(eq(schema.mailboxMessages.userId, user.id), isNull(schema.mailboxMessages.readAt))),
-    tx
-      .select({ count: sql<number>`count(*)::int` })
-      .from(schema.mailboxAttachments)
-      .innerJoin(schema.mailboxMessages, eq(schema.mailboxAttachments.messageId, schema.mailboxMessages.id))
-      .where(and(eq(schema.mailboxMessages.userId, user.id), isNull(schema.mailboxAttachments.claimedAt))),
-    tx
-      .select({ count: sql<number>`count(*)::int` })
-      .from(schema.agents)
-      .where(eq(schema.agents.ownerUserId, user.id)),
-    tx
-      .select({ count: sql<number>`count(*)::int` })
-      .from(schema.agents)
-      .where(and(eq(schema.agents.ownerUserId, user.id), eq(schema.agents.enabled, true))),
-    tx
-      .select({ count: sql<number>`count(*)::int` })
-      .from(schema.agents)
-      .where(and(eq(schema.agents.ownerUserId, user.id), eq(schema.agents.sourceType, "external"))),
-    tx
-      .select({ count: sql<number>`count(*)::int` })
-      .from(schema.agentCapabilities)
-      .innerJoin(schema.agents, eq(schema.agentCapabilities.agentId, schema.agents.id))
-      .where(eq(schema.agents.ownerUserId, user.id)),
-    tx
-      .select({ count: sql<number>`count(*)::int` })
-      .from(schema.agentExecutions)
-      .where(
-        and(
-          eq(schema.agentExecutions.ownerUserId, user.id),
-          inArray(schema.agentExecutions.status, ["queued", "running", "submitted"]),
-        ),
+  const walletAccounts = await tx.query.ledgerAccounts.findMany({
+    where: (row, operators) => operators.eq(row.userId, user.id),
+    columns: {
+      currency: true,
+      availableBalance: true,
+      frozenBalance: true,
+    },
+  });
+  const recentEntryRow = await tx
+    .select({ count: sql<number>`count(*)::int` })
+    .from(schema.ledgerEntries)
+    .where(eq(schema.ledgerEntries.userId, user.id));
+  const mailboxMessageRow = await tx
+    .select({ count: sql<number>`count(*)::int` })
+    .from(schema.mailboxMessages)
+    .where(eq(schema.mailboxMessages.userId, user.id));
+  const unreadMailboxMessageRow = await tx
+    .select({ count: sql<number>`count(*)::int` })
+    .from(schema.mailboxMessages)
+    .where(and(eq(schema.mailboxMessages.userId, user.id), isNull(schema.mailboxMessages.readAt)));
+  const pendingAttachmentRow = await tx
+    .select({ count: sql<number>`count(*)::int` })
+    .from(schema.mailboxAttachments)
+    .innerJoin(schema.mailboxMessages, eq(schema.mailboxAttachments.messageId, schema.mailboxMessages.id))
+    .where(and(eq(schema.mailboxMessages.userId, user.id), isNull(schema.mailboxAttachments.claimedAt)));
+  const totalAgentRow = await tx
+    .select({ count: sql<number>`count(*)::int` })
+    .from(schema.agents)
+    .where(eq(schema.agents.ownerUserId, user.id));
+  const enabledAgentRow = await tx
+    .select({ count: sql<number>`count(*)::int` })
+    .from(schema.agents)
+    .where(and(eq(schema.agents.ownerUserId, user.id), eq(schema.agents.enabled, true)));
+  const externalAgentRow = await tx
+    .select({ count: sql<number>`count(*)::int` })
+    .from(schema.agents)
+    .where(and(eq(schema.agents.ownerUserId, user.id), eq(schema.agents.sourceType, "external")));
+  const capabilityRow = await tx
+    .select({ count: sql<number>`count(*)::int` })
+    .from(schema.agentCapabilities)
+    .innerJoin(schema.agents, eq(schema.agentCapabilities.agentId, schema.agents.id))
+    .where(eq(schema.agents.ownerUserId, user.id));
+  const activeExecutionRow = await tx
+    .select({ count: sql<number>`count(*)::int` })
+    .from(schema.agentExecutions)
+    .where(
+      and(
+        eq(schema.agentExecutions.ownerUserId, user.id),
+        inArray(schema.agentExecutions.status, ["queued", "running", "submitted"]),
       ),
-    tx
-      .select({ count: sql<number>`count(*)::int` })
-      .from(schema.items)
-      .where(eq(schema.items.userId, user.id)),
-    tx
-      .select({ count: sql<number>`count(*)::int` })
-      .from(schema.items)
-      .where(and(eq(schema.items.userId, user.id), eq(schema.items.status, "active"))),
-    tx
-      .select({ count: sql<number>`count(*)::int` })
-      .from(schema.items)
-      .where(and(eq(schema.items.userId, user.id), eq(schema.items.status, "listed"))),
-  ]);
+    );
+  const totalItemRow = await tx
+    .select({ count: sql<number>`count(*)::int` })
+    .from(schema.items)
+    .where(eq(schema.items.userId, user.id));
+  const activeItemRow = await tx
+    .select({ count: sql<number>`count(*)::int` })
+    .from(schema.items)
+    .where(and(eq(schema.items.userId, user.id), eq(schema.items.status, "active")));
+  const listedItemRow = await tx
+    .select({ count: sql<number>`count(*)::int` })
+    .from(schema.items)
+    .where(and(eq(schema.items.userId, user.id), eq(schema.items.status, "listed")));
 
   const walletEnabled = !features || (features.wallet.enabled && features.ledger.enabled);
   const mailboxEnabled = !features || features.mailbox.enabled;

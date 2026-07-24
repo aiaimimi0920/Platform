@@ -334,9 +334,9 @@ web/src/features/account-heavy-agent-chat/adapter.ts
 - Remove the corresponding placeholder `README.md` files after executable coverage exists
 - Modify services only when a failing invariant test proves a defect
 
-- [ ] Add real PostgreSQL tests for first/repeat login, role boundaries, grant/deduct/freeze/unfreeze, no negative balance, order/rollback, task escrow/settlement/cancel/default.
-- [ ] Run RED tests against the isolated database, fix defects minimally, then require all domain suites green.
-- [ ] Commit `test(platform): cover core identity economy and tasks`.
+- [x] Add real PostgreSQL tests for first/repeat login, role boundaries, grant/deduct/freeze/unfreeze, no negative balance, order/rollback, task escrow/settlement/cancel/default.
+- [x] Run RED tests against the isolated database, fix defects minimally, then require all domain suites green.
+- [x] Commit `test(platform): cover core identity economy and tasks`.
 
 ### Task P4-02: Agent, Mailbox, Governance, And Executor Contracts
 

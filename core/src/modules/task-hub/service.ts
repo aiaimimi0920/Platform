@@ -15,11 +15,13 @@ import { and, count, desc, eq, inArray, ne, or, sql } from "drizzle-orm";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 import {
   freezeBalance,
-  getDispatchReputationProfilesInTx,
-  refreshReputationUsersInTx,
   transferBalance,
   unfreezeBalance,
-} from "@neuro/account-domain";
+} from "../../../../packages/account-domain/dist/modules/wallet-ledger/service.js";
+import {
+  getDispatchReputationProfilesInTx,
+  refreshReputationUsersInTx,
+} from "../../../../packages/account-domain/dist/modules/reputation/service.js";
 
 import { db } from "@/db/client";
 import * as schema from "@/db/schema";

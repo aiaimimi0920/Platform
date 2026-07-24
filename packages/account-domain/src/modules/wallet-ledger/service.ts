@@ -126,6 +126,10 @@ async function mutateAccount(args: {
   referenceType?: string | null;
   referenceId?: string | null;
 }) {
+  if (!Number.isFinite(args.amount) || args.amount <= 0) {
+    throw new BadRequestError("Wallet mutation amount must be greater than 0");
+  }
+
   const tx = args.tx ?? db;
   await ensureWalletAccounts(args.userId, tx);
 

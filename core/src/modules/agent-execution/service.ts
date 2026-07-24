@@ -91,7 +91,7 @@ import type {
 } from "@neuro/contracts";
 import { and, asc, desc, eq, gte, inArray, max, or, sql, type SQL } from "drizzle-orm";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
-import { transferBalance } from "@neuro/account-domain";
+import { transferBalance } from "../../../../packages/account-domain/dist/modules/wallet-ledger/service.js";
 
 import { db } from "@/db/client";
 import { redis } from "@/db/redis";
