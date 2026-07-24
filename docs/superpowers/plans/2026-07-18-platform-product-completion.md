@@ -321,9 +321,9 @@ web/src/features/account-heavy-agent-chat/adapter.ts
 - Modify: `web/src/features/account-agent-center/agent-center-page.tsx`
 - Add focused component/server-action tests
 
-- [ ] Add failing tests for real slot count, create/delete/enable/disable permissions, default Mimi protection, and entitlement errors.
-- [ ] Wire controls to the heavy-chat/Agent APIs and remove hard-coded `1 / 2` and permanently disabled buttons.
-- [ ] Run tests and commit `feat(platform): make heavy slot controls functional`.
+- [x] Add failing tests for real slot count, create/delete/enable/disable permissions, default Mimi protection, and entitlement errors.
+- [x] Wire controls to the heavy-chat/Agent APIs and remove hard-coded `1 / 2` and permanently disabled buttons.
+- [x] Run tests and commit `feat(platform): make heavy slot controls functional`.
 
 ## Phase 4: Core Domain Coverage, Security, And Observability
 

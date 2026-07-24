@@ -3,7 +3,7 @@
 - [x] `P3-01` typed dependency result envelope and shared states。
 - [x] `P3-02` remove demo catalog and silent empty fallbacks。
 - [x] `P3-03` direct mailbox/benefits/my-arbitrations workspaces。
-- [ ] `P3-04` real managed-heavy slot controls。
+- [x] `P3-04` real managed-heavy slot controls。
 
 Acceptance: dependency failure is visibly unavailable/error, true empty remains empty, and every successful action has a queryable side effect.
 
@@ -37,4 +37,14 @@ P3-02 is complete. P3-03 evidence follows.
 - Added focused route and helper contracts for the new direct surfaces: `src/app/p3-03-workspaces.test.ts`, `src/app/arbitrations/presentation.test.ts`, `src/features/account-benefit-center/utils.test.ts`, and the mailbox deep-link/workspace regressions in `src/features/mailbox/player/utils.test.ts`.
 - Verification evidence: `npm run test --workspace @neuro/web` passed `273/273`; `npm run typecheck --workspace @neuro/web` completed successfully via `next build`; `git diff --check -- Platform` exited `0` with only Git LF/CRLF normalization warnings.
 
-P3-01, P3-02, and P3-03 are complete. P3-04 remains; Platform is not complete and release generation is still prohibited.
+P3-03 is complete. P3-04 evidence follows.
+
+## P3-04 Evidence
+
+- `/agents?role=heavy` no longer hard-codes `1 / 2` or renders permanently disabled controls. The slot summary now derives from live custom heavy-agent count plus the protected default Mimi slot, and the toolbar switches between create/batch-confirm states like the light/cloud role workbenches.
+- The heavy role overview now wires real `saveManagedHeavyAgentAction` and `applyManagedHeavyAgentBatchAction` entry points. Owners can create one self-defined heavy slot, edit it, and batch delete/enable/disable only custom heavy slots while the default Mimi entry remains non-selectable and protected.
+- Entitlement pressure is surfaced in the UI instead of only via dead buttons. When the owner already occupies the default slot plus one self-created slot, the create affordance is disabled and the same “更多槽位请先购买” guidance remains visible before the form submits.
+- Added the focused contract `src/features/account-agent-center/managed-heavy-role-section.test.ts` to pin real slot-count derivation, live action wiring, and default Mimi protection.
+- Verification evidence: `npm run test --workspace @neuro/web` passed `276/276`; `npm run typecheck --workspace @neuro/web` completed successfully via `next build`; `git diff --check -- Platform` exited `0` with only Git LF/CRLF normalization warnings.
+
+Phase 3 is complete. Platform is still not complete: Phase 4-6 remain, and release generation is still prohibited.
