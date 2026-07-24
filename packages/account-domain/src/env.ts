@@ -47,7 +47,7 @@ function requireEnv(name: string): string {
 function resolveOptionalOverride(primaryName: string, fallbackName: string) {
   const fallback = requireEnv(fallbackName);
   const override = process.env[primaryName]?.trim();
-  if (override) {
+  if (override && override !== fallback) {
     return {
       value: override,
       usesDedicated: true,

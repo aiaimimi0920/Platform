@@ -12,8 +12,11 @@ import type {
   RedemptionRewardEntry,
   UpsertRedemptionCodeInput,
 } from "@neuro/contracts";
-import { grantBalance, transferBalance } from "@neuro/account-domain";
 import { and, eq, sql } from "drizzle-orm";
+import {
+  grantBalance,
+  transferBalance,
+} from "../../../../packages/account-domain/dist/modules/wallet-ledger/service.js";
 
 import { db } from "@/db/client";
 import { redis } from "@/db/redis";
@@ -528,26 +531,40 @@ export async function getMailboxSnapshot(userId: string): Promise<MailboxSnapsho
 }
 
 export async function claimAttachment(userId: string, messageId: string, attachmentId: string) {
-  const [message] = await db
-    .select()
-    .from(mailboxMessages)
-    .where(and(eq(mailboxMessages.id, messageId), eq(mailboxMessages.userId, userId)));
-  if (!message) {
-    throw new Error("邮件不存在");
-  }
-
-  const [attachment] = await db
-    .select()
-    .from(mailboxAttachments)
-    .where(and(eq(mailboxAttachments.id, attachmentId), eq(mailboxAttachments.messageId, messageId)));
-  if (!attachment) {
-    throw new Error("附件不存在");
-  }
-  if (attachment.claimedAt) {
-    throw new Error("附件已领取");
-  }
-
   return db.transaction(async (tx) => {
+    await tx.execute(sql`
+      select id
+      from mailbox_messages
+      where id = ${messageId}
+        and user_id = ${userId}
+      for update
+    `);
+    const [message] = await tx
+      .select()
+      .from(mailboxMessages)
+      .where(and(eq(mailboxMessages.id, messageId), eq(mailboxMessages.userId, userId)));
+    if (!message) {
+      throw new Error("邮件不存在");
+    }
+
+    await tx.execute(sql`
+      select id
+      from mailbox_attachments
+      where id = ${attachmentId}
+        and message_id = ${messageId}
+      for update
+    `);
+    const [attachment] = await tx
+      .select()
+      .from(mailboxAttachments)
+      .where(and(eq(mailboxAttachments.id, attachmentId), eq(mailboxAttachments.messageId, messageId)));
+    if (!attachment) {
+      throw new Error("附件不存在");
+    }
+    if (attachment.claimedAt) {
+      return toMailboxAttachmentView(attachment);
+    }
+
     if (attachment.kind === "currency" && attachment.currency && attachment.amount) {
       await grantBalance(
         userId,

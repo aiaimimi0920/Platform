@@ -344,9 +344,9 @@ web/src/features/account-heavy-agent-chat/adapter.ts
 - Add executable tests under Agent, arbitration, opinion, reputation, mailbox, and Executor modules
 - Modify `executor/package.json`, `executor/src/health.ts`, `executor/src/http.ts`, `executor/src/tasks.ts` only as required by failing tests
 
-- [ ] Test Agent ownership/callback/governance, mailbox delivery/idempotency, arbitration evidence/review, opinion settlement, reputation effects, and every Executor task key/HTTP contract.
-- [ ] Remove covered placeholder README files.
-- [ ] Run focused and workspace suites; commit `test(platform): cover agents governance mailbox and executor`.
+- [x] Test Agent ownership/callback/governance, mailbox delivery/idempotency, arbitration evidence/review, opinion settlement, reputation effects, and every Executor task key/HTTP contract.
+- [x] Remove covered placeholder README files.
+- [x] Run focused and workspace suites; commit `test(platform): cover agents governance mailbox and executor`.
 
 ### Task P4-03: Required Integration Fixture And OAuth Contract
 

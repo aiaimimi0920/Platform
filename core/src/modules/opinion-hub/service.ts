@@ -21,8 +21,8 @@ import type {
 import {
   getUserProgressionAccessRule,
   getUserProgressionSnapshot,
-  transferBalance,
-} from "@neuro/account-domain";
+} from "../../../../packages/account-domain/dist/modules/user-progression/service.js";
+import { transferBalance } from "../../../../packages/account-domain/dist/modules/wallet-ledger/service.js";
 import { eq, sql } from "drizzle-orm";
 
 import { db } from "@/db/client";

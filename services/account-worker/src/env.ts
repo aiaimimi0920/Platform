@@ -514,6 +514,6 @@ export const env: WorkerEnv = {
     1,
   ),
   webPublicBaseUrl: process.env.WEB_PUBLIC_BASE_URL?.trim() || null,
-  usesDedicatedDatabase: Boolean(accountDatabaseUrl),
-  usesDedicatedRedis: Boolean(accountRedisUrl),
+  usesDedicatedDatabase: Boolean(accountDatabaseUrl && accountDatabaseUrl !== sharedDatabaseUrl),
+  usesDedicatedRedis: Boolean(accountRedisUrl && accountRedisUrl !== sharedRedisUrl),
 };

@@ -2527,7 +2527,7 @@ export async function updateArbitrationCaseStatus(
       }
     }
 
-    if (openRound) {
+    if (openRound && ["resolved", "rejected"].includes(input.status)) {
       await tx
         .update(arbitrationCaseReviewRounds)
         .set({
@@ -2858,6 +2858,9 @@ export async function releaseArbitrationCase(userId: string, caseId: string): Pr
     }
     if (!["open", "under_review"].includes(locked.status)) {
       throw new ConflictError("Only active arbitration cases can be released");
+    }
+    if (locked.assignedOperatorUserId && locked.assignedOperatorUserId !== userId) {
+      throw new ConflictError("This case is currently claimed by another operator");
     }
     if (!locked.assignedOperatorUserId) {
       return;
