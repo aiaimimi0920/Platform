@@ -27,47 +27,45 @@ export async function getUserProgressionSnapshot(
   tx: DbTx = db,
   platformMetrics: PlatformProgressionMetrics | null = null,
 ): Promise<UserProgressionSnapshot> {
-  const [dailyRewardCountRow, dailyMissionCountRow, weeklyMissionCountRow] = await Promise.all([
-    tx
-      .select({ count: sql<number>`count(*)::int` })
-      .from(schema.personalMissionClaims)
-      .innerJoin(
-        schema.personalMissionDefinitions,
-        eq(schema.personalMissionClaims.missionId, schema.personalMissionDefinitions.id),
-      )
-      .where(
-        and(
-          eq(schema.personalMissionClaims.userId, seed.userId),
-          eq(schema.personalMissionDefinitions.kind, "checkin"),
-        ),
+  const dailyRewardCountRow = await tx
+    .select({ count: sql<number>`count(*)::int` })
+    .from(schema.personalMissionClaims)
+    .innerJoin(
+      schema.personalMissionDefinitions,
+      eq(schema.personalMissionClaims.missionId, schema.personalMissionDefinitions.id),
+    )
+    .where(
+      and(
+        eq(schema.personalMissionClaims.userId, seed.userId),
+        eq(schema.personalMissionDefinitions.kind, "checkin"),
       ),
-    tx
-      .select({ count: sql<number>`count(*)::int` })
-      .from(schema.personalMissionClaims)
-      .innerJoin(
-        schema.personalMissionDefinitions,
-        eq(schema.personalMissionClaims.missionId, schema.personalMissionDefinitions.id),
-      )
-      .where(
-        and(
-          eq(schema.personalMissionClaims.userId, seed.userId),
-          eq(schema.personalMissionDefinitions.kind, "daily"),
-        ),
+    );
+  const dailyMissionCountRow = await tx
+    .select({ count: sql<number>`count(*)::int` })
+    .from(schema.personalMissionClaims)
+    .innerJoin(
+      schema.personalMissionDefinitions,
+      eq(schema.personalMissionClaims.missionId, schema.personalMissionDefinitions.id),
+    )
+    .where(
+      and(
+        eq(schema.personalMissionClaims.userId, seed.userId),
+        eq(schema.personalMissionDefinitions.kind, "daily"),
       ),
-    tx
-      .select({ count: sql<number>`count(*)::int` })
-      .from(schema.personalMissionClaims)
-      .innerJoin(
-        schema.personalMissionDefinitions,
-        eq(schema.personalMissionClaims.missionId, schema.personalMissionDefinitions.id),
-      )
-      .where(
-        and(
-          eq(schema.personalMissionClaims.userId, seed.userId),
-          eq(schema.personalMissionDefinitions.kind, "weekly"),
-        ),
+    );
+  const weeklyMissionCountRow = await tx
+    .select({ count: sql<number>`count(*)::int` })
+    .from(schema.personalMissionClaims)
+    .innerJoin(
+      schema.personalMissionDefinitions,
+      eq(schema.personalMissionClaims.missionId, schema.personalMissionDefinitions.id),
+    )
+    .where(
+      and(
+        eq(schema.personalMissionClaims.userId, seed.userId),
+        eq(schema.personalMissionDefinitions.kind, "weekly"),
       ),
-  ]);
+    );
 
   const metrics: UserProgressionMetricValues = {
     dailyRewardCount: toCount(dailyRewardCountRow),
@@ -84,55 +82,43 @@ export async function getUserProgressionSnapshot(
   };
 
   if (!env.usesDedicatedDatabase) {
-    const [
-      taskApplicationCountRow,
-      taskCreatedCountRow,
-      taskCompletedCountRow,
-      itemOwnedCountRow,
-      opinionCreatedCountRow,
-      opinionSupportCountRow,
-      opinionOpposeCountRow,
-      agentCreatedCountRow,
-      agentCapabilityCountRow,
-    ] = await Promise.all([
-      tx
-        .select({ count: sql<number>`count(*)::int` })
-        .from(schema.taskApplications)
-        .where(eq(schema.taskApplications.applicantUserId, seed.userId)),
-      tx
-        .select({ count: sql<number>`count(*)::int` })
-        .from(schema.tasks)
-        .where(buildPublishedTaskCreatorFilter(seed.userId)),
-      tx
-        .select({ count: sql<number>`count(*)::int` })
-        .from(schema.tasks)
-        .where(and(eq(schema.tasks.assignedUserId, seed.userId), eq(schema.tasks.status, "accepted"))),
-      tx
-        .select({ count: sql<number>`count(*)::int` })
-        .from(schema.items)
-        .where(eq(schema.items.userId, seed.userId)),
-      tx
-        .select({ count: sql<number>`count(*)::int` })
-        .from(schema.opinionTopics)
-        .where(eq(schema.opinionTopics.creatorUserId, seed.userId)),
-      tx
-        .select({ count: sql<number>`count(*)::int` })
-        .from(schema.opinionTopicSupports)
-        .where(eq(schema.opinionTopicSupports.userId, seed.userId)),
-      tx
-        .select({ count: sql<number>`count(*)::int` })
-        .from(schema.opinionTopicOpposes)
-        .where(eq(schema.opinionTopicOpposes.userId, seed.userId)),
-      tx
-        .select({ count: sql<number>`count(*)::int` })
-        .from(schema.agents)
-        .where(eq(schema.agents.ownerUserId, seed.userId)),
-      tx
-        .select({ count: sql<number>`count(*)::int` })
-        .from(schema.agentCapabilities)
-        .innerJoin(schema.agents, eq(schema.agentCapabilities.agentId, schema.agents.id))
-        .where(eq(schema.agents.ownerUserId, seed.userId)),
-    ]);
+    const taskApplicationCountRow = await tx
+      .select({ count: sql<number>`count(*)::int` })
+      .from(schema.taskApplications)
+      .where(eq(schema.taskApplications.applicantUserId, seed.userId));
+    const taskCreatedCountRow = await tx
+      .select({ count: sql<number>`count(*)::int` })
+      .from(schema.tasks)
+      .where(buildPublishedTaskCreatorFilter(seed.userId));
+    const taskCompletedCountRow = await tx
+      .select({ count: sql<number>`count(*)::int` })
+      .from(schema.tasks)
+      .where(and(eq(schema.tasks.assignedUserId, seed.userId), eq(schema.tasks.status, "accepted")));
+    const itemOwnedCountRow = await tx
+      .select({ count: sql<number>`count(*)::int` })
+      .from(schema.items)
+      .where(eq(schema.items.userId, seed.userId));
+    const opinionCreatedCountRow = await tx
+      .select({ count: sql<number>`count(*)::int` })
+      .from(schema.opinionTopics)
+      .where(eq(schema.opinionTopics.creatorUserId, seed.userId));
+    const opinionSupportCountRow = await tx
+      .select({ count: sql<number>`count(*)::int` })
+      .from(schema.opinionTopicSupports)
+      .where(eq(schema.opinionTopicSupports.userId, seed.userId));
+    const opinionOpposeCountRow = await tx
+      .select({ count: sql<number>`count(*)::int` })
+      .from(schema.opinionTopicOpposes)
+      .where(eq(schema.opinionTopicOpposes.userId, seed.userId));
+    const agentCreatedCountRow = await tx
+      .select({ count: sql<number>`count(*)::int` })
+      .from(schema.agents)
+      .where(eq(schema.agents.ownerUserId, seed.userId));
+    const agentCapabilityCountRow = await tx
+      .select({ count: sql<number>`count(*)::int` })
+      .from(schema.agentCapabilities)
+      .innerJoin(schema.agents, eq(schema.agentCapabilities.agentId, schema.agents.id))
+      .where(eq(schema.agents.ownerUserId, seed.userId));
 
     metrics.taskApplicationCount = toCount(taskApplicationCountRow);
     metrics.taskCreatedCount = toCount(taskCreatedCountRow);

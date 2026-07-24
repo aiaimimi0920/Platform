@@ -21,7 +21,7 @@ Acceptance: required integration has no skipped suite and every error evidence c
   - `core/package.json` integration scripts
 - `P4-01` 通过验证：
   - `npm run build --workspace @neuro/account-domain`
-  - `npx tsc --noEmit --pretty false -p core/tsconfig.json`
+  - `npm run typecheck --workspace @neuro/core`
   - `npm run test:integration --workspace @neuro/core`
 - 当前剩余警告：
-  - identity / task-hub 相关集成测试仍会打印 dedicated read-model fallback 警告（`platform-summary -> fetch failed`），因为测试环境只验证本地数据库契约，不启动 core read-model HTTP 服务；这不影响 `P4-01` 判定，但后续 `P4-04` / acceptance 仍需统一为更清晰的 dependency observability 表达。
+  - task-hub 相关集成测试仍会打印 dedicated read-model fallback 警告（`platform-summary -> fetch failed`），因为测试环境只验证本地数据库契约，不启动 core read-model HTTP 服务；这不影响 `P4-01` 判定，但后续 `P4-04` / acceptance 仍需统一为更清晰的 dependency observability 表达。
