@@ -148,11 +148,11 @@ test("normalization redacts credentials from failure messages and diagnostics", 
     failures: [
       {
         message:
-          "Authorization: Bearer auth-secret token=token-secret api_key=api-secret password=pw-secret sk-live-123",
-        source: "gateway?api key=source-secret",
+          "Authorization: Bearer auth-secret Cookie: sid=cookie-secret token=token-secret api_key=api-secret password=pw-secret email_code=123456 sk-live-123",
+        source: "gateway?api key=source-secret&cookie=source-cookie",
         code: "token=code-secret",
         diagnostics:
-          'Bearer diag-bearer; api key="diag-key"; password: diag-password; sk-diagnostic-secret',
+          'Bearer diag-bearer; api key="diag-key"; password: diag-password; oauth-code=oauth-secret; verification-code=verify-secret; sk-diagnostic-secret',
       },
     ],
     retry: { retryable: true, retryAfterMs: null },
@@ -167,12 +167,17 @@ test("normalization redacts credentials from failure messages and diagnostics", 
     "token-secret",
     "api-secret",
     "pw-secret",
+    "cookie-secret",
+    "123456",
     "sk-live-123",
     "source-secret",
+    "source-cookie",
     "code-secret",
     "diag-bearer",
     "diag-key",
     "diag-password",
+    "oauth-secret",
+    "verify-secret",
     "sk-diagnostic-secret",
   ]) {
     assert.doesNotMatch(visibleFailureText, new RegExp(secret));
@@ -208,6 +213,36 @@ test("dependency failures classify unauthorized, timeout, and server errors with
     [unauthorized.failures[0]?.diagnostics, timeout.failures[0]?.diagnostics, serverError.failures[0]?.diagnostics].join(" "),
     /auth-secret|timeout-secret|server-secret/,
   );
+});
+
+test("dependency failures preserve safe operator diagnostics from classified internal requests", () => {
+  const result = createDependencyFailureResult<never>({
+    error: {
+      code: "INTERNAL_SERVER_ERROR",
+      status: 503,
+      category: "dependency",
+      service: "account-api",
+      requestId: "account-request-1",
+      correlationId: "account-correlation-1",
+      occurredAt: "2026-07-25T01:02:03.000Z",
+      retryable: true,
+      publicMessage: "账号服务暂不可用。",
+      diagnostics: "Authorization: Bearer diagnostic-secret email_code=654321",
+    },
+    message: "账号服务暂不可用。",
+    source: "account-api",
+  });
+
+  assert.equal(result.state, "unavailable");
+  assert.equal(result.correlationId, "account-correlation-1");
+  assert.equal(result.failures[0]?.source, "account-api");
+  assert.equal(result.failures[0]?.code, "ERR-DEPENDENCY");
+  assert.match(result.failures[0]?.diagnostics ?? "", /service=account-api/);
+  assert.match(result.failures[0]?.diagnostics ?? "", /category=dependency/);
+  assert.match(result.failures[0]?.diagnostics ?? "", /requestId=account-request-1/);
+  assert.match(result.failures[0]?.diagnostics ?? "", /correlationId=account-correlation-1/);
+  assert.match(result.failures[0]?.diagnostics ?? "", /retryable=true/);
+  assert.doesNotMatch(JSON.stringify(result), /diagnostic-secret|654321/);
 });
 
 test("dependency failures recognize auth errors that carry a 401 status or standard auth message", () => {

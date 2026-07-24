@@ -3,11 +3,14 @@ import { afterEach, describe, it } from "node:test";
 
 import { HttpError } from "./errors";
 import {
+  redactPlatformText,
   getPlatformCorsObservabilitySnapshot,
   isAllowedPlatformOrigin,
   platformCorsOrigin,
+  resolvePlatformRequestObservability,
   resetPlatformCorsObservabilityForTests,
   resolvePlatformAllowedOrigins,
+  serializePlatformLogError,
   serializePlatformError,
 } from "./http-server";
 
@@ -61,6 +64,79 @@ describe("backend foundation HTTP server helpers", () => {
         },
       },
     });
+  });
+
+  it("serializes request observability and operator diagnostics without leaking credentials", () => {
+    const serialized = serializePlatformError(
+      new HttpError(503, "MODULE_DISABLED", "Module unavailable token=server-secret", "agentRegistry"),
+      {
+        service: "core",
+        requestId: "request-p4-04",
+        correlationId: "correlation-p4-04",
+        occurredAt: "2026-07-25T01:02:03.000Z",
+      },
+    );
+
+    assert.equal(serialized.statusCode, 503);
+    assert.equal(serialized.body.error.requestId, "request-p4-04");
+    assert.equal(serialized.body.error.correlationId, "correlation-p4-04");
+    assert.equal(serialized.body.error.category, "dependency");
+    assert.deepEqual(serialized.body.error.diagnostics, {
+      service: "core",
+      category: "dependency",
+      occurredAt: "2026-07-25T01:02:03.000Z",
+      requestId: "request-p4-04",
+      correlationId: "correlation-p4-04",
+      retryable: true,
+      statusCode: 503,
+      moduleKey: "agentRegistry",
+    });
+    assert.doesNotMatch(JSON.stringify(serialized), /server-secret/);
+
+    const logEntry = serializePlatformLogError(
+      new Error("database password=log-secret email_code=654321"),
+      {
+        service: "account-api",
+        requestId: "request-log",
+        correlationId: "correlation-log",
+        occurredAt: "2026-07-25T01:02:04.000Z",
+      },
+    );
+    assert.equal(logEntry.service, "account-api");
+    assert.equal(logEntry.category, "internal");
+    assert.equal(logEntry.requestId, "request-log");
+    assert.doesNotMatch(JSON.stringify(logEntry), /log-secret|654321/);
+  });
+
+  it("normalizes request ids and redacts token/cookie/key/email-code shaped text", () => {
+    assert.deepEqual(
+      resolvePlatformRequestObservability(
+        {
+          "x-request-id": "request-safe-1",
+          "x-correlation-id": "correlation-safe-1",
+        },
+        { generateId: () => "generated-safe" },
+      ),
+      { requestId: "request-safe-1", correlationId: "correlation-safe-1" },
+    );
+
+    const unsafe = resolvePlatformRequestObservability(
+      {
+        "x-request-id": "Bearer request-secret",
+        "x-correlation-id": "correlation token=correlation-secret",
+      },
+      { generateId: () => "generated-safe" },
+    );
+    assert.deepEqual(unsafe, { requestId: "generated-safe", correlationId: "generated-safe" });
+    assert.doesNotMatch(JSON.stringify(unsafe), /request-secret|correlation-secret/);
+
+    const redacted = redactPlatformText(
+      "Authorization: Bearer auth-secret; Cookie: sid=cookie-secret; api_key=key-secret email_code=123456 sk-live-secret",
+    );
+    for (const secret of ["auth-secret", "cookie-secret", "key-secret", "123456", "sk-live-secret"]) {
+      assert.doesNotMatch(redacted, new RegExp(secret));
+    }
+    assert.match(redacted, /\[REDACTED\]/);
   });
 
   it("records CORS allow/reject decisions and exposes the active allowlist", () => {

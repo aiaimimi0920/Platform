@@ -1,6 +1,11 @@
 import type { ApiErrorPayload, InternalUserContext } from "@neuro/contracts";
 
-import { fetchInternal, resolveInternalRequestTimeoutMs } from "@/lib/internal-request";
+import {
+  classifyInternalDependencyError,
+  fetchInternal,
+  resolveInternalRequestTimeoutMs,
+  type ClassifiedInternalDependencyError,
+} from "@/lib/internal-request";
 
 const gatewayInternalUrl = process.env.AI_GATEWAY_INTERNAL_URL || "http://127.0.0.1:4200";
 const gatewayManagementToken =
@@ -15,6 +20,16 @@ const gatewayRequestTimeoutMs = resolveInternalRequestTimeoutMs(
 
 type GatewayRequestError = Error & {
   code?: ApiErrorPayload["code"];
+  status?: number | null;
+  statusCode?: number | null;
+  category?: ClassifiedInternalDependencyError["category"];
+  service?: ClassifiedInternalDependencyError["service"];
+  requestId?: string | null;
+  correlationId?: string | null;
+  occurredAt?: string;
+  retryable?: boolean;
+  diagnostics?: string;
+  publicMessage?: string;
 };
 
 type GatewayRequestOptions = {
@@ -22,12 +37,6 @@ type GatewayRequestOptions = {
   body?: unknown;
   userContext?: InternalUserContext | null;
 };
-
-type ApiErrorResponseBody = {
-  error?: ApiErrorPayload;
-  message?: string;
-  code?: ApiErrorPayload["code"];
-} | null;
 
 function buildGatewayHeaders(userContext?: InternalUserContext | null, hasJsonBody = false): HeadersInit {
   const headers: Record<string, string> = {};
@@ -56,19 +65,6 @@ function buildGatewayHeaders(userContext?: InternalUserContext | null, hasJsonBo
   return headers;
 }
 
-async function parseApiErrorResponse(response: Response): Promise<ApiErrorResponseBody> {
-  const raw = await response.text();
-  if (!raw) {
-    return null;
-  }
-
-  try {
-    return JSON.parse(raw) as ApiErrorResponseBody;
-  } catch {
-    return { message: raw };
-  }
-}
-
 export async function gatewayRequest<T>(pathname: string, options: GatewayRequestOptions = {}): Promise<T> {
   const hasJsonBody = options.body !== undefined;
   const response = await fetchInternal(`${gatewayInternalUrl}${pathname}`, {
@@ -81,10 +77,23 @@ export async function gatewayRequest<T>(pathname: string, options: GatewayReques
   });
 
   if (!response.ok) {
-    const payload = await parseApiErrorResponse(response);
-    const message = payload?.error?.message || payload?.message || `Gateway request failed: ${pathname}`;
+    const classified = await classifyInternalDependencyError(response, {
+      targetService: "gateway",
+      fallbackMessage: `Gateway request failed: ${pathname}`,
+    });
+    const message = classified.publicMessage;
     const error = new Error(message) as GatewayRequestError;
-    error.code = payload?.error?.code || payload?.code;
+    error.code = classified.code as ApiErrorPayload["code"] | undefined;
+    error.status = classified.status;
+    error.statusCode = classified.status;
+    error.category = classified.category;
+    error.service = classified.service;
+    error.requestId = classified.requestId;
+    error.correlationId = classified.correlationId;
+    error.occurredAt = classified.occurredAt;
+    error.retryable = classified.retryable;
+    error.diagnostics = classified.diagnostics;
+    error.publicMessage = classified.publicMessage;
     throw error;
   }
 

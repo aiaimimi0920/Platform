@@ -23,6 +23,17 @@ export type DependencyFailure = {
   diagnostics: string | null;
 };
 
+type ClassifiedDependencyErrorRecord = Record<string, unknown> & {
+  category?: string;
+  service?: string;
+  requestId?: string | null;
+  correlationId?: string | null;
+  occurredAt?: string;
+  retryable?: boolean;
+  status?: number | null;
+  statusCode?: number | null;
+};
+
 export type DependencyFailureInputs = readonly [
   DependencyFailureInput,
   ...DependencyFailureInput[],
@@ -108,14 +119,16 @@ const authorizationPattern = new RegExp(
   "gi",
 );
 const bearerPattern = new RegExp(String.raw`\bbearer\s+${secretValuePattern}`, "gi");
+const cookiePattern = /\b(Set-Cookie|Cookie)\b\s*[:=]\s*[^\r\n]*/gi;
 const namedSecretPattern = new RegExp(
-  String.raw`\b((?:(?:access|refresh|id)[_-]?)?token|api[_ -]?key|apikey|password)\b(\s*[:=]\s*)${secretValuePattern}`,
+  String.raw`\b((?:(?:access|refresh|id|session)[_-]?)?token|client[_ -]?secret|secret[_ -]?access[_ -]?key|access[_ -]?key|private[_ -]?key|api[_ -]?key|apikey|password|passwd|pwd|credentials?|secret|cookie|key|(?:email|oauth|verification)[_ -]?code)\b(\s*[:=]\s*)${secretValuePattern}`,
   "gi",
 );
 const skSecretPattern = /\bsk-[a-z0-9._-]+/gi;
 
 function redactDependencyText(value: string) {
   return value
+    .replace(cookiePattern, (_match, header: string) => `${header}: ${redactedValue}`)
     .replace(authorizationPattern, `Authorization: ${redactedValue}`)
     .replace(bearerPattern, `Bearer ${redactedValue}`)
     .replace(namedSecretPattern, (_match, name: string, separator: string) => {
@@ -197,6 +210,45 @@ function normalizeRetry(retry: DependencyRetryMetadata): DependencyRetryMetadata
   return { retryable: false, retryAfterMs: null };
 }
 
+function toRecord(value: unknown): Record<string, unknown> | null {
+  return typeof value === "object" && value !== null && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null;
+}
+
+function isClassifiedDependencyError(record: unknown): record is ClassifiedDependencyErrorRecord {
+  const normalized = toRecord(record);
+  if (!normalized) return false;
+  return typeof normalized.category === "string" || typeof normalized.service === "string";
+}
+
+function buildClassifiedDependencyDiagnostics(record: ClassifiedDependencyErrorRecord): string | null {
+  const parts = [
+    typeof record.service === "string" ? `service=${record.service}` : null,
+    typeof record.category === "string" ? `category=${record.category}` : null,
+    typeof record.occurredAt === "string" ? `occurredAt=${record.occurredAt}` : null,
+    typeof record.requestId === "string" ? `requestId=${record.requestId}` : null,
+    typeof record.correlationId === "string" ? `correlationId=${record.correlationId}` : null,
+    typeof record.retryable === "boolean" ? `retryable=${record.retryable}` : null,
+    typeof record.status === "number"
+      ? `status=${record.status}`
+      : typeof record.statusCode === "number"
+        ? `status=${record.statusCode}`
+        : null,
+  ].filter((part): part is string => typeof part === "string" && part.length > 0);
+  if (parts.length === 0) {
+    return null;
+  }
+  return redactDependencyText(parts.join(" ")).trim() || null;
+}
+
+function normalizeFailureCode(code: string | null, record: Record<string, unknown> | null): string | null {
+  const category = typeof record?.category === "string" ? record.category : null;
+  if (category === "dependency" || category === "internal") return "ERR-DEPENDENCY";
+  if (category === "auth") return "ERR-AUTH";
+  return code;
+}
+
 export function normalizeDependencyResult<T>(input: DependencyResultInput<T>): DependencyResult<T> {
   const correlationId = normalizeCorrelationId(input.correlationId);
 
@@ -242,7 +294,7 @@ export function createDependencyFailureResult<T>(args: {
   source: string;
   unauthorizedMessage?: string;
 }): DependencyResult<T> {
-  const errorRecord = typeof args.error === "object" && args.error !== null ? args.error : null;
+  const errorRecord = toRecord(args.error);
   const code = errorRecord && "code" in errorRecord && typeof errorRecord.code === "string" ? errorRecord.code : null;
   const statusCode =
     errorRecord && "statusCode" in errorRecord && typeof errorRecord.statusCode === "number"
@@ -255,14 +307,18 @@ export function createDependencyFailureResult<T>(args: {
     errorRecord && "correlationId" in errorRecord && (typeof errorRecord.correlationId === "string" || errorRecord.correlationId === null)
       ? errorRecord.correlationId
       : null;
+  const classified = isClassifiedDependencyError(errorRecord) ? errorRecord : null;
   const unauthorized =
+    classified?.category === "auth" ||
     code === "UNAUTHORIZED" ||
     code === "FORBIDDEN" ||
     code === "AUTHENTICATION_REQUIRED" ||
     statusCode === 401 ||
     statusCode === 403 ||
     errorMessage === "Authentication required";
-  const retryable = !unauthorized && code !== "MODULE_DISABLED" && code !== "NOT_FOUND" && code !== "BAD_REQUEST";
+  const retryable = typeof classified?.retryable === "boolean"
+    ? classified.retryable
+    : !unauthorized && code !== "MODULE_DISABLED" && code !== "NOT_FOUND" && code !== "BAD_REQUEST";
 
   return createDependencyResult({
     state: unauthorized ? "unauthorized" : "unavailable",
@@ -271,8 +327,8 @@ export function createDependencyFailureResult<T>(args: {
       {
         message: unauthorized ? args.unauthorizedMessage ?? args.message : args.message,
         source: args.source,
-        code,
-        diagnostics: null,
+        code: normalizeFailureCode(code, errorRecord),
+        diagnostics: classified ? buildClassifiedDependencyDiagnostics(classified) : null,
       },
     ],
     retry: retryable ? { retryable: true, retryAfterMs: null } : { retryable: false, retryAfterMs: null },

@@ -479,6 +479,7 @@ test("redacts credentials from evidence text", () => {
     '{"password":"json-password-secret","credential":"json-credential-secret"}',
     'credentials={"username":"public","secretAccessKey":"credential-object-secret"}',
     'credentials={\n  "username":"public",\n  "secretAccessKey":"multiline-credential-secret"\n}',
+    'email_code=987654 oauth_code=oauth-code-secret verification-code: verification-code-secret sk-canary-secret',
   ].join("\n");
   const output = redactText(input);
   assert.equal(output.includes("secret-token"), false);
@@ -508,6 +509,10 @@ test("redacts credentials from evidence text", () => {
   assert.equal(output.includes("json-credential-secret"), false);
   assert.equal(output.includes("credential-object-secret"), false);
   assert.equal(output.includes("multiline-credential-secret"), false);
+  assert.equal(output.includes("987654"), false);
+  assert.equal(output.includes("oauth-code-secret"), false);
+  assert.equal(output.includes("verification-code-secret"), false);
+  assert.equal(output.includes("sk-canary-secret"), false);
   assert.match(output, /Cookie\s*[:=]\s*\[REDACTED\]/i);
   assert.match(output, /Authorization\s*[:=]\s*\[REDACTED\]/i);
   assert.match(output, /postgres:\/\/\[REDACTED\]@db\.internal\/platform/i);

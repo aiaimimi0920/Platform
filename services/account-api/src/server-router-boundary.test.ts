@@ -3,6 +3,14 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, it } from "node:test";
 
+import Fastify from "fastify";
+
+import { HttpError } from "@neuro/backend-foundation/platform/errors";
+import {
+  registerPlatformRequestObservability,
+  serializePlatformError,
+} from "@neuro/backend-foundation/platform/http-server";
+
 const srcDir = join(process.cwd(), "src");
 
 const notificationWebhookRoutePaths = [
@@ -33,6 +41,46 @@ describe("account api server route boundaries", () => {
     for (const routePath of notificationWebhookRoutePaths) {
       assert.match(router, new RegExp(routePath.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
       assert.doesNotMatch(server, new RegExp(routePath.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+    }
+  });
+
+  it("returns safe account-api diagnostics with request correlation headers", async () => {
+    const app = Fastify({ logger: false });
+    registerPlatformRequestObservability(app, { service: "account-api" });
+    app.get("/__dependency-error", async () => {
+      throw new HttpError(503, "MODULE_DISABLED", "Account module unavailable token=account-secret", "benefits");
+    });
+    app.setErrorHandler((error, request, reply) => {
+      const serialized = serializePlatformError(error, {
+        service: "account-api",
+        requestId: request.platformRequest.requestId,
+        correlationId: request.platformRequest.correlationId,
+      });
+      return reply.status(serialized.statusCode).send(serialized.body);
+    });
+
+    try {
+      const response = await app.inject({
+        method: "GET",
+        url: "/__dependency-error",
+        headers: {
+          "x-request-id": "account-dependency-request",
+          "x-correlation-id": "account-dependency-correlation",
+        },
+      });
+
+      const body = response.json();
+      assert.equal(response.statusCode, 503);
+      assert.equal(response.headers["x-request-id"], "account-dependency-request");
+      assert.equal(response.headers["x-correlation-id"], "account-dependency-correlation");
+      assert.equal(body.error.category, "dependency");
+      assert.equal(body.error.diagnostics.service, "account-api");
+      assert.equal(body.error.diagnostics.requestId, "account-dependency-request");
+      assert.equal(body.error.diagnostics.correlationId, "account-dependency-correlation");
+      assert.equal(body.error.diagnostics.retryable, true);
+      assert.doesNotMatch(JSON.stringify(body), /account-secret/);
+    } finally {
+      await app.close();
     }
   });
 });

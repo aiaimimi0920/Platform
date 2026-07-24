@@ -29,6 +29,9 @@ import { HttpError } from "@neuro/backend-foundation/platform/errors";
 import { ensureFeatureModules } from "@neuro/backend-foundation/platform/feature-modules/service";
 import {
   platformCorsOrigin,
+  registerPlatformRequestObservability,
+  resolvePlatformRequestContext,
+  serializePlatformLogError,
   serializePlatformError,
 } from "@neuro/backend-foundation/platform/http-server";
 
@@ -44,6 +47,7 @@ export async function buildServer() {
     origin: platformCorsOrigin,
     credentials: true,
   });
+  registerPlatformRequestObservability(app, { service: "account-api" });
   await app.register(multipart, {
     limits: {
       fields: 128,
@@ -100,12 +104,13 @@ export async function buildServer() {
   await app.register(platformHttpDebugRouter);
   await app.register(notificationWebhookOpsRouter);
 
-  app.setErrorHandler((error, _request, reply) => {
+  app.setErrorHandler((error, request, reply) => {
+    const requestContext = resolvePlatformRequestContext(request.platformRequest, "account-api");
     if (!(error instanceof HttpError)) {
-      app.log.error(error);
+      app.log.error(serializePlatformLogError(error, requestContext));
     }
 
-    const serialized = serializePlatformError(error);
+    const serialized = serializePlatformError(error, requestContext);
     return reply.status(serialized.statusCode).send(serialized.body);
   });
 

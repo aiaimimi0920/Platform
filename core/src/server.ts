@@ -3,7 +3,13 @@ import { sql } from "drizzle-orm";
 import Fastify, { type FastifyInstance } from "fastify";
 
 import { HttpError } from "@/platform/errors";
-import { platformCorsOrigin, serializePlatformError } from "@/platform/http-server";
+import {
+  platformCorsOrigin,
+  registerPlatformRequestObservability,
+  resolvePlatformRequestContext,
+  serializePlatformError,
+  serializePlatformLogError,
+} from "@/platform/http-server";
 
 export type CorePlatformInitializer = () => Promise<void> | void;
 export type CoreReadyCheck = () => Promise<void>;
@@ -102,12 +108,13 @@ export async function registerCoreHttpDebugRoutes(app: FastifyInstance) {
 }
 
 export function registerCoreErrorHandler(app: FastifyInstance) {
-  app.setErrorHandler((error, _request, reply) => {
+  app.setErrorHandler((error, request, reply) => {
+    const requestContext = resolvePlatformRequestContext(request.platformRequest, "core");
     if (!(error instanceof HttpError)) {
-      app.log.error(error);
+      app.log.error(serializePlatformLogError(error, requestContext));
     }
 
-    const serialized = serializePlatformError(error);
+    const serialized = serializePlatformError(error, requestContext);
     return reply.status(serialized.statusCode).send(serialized.body);
   });
 }
@@ -119,6 +126,7 @@ export async function buildServer(options: CoreServerBuildOptions = {}) {
     origin: platformCorsOrigin,
     credentials: true,
   });
+  registerPlatformRequestObservability(app, { service: "core" });
 
   const platformInitializer = options.initializePlatform ?? initializeDefaultPlatform;
   if (platformInitializer) {

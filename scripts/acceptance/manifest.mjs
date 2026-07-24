@@ -126,9 +126,10 @@ export function redactText(value, sensitiveValues = []) {
       "$1[REDACTED]@",
     )
     .replace(
-      /(["']?)(access[-_]?token|refresh[-_]?token|id[-_]?token|session[-_]?token|client[-_]?secret|secret[-_]?access[-_]?key|access[-_]?key|private[-_]?key|token|cookie|api[-_]?key|authorization|password|passwd|pwd|credentials?|secret|key|code)\1\s*[:=]\s*(?:"[^"]*"|'[^']*'|[^\s,;}]+)/gi,
+      /(["']?)(access[-_]?token|refresh[-_]?token|id[-_]?token|session[-_]?token|client[-_]?secret|secret[-_]?access[-_]?key|access[-_]?key|private[-_]?key|token|cookie|api[-_]?key|authorization|password|passwd|pwd|credentials?|secret|key|(?:email|oauth|verification)[-_]?code|code)\1\s*[:=]\s*(?:"[^"]*"|'[^']*'|[^\s,;}]+)/gi,
       (_match, _quote, key) => `${key}=[REDACTED]`,
-    );
+    )
+    .replace(/\bsk-[a-z0-9._-]+/gi, "[REDACTED]");
 }
 
 const SENSITIVE_ARGUMENT_COMPONENTS = new Set([

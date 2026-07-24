@@ -1280,8 +1280,9 @@ test("core package exposes explicit heavy chat unit and required integration gat
 
   assert.match(packageJson.scripts?.test ?? "", /heavy-chat\/repository\.test\.ts/);
   assert.match(packageJson.scripts?.["test:heavy-chat"] ?? "", /heavy-chat\/repository\.test\.ts/);
+  assert.match(packageJson.scripts?.["test:integration"] ?? "", /test:integration:heavy-chat/);
   assert.match(
-    packageJson.scripts?.["test:integration"] ?? "",
+    packageJson.scripts?.["test:integration:heavy-chat"] ?? "",
     /heavy-chat\/repository\.integration\.test\.ts/,
   );
 });

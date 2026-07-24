@@ -3,9 +3,9 @@
 - [x] `P4-01` identity, wallet, commerce, task invariants。
 - [x] `P4-02` agent, mailbox, governance, arbitration, executor contracts。
 - [x] `P4-03` required PostgreSQL/Valkey/S3 fixture and OAuth contract。
-- [ ] `P4-04` correlation IDs, dependency taxonomy, secret redaction。
+- [x] `P4-04` correlation IDs, dependency taxonomy, secret redaction。
 
-Acceptance: required integration has no skipped suite and every error evidence contains service/category/time/correlation id without secrets.
+Acceptance: required integration has no skipped suite（`P4-03`），and every error/dependency evidence now contains service/category/time/correlation id without secrets（`P4-04`）。Phase 4 已完成；产品状态仍为 `Platform 产品未完成`。
 
 ## P4-01 完成记录
 
@@ -76,3 +76,27 @@ Acceptance: required integration has no skipped suite and every error evidence c
   - `npm run test:integration:required --workspace @neuro/account-domain`
   - `npm run test:integration:required --workspace @neuro/core`
   - 一次 production `runRequiredIntegrationFixture(...)` full summary：`10 discovered / 10 executed / 10 passed / 0 failed / 0 skipped`
+
+## P4-04 完成记录
+
+- `packages/backend-foundation/src/platform/http-server.ts` 新增共享 request observability：
+  - 归一化 `x-request-id` / `x-correlation-id`，拒绝 secret-shaped 或非法 header 值并生成安全 fallback。
+  - `serializePlatformError` 在有 request context 时附带 requestId、correlationId、category 与 diagnostics；`serializePlatformLogError` 为非 `HttpError` 输出已脱敏 structured log entry。
+  - `redactPlatformText` 覆盖 Authorization/Bearer、Cookie、token、key、client secret、password、email/oauth/verification code 与 `sk-*`。
+- Core 与 Account API HTTP 边界已注册共享 observability hook，并在错误处理器中使用安全 diagnostics / log entry；Core full test 中同步修正 heavy-chat required integration gate 的脚本断言，使其匹配当前 `test:integration:heavy-chat` 拆分。
+- Web 内部请求层已补齐：
+  - `fetchInternal` 为 Core / Account / Gateway 请求传播安全 request/correlation headers，并为 network/timeout transport failures 附带 service/category/time/correlation diagnostics。
+  - `classifyInternalDependencyError` 将 HTTP 非 2xx 和 transport errors 统一分类为 auth / validation / not_found / conflict / quota / dependency / internal，且对响应中的 secret-shaped request-id、correlation-id、code 做脱敏。
+  - Account/Core/Gateway/Heavy Chat clients 统一使用 classified dependency error；dependency result 保留安全 operator diagnostics，同时继续隐藏原始 credential-shaped message/diagnostics。
+- Acceptance evidence redaction 扩展到 email/oauth/verification code 与 `sk-*`，避免验收 stdout/stderr/evidence manifest 记录 canary secret。
+- `P4-04` 通过验证：
+  - `npm run test --workspace @neuro/backend-foundation`
+  - `npm run typecheck --workspace @neuro/backend-foundation`
+  - `npm run test --workspace @neuro/core`（151/151）
+  - `npm run typecheck --workspace @neuro/core`
+  - `npm run test --workspace @neuro/account-api`
+  - `npm run typecheck --workspace @neuro/account-api`
+  - `npm run test --workspace @neuro/web`（284/284）
+  - `npm run typecheck --workspace @neuro/web`
+  - `node --test scripts/acceptance/tests/manifest.test.mjs`
+  - `git diff --check -- Platform`（退出 0；仅 Git LF/CRLF 提示）

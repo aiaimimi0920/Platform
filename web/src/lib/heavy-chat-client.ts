@@ -12,7 +12,12 @@ import type {
   SendHeavyChatMessageRequest,
 } from "@neuro/contracts";
 
-import { fetchInternal, resolveInternalRequestTimeoutMs } from "./internal-request";
+import {
+  classifyInternalDependencyError,
+  fetchInternal,
+  resolveInternalRequestTimeoutMs,
+  type ClassifiedInternalDependencyError,
+} from "./internal-request";
 
 type HeavyChatCoreRequestOptions = {
   body?: unknown;
@@ -32,13 +37,33 @@ type HeavyChatErrorBody = {
 export class HeavyChatWebClientError extends Error {
   readonly statusCode: number;
   readonly code: ApiErrorCode | undefined;
+  readonly category: ClassifiedInternalDependencyError["category"];
+  readonly service: ClassifiedInternalDependencyError["service"];
+  readonly requestId: string | null;
+  readonly correlationId: string | null;
+  readonly occurredAt: string;
+  readonly retryable: boolean;
+  readonly diagnostics: string;
   readonly responseBody: unknown;
 
-  constructor(statusCode: number, message: string, code: ApiErrorCode | undefined, responseBody: unknown) {
+  constructor(
+    statusCode: number,
+    message: string,
+    code: ApiErrorCode | undefined,
+    responseBody: unknown,
+    dependency: ClassifiedInternalDependencyError,
+  ) {
     super(message);
     this.name = "HeavyChatWebClientError";
     this.statusCode = statusCode;
     this.code = code;
+    this.category = dependency.category;
+    this.service = dependency.service;
+    this.requestId = dependency.requestId;
+    this.correlationId = dependency.correlationId;
+    this.occurredAt = dependency.occurredAt;
+    this.retryable = dependency.retryable;
+    this.diagnostics = dependency.diagnostics;
     this.responseBody = responseBody;
   }
 }
@@ -102,10 +127,15 @@ async function heavyChatCoreRequest<T>(pathname: string, options: HeavyChatCoreR
       process.env.INTERNAL_FETCH_TIMEOUT_MS,
     ),
   });
+  const responseForClassification = response.clone();
   const body = await parseResponseBody(response);
   if (!response.ok) {
     const normalized = normalizeErrorBody(body);
-    throw new HeavyChatWebClientError(response.status, normalized.message, normalized.code, body);
+    const dependency = await classifyInternalDependencyError(responseForClassification, {
+      targetService: "core",
+      fallbackMessage: "Heavy chat request failed",
+    });
+    throw new HeavyChatWebClientError(response.status, normalized.message, normalized.code, body, dependency);
   }
   return body as T;
 }
