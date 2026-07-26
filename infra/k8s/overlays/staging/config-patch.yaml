@@ -1,0 +1,67 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: neuroloom-account-api-config
+data:
+  PLATFORM_INTERNAL_URL: "http://staging-neuroloom-core:4000"
+  AI_GATEWAY_INTERNAL_URL: "http://staging-neuroloom-gateway:4200"
+  BENEFIT_SERVICE_API_PUBLIC_BASE_URL: "https://new-api.staging.neuroloom.internal/v1"
+  AI_GATEWAY_PUBLIC_BASE_URL: "https://new-api.staging.neuroloom.internal"
+  AI_GATEWAY_COMPATIBILITY_BASE_URL: "https://account.staging.neuroloom.internal/v1/new-api"
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: neuroloom-gateway-config
+data:
+  AI_GATEWAY_PUBLIC_BASE_URL: "https://new-api.staging.neuroloom.internal"
+  AI_GATEWAY_COMPATIBILITY_BASE_URL: "https://account.staging.neuroloom.internal/v1/new-api"
+  OBJECT_STORAGE_BUCKET: "neuroloom-staging"
+  OBJECT_STORAGE_ENDPOINT: "https://r2.staging.neuroloom.internal"
+  S3_PUBLIC_BASE_URL: "https://files.staging.neuroloom.internal"
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: neuroloom-account-worker-config
+data:
+  PLATFORM_INTERNAL_URL: "http://staging-neuroloom-core:4000"
+  CORE_INTERNAL_URL: "http://staging-neuroloom-core:4000"
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: neuroloom-web-config
+data:
+  ACCOUNT_INTERNAL_URL: "http://staging-neuroloom-account-api:4000"
+  ACCOUNT_WORKER_INTERNAL_URL: "http://staging-neuroloom-account-worker:7303"
+  CORE_INTERNAL_URL: "http://staging-neuroloom-core:4000"
+  AI_GATEWAY_INTERNAL_URL: "http://staging-neuroloom-gateway:4200"
+  NEXTAUTH_URL: "https://app.staging.neuroloom.internal"
+  NEXT_PUBLIC_APP_URL: "https://app.staging.neuroloom.internal"
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: neuroloom-core-config
+data:
+  ACCOUNT_INTERNAL_URL: "http://staging-neuroloom-account-api:4000"
+  AI_GATEWAY_INTERNAL_URL: "http://staging-neuroloom-gateway:4200"
+  CORE_PUBLIC_BASE_URL: "https://api.staging.neuroloom.internal"
+  OBJECT_STORAGE_BUCKET: "neuroloom-staging"
+  OBJECT_STORAGE_ENDPOINT: "https://r2.staging.neuroloom.internal"
+  S3_PUBLIC_BASE_URL: "https://files.staging.neuroloom.internal"
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: neuroloom-worker-config
+data:
+  CORE_INTERNAL_URL: "http://staging-neuroloom-core:4000"
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: neuroloom-executor-config
+data:
+  CORE_INTERNAL_URL: "http://staging-neuroloom-core:4000"

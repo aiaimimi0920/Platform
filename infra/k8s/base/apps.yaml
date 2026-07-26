@@ -14,7 +14,7 @@ spec:
     spec:
       containers:
         - name: account-api
-          image: ghcr.io/example/neuroloom-account-api:latest
+          image: ghcr.io/aiaimimi0920/neuroloom-platform-account-api
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 4000
@@ -69,7 +69,7 @@ spec:
       terminationGracePeriodSeconds: 360
       containers:
         - name: gateway
-          image: ghcr.io/example/neuroloom-gateway:latest
+          image: ghcr.io/aiaimimi0920/neuroloom-platform-gateway
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 4200
@@ -139,7 +139,7 @@ spec:
     spec:
       containers:
         - name: web
-          image: ghcr.io/example/neuroloom-web:latest
+          image: ghcr.io/aiaimimi0920/neuroloom-platform-web
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 3000
@@ -186,7 +186,7 @@ spec:
     spec:
       containers:
         - name: core
-          image: ghcr.io/example/neuroloom-core:latest
+          image: ghcr.io/aiaimimi0920/neuroloom-platform-core
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 4000
@@ -233,7 +233,7 @@ spec:
     spec:
       containers:
         - name: account-worker
-          image: ghcr.io/example/neuroloom-account-worker:latest
+          image: ghcr.io/aiaimimi0920/neuroloom-platform-account-worker
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 7303
@@ -268,7 +268,7 @@ spec:
     spec:
       containers:
         - name: worker
-          image: ghcr.io/example/neuroloom-worker:latest
+          image: ghcr.io/aiaimimi0920/neuroloom-platform-worker
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 7301
@@ -303,7 +303,7 @@ spec:
     spec:
       containers:
         - name: executor
-          image: ghcr.io/example/neuroloom-executor:latest
+          image: ghcr.io/aiaimimi0920/neuroloom-platform-executor
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 7302
@@ -329,7 +329,7 @@ metadata:
 spec:
   ingressClassName: traefik
   rules:
-    - host: app.example.com
+    - host: app.platform.neuroloom.internal
       http:
         paths:
           - path: /
@@ -339,7 +339,7 @@ spec:
                 name: neuroloom-web
                 port:
                   name: http
-    - host: api.example.com
+    - host: api.platform.neuroloom.internal
       http:
         paths:
           - path: /internal/identity/linuxdo-upsert
@@ -403,11 +403,11 @@ spec:
   ingressClassName: account-traefik
   tls:
     - hosts:
-        - account-api.example.com
-        - new-api.example.com
+        - account-api.platform.neuroloom.internal
+        - new-api.platform.neuroloom.internal
       secretName: neuroloom-account-edge-tls
   rules:
-    - host: account-api.example.com
+    - host: account-api.platform.neuroloom.internal
       http:
         paths:
           - path: /v1/new-api
@@ -424,7 +424,7 @@ spec:
                 name: neuroloom-account-api
                 port:
                   name: http
-    - host: new-api.example.com
+    - host: new-api.platform.neuroloom.internal
       http:
         paths:
           - path: /v1

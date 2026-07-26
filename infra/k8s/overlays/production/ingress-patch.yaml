@@ -5,7 +5,7 @@ metadata:
 spec:
   ingressClassName: traefik
   rules:
-    - host: app.example.com
+    - host: app.platform.neuroloom.internal
       http:
         paths:
           - path: /
@@ -15,7 +15,7 @@ spec:
                 name: neuroloom-web
                 port:
                   name: http
-    - host: api.example.com
+    - host: api.platform.neuroloom.internal
       http:
         paths:
           - path: /internal/identity/linuxdo-upsert
@@ -76,19 +76,37 @@ metadata:
     traefik.ingress.kubernetes.io/router.entrypoints: websecure
     traefik.ingress.kubernetes.io/router.tls: "true"
 spec:
-  ingressClassName: account-traefik
+  ingressClassName: production-account-traefik
   tls:
     - hosts:
-        - account-api.example.com
+        - account.platform.neuroloom.internal
+        - new-api.platform.neuroloom.internal
       secretName: neuroloom-account-edge-tls
   rules:
-    - host: account-api.example.com
+    - host: account.platform.neuroloom.internal
       http:
         paths:
+          - path: /v1/new-api
+            pathType: Prefix
+            backend:
+              service:
+                name: neuroloom-gateway
+                port:
+                  name: http
           - path: /
             pathType: Prefix
             backend:
               service:
                 name: neuroloom-account-api
+                port:
+                  name: http
+    - host: new-api.platform.neuroloom.internal
+      http:
+        paths:
+          - path: /v1
+            pathType: Prefix
+            backend:
+              service:
+                name: neuroloom-gateway
                 port:
                   name: http

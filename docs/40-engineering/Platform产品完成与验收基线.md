@@ -146,19 +146,15 @@ Platform 只有同时满足下面条件，才允许标记为产品完成。
 - cleanup 只能删除本次 project 创建的容器、网络、volume 和临时目录。
 - 依赖必须按 `service_healthy` 启动，不以进程已启动替代 ready。
 
-### 3.3 生产部署清单仍是示例
+### 3.3 生产部署清单需与 release artifact 对齐
 
-Kubernetes 清单仍包含 `ghcr.io/example/*:latest`、`example.com`、示例对象存储地址，并缺少完整 migration 首次部署链。
+`P5-01` 已移除 Kubernetes 清单中的 `ghcr.io/example/*:latest`、`example.com`、示例对象存储地址，并补齐 staging / production namespace + namePrefix、digest replacement、migration Job、Gateway secret contract、namespace-scoped account-edge RBAC 与 deploy helper gates。
 
-正式修复方向：
+后续 release 仍必须完成：
 
-- Kustomize overlay 必须要求不可变镜像标签或 digest。
-- staging 与 production 使用独立 namespace/name prefix。
-- 禁止 `latest + IfNotPresent` 作为验收发布组合。
-- 增加 migration Job 和首次部署顺序。
-- 补齐 Gateway secret 模板或显式外部 secret contract。
-- 移除 account-edge 对全集群 Secret 的读权限。
-- deploy helper 必须执行 render、placeholder gate、rollout status 和 smoke。
+- `P5-03` 用真实 release artifact digest 替换当前 overlay 中的 release-contract seed digest。
+- `acceptance:release` 只接受 OCI/digest 输入，不得从源码 bind/build context 启动。
+- deploy helper 的 render、placeholder gate、migration wait、rollout status 和 smoke 结果需要被 release evidence 记录。
 
 ### 3.4 当前 release 不是完整 Platform 交付
 

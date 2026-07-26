@@ -6,9 +6,9 @@ data:
   PORT: "4000"
   PLATFORM_INTERNAL_URL: "http://neuroloom-core:4000"
   AI_GATEWAY_INTERNAL_URL: "http://neuroloom-gateway:4200"
-  BENEFIT_SERVICE_API_PUBLIC_BASE_URL: "https://new-api.example.com/v1"
-  AI_GATEWAY_PUBLIC_BASE_URL: "https://new-api.example.com"
-  AI_GATEWAY_COMPATIBILITY_BASE_URL: "https://account-api.example.com/v1/new-api"
+  BENEFIT_SERVICE_API_PUBLIC_BASE_URL: "https://new-api.platform.neuroloom.internal/v1"
+  AI_GATEWAY_PUBLIC_BASE_URL: "https://new-api.platform.neuroloom.internal"
+  AI_GATEWAY_COMPATIBILITY_BASE_URL: "https://account.platform.neuroloom.internal/v1/new-api"
 ---
 apiVersion: v1
 kind: ConfigMap
@@ -19,14 +19,14 @@ data:
   GATEWAY_RUNTIME_ROLE: "splitter"
   GATEWAY_SPLITTER_INITIAL_WORKER_PORT: "4201"
   GATEWAY_DEFAULT_PROJECT_ID: "platform-default-project"
-  AI_GATEWAY_PUBLIC_BASE_URL: "https://new-api.example.com"
-  AI_GATEWAY_COMPATIBILITY_BASE_URL: "https://account-api.example.com/v1/new-api"
+  AI_GATEWAY_PUBLIC_BASE_URL: "https://new-api.platform.neuroloom.internal"
+  AI_GATEWAY_COMPATIBILITY_BASE_URL: "https://account.platform.neuroloom.internal/v1/new-api"
   OBJECT_STORAGE_DRIVER: "s3-compatible"
-  OBJECT_STORAGE_BUCKET: "neuroloom-prod"
+  OBJECT_STORAGE_BUCKET: "neuroloom-platform"
   OBJECT_STORAGE_REGION: "auto"
-  OBJECT_STORAGE_ENDPOINT: "https://example-account.r2.cloudflarestorage.com"
+  OBJECT_STORAGE_ENDPOINT: "https://r2.platform.neuroloom.internal"
   OBJECT_STORAGE_FORCE_PATH_STYLE: "false"
-  S3_PUBLIC_BASE_URL: "https://files.example.com"
+  S3_PUBLIC_BASE_URL: "https://files.platform.neuroloom.internal"
 ---
 apiVersion: v1
 kind: ConfigMap
@@ -34,6 +34,7 @@ metadata:
   name: neuroloom-account-worker-config
 data:
   PLATFORM_INTERNAL_URL: "http://neuroloom-core:4000"
+  CORE_INTERNAL_URL: "http://neuroloom-core:4000"
   WORKER_POLL_INTERVAL_MS: "4000"
   WORKER_HEALTH_PORT: "7303"
   PRODUCT_SHADOW_SYNC_INTERVAL_MS: "300000"
@@ -97,9 +98,12 @@ metadata:
   name: neuroloom-web-config
 data:
   PORT: "3000"
+  ACCOUNT_INTERNAL_URL: "http://neuroloom-account-api:4000"
   ACCOUNT_WORKER_INTERNAL_URL: "http://neuroloom-account-worker:7303"
   CORE_INTERNAL_URL: "http://neuroloom-core:4000"
   AI_GATEWAY_INTERNAL_URL: "http://neuroloom-gateway:4200"
+  NEXTAUTH_URL: "https://app.platform.neuroloom.internal"
+  NEXT_PUBLIC_APP_URL: "https://app.platform.neuroloom.internal"
 ---
 apiVersion: v1
 kind: ConfigMap
@@ -107,19 +111,22 @@ metadata:
   name: neuroloom-core-config
 data:
   PORT: "4000"
-  CORE_PUBLIC_BASE_URL: "https://api.example.com"
+  ACCOUNT_INTERNAL_URL: "http://neuroloom-account-api:4000"
+  AI_GATEWAY_INTERNAL_URL: "http://neuroloom-gateway:4200"
+  CORE_PUBLIC_BASE_URL: "https://api.platform.neuroloom.internal"
   OBJECT_STORAGE_DRIVER: "s3-compatible"
-  OBJECT_STORAGE_BUCKET: "neuroloom-prod"
+  OBJECT_STORAGE_BUCKET: "neuroloom-platform"
   OBJECT_STORAGE_REGION: "auto"
-  OBJECT_STORAGE_ENDPOINT: "https://example-account.r2.cloudflarestorage.com"
+  OBJECT_STORAGE_ENDPOINT: "https://r2.platform.neuroloom.internal"
   OBJECT_STORAGE_FORCE_PATH_STYLE: "false"
-  S3_PUBLIC_BASE_URL: "https://files.example.com"
+  S3_PUBLIC_BASE_URL: "https://files.platform.neuroloom.internal"
 ---
 apiVersion: v1
 kind: ConfigMap
 metadata:
   name: neuroloom-worker-config
 data:
+  CORE_INTERNAL_URL: "http://neuroloom-core:4000"
   WORKER_POLL_INTERVAL_MS: "4000"
   WORKER_HEALTH_PORT: "7301"
 ---

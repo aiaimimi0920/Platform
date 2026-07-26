@@ -1,0 +1,22 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: neuroloom-account-edge
+spec:
+  template:
+    spec:
+      containers:
+        - name: traefik
+          args:
+            - --providers.kubernetesingress=true
+            - --providers.kubernetesingress.ingressclass=staging-account-traefik
+            - --providers.kubernetesingress.namespaces=$(POD_NAMESPACE)
+            - --entrypoints.web.address=:8000
+            - --entrypoints.web.http.redirections.entrypoint.to=websecure
+            - --entrypoints.web.http.redirections.entrypoint.scheme=https
+            - --entrypoints.websecure.address=:8443
+            - --entrypoints.websecure.http.tls=true
+            - --entrypoints.traefik.address=:8082
+            - --ping=true
+            - --ping.entrypoint=traefik
+            - --api.dashboard=false

@@ -11,7 +11,7 @@ spec:
           restartPolicy: OnFailure
           containers:
             - name: task
-              image: ghcr.io/example/neuroloom-executor:latest
+              image: ghcr.io/aiaimimi0920/neuroloom-platform-executor
               imagePullPolicy: IfNotPresent
               command: ["/bin/sh", "-c"]
               args: ["npm run run-task -- reconcile-due"]
@@ -34,7 +34,7 @@ spec:
           restartPolicy: OnFailure
           containers:
             - name: task
-              image: ghcr.io/example/neuroloom-executor:latest
+              image: ghcr.io/aiaimimi0920/neuroloom-platform-executor
               imagePullPolicy: IfNotPresent
               command: ["/bin/sh", "-c"]
               args: ["npm run run-task -- manual-review-release-stale"]
@@ -57,7 +57,7 @@ spec:
           restartPolicy: OnFailure
           containers:
             - name: task
-              image: ghcr.io/example/neuroloom-executor:latest
+              image: ghcr.io/aiaimimi0920/neuroloom-platform-executor
               imagePullPolicy: IfNotPresent
               command: ["/bin/sh", "-c"]
               args: ["npm run run-task -- manual-review-rebalance-auto"]
@@ -80,7 +80,7 @@ spec:
           restartPolicy: OnFailure
           containers:
             - name: task
-              image: ghcr.io/example/neuroloom-executor:latest
+              image: ghcr.io/aiaimimi0920/neuroloom-platform-executor
               imagePullPolicy: IfNotPresent
               command: ["/bin/sh", "-c"]
               args: ["npm run run-task -- manual-review-auto-assign-sla"]
@@ -103,7 +103,7 @@ spec:
           restartPolicy: OnFailure
           containers:
             - name: task
-              image: ghcr.io/example/neuroloom-executor:latest
+              image: ghcr.io/aiaimimi0920/neuroloom-platform-executor
               imagePullPolicy: IfNotPresent
               command: ["/bin/sh", "-c"]
               args: ["npm run run-task -- manual-review-sync-sla-anomalies"]
@@ -126,7 +126,7 @@ spec:
           restartPolicy: OnFailure
           containers:
             - name: task
-              image: ghcr.io/example/neuroloom-executor:latest
+              image: ghcr.io/aiaimimi0920/neuroloom-platform-executor
               imagePullPolicy: IfNotPresent
               command: ["/bin/sh", "-c"]
               args: ["npm run run-task -- fulfillment-anomalies-escalate"]
@@ -149,7 +149,7 @@ spec:
           restartPolicy: OnFailure
           containers:
             - name: task
-              image: ghcr.io/example/neuroloom-executor:latest
+              image: ghcr.io/aiaimimi0920/neuroloom-platform-executor
               imagePullPolicy: IfNotPresent
               command: ["/bin/sh", "-c"]
               args: ["npm run run-task -- arbitration-release-stale"]
@@ -172,7 +172,7 @@ spec:
           restartPolicy: OnFailure
           containers:
             - name: task
-              image: ghcr.io/example/neuroloom-executor:latest
+              image: ghcr.io/aiaimimi0920/neuroloom-platform-executor
               imagePullPolicy: IfNotPresent
               command: ["/bin/sh", "-c"]
               args: ["npm run run-task -- arbitration-cleanup-remote"]
@@ -195,7 +195,7 @@ spec:
           restartPolicy: OnFailure
           containers:
             - name: task
-              image: ghcr.io/example/neuroloom-executor:latest
+              image: ghcr.io/aiaimimi0920/neuroloom-platform-executor
               imagePullPolicy: IfNotPresent
               command: ["/bin/sh", "-c"]
               args: ["npm run run-task -- settlements-run"]
@@ -218,7 +218,7 @@ spec:
           restartPolicy: OnFailure
           containers:
             - name: task
-              image: ghcr.io/example/neuroloom-executor:latest
+              image: ghcr.io/aiaimimi0920/neuroloom-platform-executor
               imagePullPolicy: IfNotPresent
               command: ["/bin/sh", "-c"]
               args: ["npm run run-task -- opinion-monthly-leaders"]
@@ -241,7 +241,7 @@ spec:
           restartPolicy: OnFailure
           containers:
             - name: task
-              image: ghcr.io/example/neuroloom-executor:latest
+              image: ghcr.io/aiaimimi0920/neuroloom-platform-executor
               imagePullPolicy: IfNotPresent
               command: ["/bin/sh", "-c"]
               args: ["npm run run-task -- callback-auto-remediate"]
@@ -264,7 +264,7 @@ spec:
           restartPolicy: OnFailure
           containers:
             - name: task
-              image: ghcr.io/example/neuroloom-executor:latest
+              image: ghcr.io/aiaimimi0920/neuroloom-platform-executor
               imagePullPolicy: IfNotPresent
               command: ["/bin/sh", "-c"]
               args: ["npm run run-task -- callback-compatibility-cleanup"]

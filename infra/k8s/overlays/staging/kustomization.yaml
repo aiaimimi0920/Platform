@@ -1,6 +1,28 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
+namespace: neuroloom-staging
+namePrefix: staging-
 resources:
+  - namespace.yaml
   - ../../base
+images:
+  - name: ghcr.io/aiaimimi0920/neuroloom-platform-account-api
+    digest: sha256:cd6a3e6b1e197da8fa916c8b9fa0d06f562f105817e3a3c199d801ec39ff8205
+  - name: ghcr.io/aiaimimi0920/neuroloom-platform-gateway
+    digest: sha256:8ba4cc659b1fc5cad9e355fd5cd24214eb6f8a22c479d03fc51d0867328c295f
+  - name: ghcr.io/aiaimimi0920/neuroloom-platform-web
+    digest: sha256:4af00b6ff28c74fbdd02ec19efa8d56868b8e5b3e8fc2874b697cc4d915d0a3b
+  - name: ghcr.io/aiaimimi0920/neuroloom-platform-core
+    digest: sha256:33d40749cef384e0dd89781affca547f6febd8d9cdafe114cddde922e347eb4e
+  - name: ghcr.io/aiaimimi0920/neuroloom-platform-account-worker
+    digest: sha256:0601a1d4586d5c3f29b4ca6580903e853ad318f0c3448d6f3504e6c5950fac9a
+  - name: ghcr.io/aiaimimi0920/neuroloom-platform-worker
+    digest: sha256:e12bfd16a09601eaaf81e848871d61c73f876e0ef44aebbba368a3512a616478
+  - name: ghcr.io/aiaimimi0920/neuroloom-platform-executor
+    digest: sha256:64f60b6f1996e7a07913120a5b22cc979a52f321d1de7a5bda9e6e8cd79e44a6
+  - name: docker.io/library/traefik
+    digest: sha256:c46e5e030c40a062c7c8c2d80cb7c7e68b44fce46e9c35b7120b9c0c53a3f00c
 patches:
+  - path: config-patch.yaml
+  - path: account-edge-patch.yaml
   - path: ingress-patch.yaml
