@@ -189,8 +189,15 @@ Get-Content -LiteralPath $checksumsPath | Where-Object { -not [string]::IsNullOr
     $checksumEntries[$parts[1].Trim()] = $parts[0].ToLowerInvariant()
 }
 
+$checksumsFullPath = [System.IO.Path]::GetFullPath($checksumsPath)
 $files = Get-ChildItem -LiteralPath $packagePath -Recurse -File |
-    Where-Object { $_.FullName -ne $checksumsPath } |
+    Where-Object {
+        -not [string]::Equals(
+            [System.IO.Path]::GetFullPath($_.FullName),
+            $checksumsFullPath,
+            [System.StringComparison]::OrdinalIgnoreCase
+        )
+    } |
     Sort-Object FullName
 
 foreach ($file in $files) {
