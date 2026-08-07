@@ -39,8 +39,38 @@ jobs:
       - name: Run repository smoke checks
         run: node --test scripts/smoke.mjs
 
-      - name: Run workspace unit tests
-        run: npm test
+      - name: Build shared contracts
+        run: npm run build --workspace @neuro/contracts
+
+      - name: Test contracts
+        run: npm test --workspace @neuro/contracts
+
+      - name: Test backend foundation
+        run: npm test --workspace @neuro/backend-foundation
+
+      - name: Test AI Gateway domain
+        run: npm test --workspace @neuro/ai-gateway-domain
+
+      - name: Test account domain
+        run: npm test --workspace @neuro/account-domain
+
+      - name: Test account API
+        run: npm test --workspace @neuro/account-api
+
+      - name: Test account worker
+        run: npm test --workspace @neuro/account-worker
+
+      - name: Test Platform Core
+        run: npm test --workspace @neuro/core
+
+      - name: Test executor
+        run: npm test --workspace @neuro/executor
+
+      - name: Test worker
+        run: npm test --workspace @neuro/worker
+
+      - name: Test Web
+        run: npm test --workspace @neuro/web
 
       - name: Run workspace typecheck
         run: npm run typecheck
