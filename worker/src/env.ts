@@ -7,6 +7,9 @@ type WorkerEnv = {
   platformOperatorUserIds: string[];
   coreInternalUrl: string | null;
   internalApiToken: string | null;
+  coreInternalFetchTimeoutMs: number;
+  databaseConnectionTimeoutMs: number;
+  databaseQueryTimeoutMs: number;
   agentExecutionDispatchIntervalMs: number;
   agentExecutionDispatchLimit: number;
   agentExecutionSettlementIntervalMs: number;
@@ -44,6 +47,9 @@ function parseCsvList(value: string | undefined) {
 const DEFAULT_POLL_INTERVAL_MS = 4000;
 const DEFAULT_PROCESSING_LEASE_TIMEOUT_MS = 5 * 60 * 1000;
 const DEFAULT_HEALTH_PORT = 7301;
+const DEFAULT_CORE_INTERNAL_FETCH_TIMEOUT_MS = 10_000;
+const DEFAULT_DATABASE_CONNECTION_TIMEOUT_MS = 5_000;
+const DEFAULT_DATABASE_QUERY_TIMEOUT_MS = 30_000;
 
 export const env: WorkerEnv = {
   databaseUrl: requireEnv("DATABASE_URL"),
@@ -58,6 +64,21 @@ export const env: WorkerEnv = {
   platformOperatorUserIds: parseCsvList(process.env.PLATFORM_OPERATOR_USER_IDS),
   coreInternalUrl: process.env.CORE_INTERNAL_URL?.trim() || null,
   internalApiToken: process.env.INTERNAL_API_TOKEN?.trim() || null,
+  coreInternalFetchTimeoutMs: parseNumber(
+    process.env.CORE_INTERNAL_FETCH_TIMEOUT_MS,
+    DEFAULT_CORE_INTERNAL_FETCH_TIMEOUT_MS,
+    250,
+  ),
+  databaseConnectionTimeoutMs: parseNumber(
+    process.env.DATABASE_CONNECTION_TIMEOUT_MS,
+    DEFAULT_DATABASE_CONNECTION_TIMEOUT_MS,
+    250,
+  ),
+  databaseQueryTimeoutMs: parseNumber(
+    process.env.DATABASE_QUERY_TIMEOUT_MS,
+    DEFAULT_DATABASE_QUERY_TIMEOUT_MS,
+    250,
+  ),
   agentExecutionDispatchIntervalMs: parseNumber(
     process.env.AGENT_EXECUTION_DISPATCH_INTERVAL_MS,
     5_000,

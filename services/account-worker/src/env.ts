@@ -30,6 +30,11 @@ type WorkerEnv = {
   redisUrl: string;
   sharedDatabaseUrl: string;
   sharedRedisUrl: string;
+  databaseConnectionTimeoutMs: number;
+  databaseQueryTimeoutMs: number;
+  platformInternalUrl: string;
+  internalApiToken: string | null;
+  coreInternalFetchTimeoutMs: number;
   emailDeliveryMode: "console" | "smtp";
   emailFromAddress: string;
   emailFromName: string | null;
@@ -212,6 +217,9 @@ const DEFAULT_NOTIFICATION_WEBHOOK_TIMEOUT_MS = 5000;
 const DEFAULT_NOTIFICATION_WEBHOOK_STATE_TTL_HOURS = 24;
 const DEFAULT_PROCESSING_LEASE_TIMEOUT_MS = 5 * 60 * 1000;
 const DEFAULT_PROCESSING_RECOVERY_LIMIT = 100;
+const DEFAULT_DATABASE_CONNECTION_TIMEOUT_MS = 5_000;
+const DEFAULT_DATABASE_QUERY_TIMEOUT_MS = 30_000;
+const DEFAULT_CORE_INTERNAL_FETCH_TIMEOUT_MS = 10_000;
 
 const sharedDatabaseUrl = requireEnv("DATABASE_URL");
 const sharedRedisUrl = requireEnv("REDIS_URL");
@@ -239,6 +247,27 @@ export const env: WorkerEnv = {
   redisUrl: accountRedisUrl || sharedRedisUrl,
   sharedDatabaseUrl,
   sharedRedisUrl,
+  databaseConnectionTimeoutMs: parseNumber(
+    process.env.ACCOUNT_DATABASE_CONNECTION_TIMEOUT_MS ?? process.env.DATABASE_CONNECTION_TIMEOUT_MS,
+    DEFAULT_DATABASE_CONNECTION_TIMEOUT_MS,
+    250,
+  ),
+  databaseQueryTimeoutMs: parseNumber(
+    process.env.ACCOUNT_DATABASE_QUERY_TIMEOUT_MS ?? process.env.DATABASE_QUERY_TIMEOUT_MS,
+    DEFAULT_DATABASE_QUERY_TIMEOUT_MS,
+    250,
+  ),
+  platformInternalUrl: (
+    process.env.PLATFORM_INTERNAL_URL?.trim() ||
+    process.env.CORE_INTERNAL_URL?.trim() ||
+    "http://127.0.0.1:4000"
+  ).replace(/\/+$/, ""),
+  internalApiToken: process.env.INTERNAL_API_TOKEN?.trim() || null,
+  coreInternalFetchTimeoutMs: parseNumber(
+    process.env.CORE_INTERNAL_FETCH_TIMEOUT_MS,
+    DEFAULT_CORE_INTERNAL_FETCH_TIMEOUT_MS,
+    250,
+  ),
   emailDeliveryMode: parseEmailDeliveryMode(process.env.ACCOUNT_EMAIL_DELIVERY_MODE),
   emailFromAddress: process.env.ACCOUNT_EMAIL_FROM_ADDRESS?.trim() || "noreply@neuro.local",
   emailFromName: process.env.ACCOUNT_EMAIL_FROM_NAME?.trim() || "NeuroLoom",

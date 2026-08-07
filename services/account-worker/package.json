@@ -16,9 +16,10 @@
   "dependencies": {
     "@neuro/account-domain": "*",
     "@neuro/ai-gateway-domain": "*",
+    "@neuro/backend-foundation": "*",
     "@neuro/contracts": "*",
     "ioredis": "^5.8.2",
-    "nodemailer": "^8.0.10",
+    "nodemailer": "^9.0.5",
     "pg": "^8.16.3"
   },
   "devDependencies": {

@@ -1,4 +1,5 @@
 import type { EventName } from "@neuro/contracts";
+import { requestInternalText } from "@neuro/backend-foundation/platform/internal-request";
 import {
   createMailboxMessage,
   db,
@@ -72,32 +73,29 @@ async function deleteProductShadowFromEvent(productId: string, eventName: string
   }
 }
 
-function resolvePlatformInternalUrl() {
-  const raw = process.env.PLATFORM_INTERNAL_URL?.trim() || process.env.CORE_INTERNAL_URL?.trim() || "http://127.0.0.1:4000";
-  return raw.replace(/\/+$/, "");
-}
-
 async function syncGatewayAccessGrantFromCore(itemId: string, eventName: string) {
   if (!itemId) return;
-  const internalApiToken = process.env.INTERNAL_API_TOKEN?.trim();
-  if (!internalApiToken) {
+  if (!env.internalApiToken) {
     return;
   }
 
   try {
-    const response = await fetch(
-      `${resolvePlatformInternalUrl()}/v1/internal/items/${encodeURIComponent(itemId)}/gateway-access-grants/sync`,
+    const { response, text } = await requestInternalText(
+      `${env.platformInternalUrl}/v1/internal/items/${encodeURIComponent(itemId)}/gateway-access-grants/sync`,
       {
         method: "POST",
         headers: {
-          "x-internal-api-token": internalApiToken,
+          "x-internal-api-token": env.internalApiToken,
         },
+      },
+      {
+        timeoutMs: env.coreInternalFetchTimeoutMs,
+        timeoutMessage: `Core gateway access sync timed out for ${itemId}`,
       },
     );
 
     if (!response.ok) {
-      const raw = await response.text();
-      throw new Error(raw || `core sync failed with ${response.status}`);
+      throw new Error(text || `core sync failed with ${response.status}`);
     }
   } catch (error) {
     console.warn(

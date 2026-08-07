@@ -155,6 +155,7 @@ $script = Get-Content -Raw -LiteralPath $scriptPath
 Assert-Contains $script "[string]`$PackageDir" "Verifier must accept a release package directory."
 Assert-Contains $script "manifest.json" "Verifier must inspect manifest.json."
 Assert-Contains $script "webDestination" "Verifier must validate Platform Web payload location."
+Assert-Contains $script "packageRoot" "Verifier must validate the relocatable package root."
 Assert-Contains $script "checksums.sha256" "Verifier must validate full release checksums."
 Assert-Contains $script ".zip.sha256" "Verifier must validate zip sidecar hashes."
 Assert-Contains $script "web\node_modules" "Verifier must reject node_modules in the web payload."
@@ -195,25 +196,25 @@ try {
     [System.IO.File]::WriteAllText("$zipPath.sha256", "$zipHash  Platform-fixture-platform-web-web-next.zip`r`n", [System.Text.ASCIIEncoding]::new())
 
     $manifest = [ordered]@{
-        schemaVersion = 1
+        schemaVersion = 2
         app = "Platform"
         component = "web"
         versionId = "fixture-platform-web"
         profile = "release"
         target = "web-next"
-        destination = [System.IO.Path]::GetFullPath($packageDir)
-        webDestination = [System.IO.Path]::GetFullPath((Join-Path $packageDir "web"))
+        packageRoot = "."
+        webDestination = "web"
         commands = @(
-            [ordered]@{ display = "npm run build --workspace @neuro/contracts"; logRelativePath = "logs\platform-contracts-build.log" },
-            [ordered]@{ display = "npm run build --workspace web"; logRelativePath = "logs\platform-web-build.log" }
+            [ordered]@{ display = "npm run build --workspace @neuro/contracts"; workingDirectory = "."; logRelativePath = "logs\platform-contracts-build.log" },
+            [ordered]@{ display = "npm run build --workspace web"; workingDirectory = "."; logRelativePath = "logs\platform-web-build.log" }
         )
         copyRoots = @(
-            [ordered]@{ destinationRelativePath = "web\src" },
-            [ordered]@{ destinationRelativePath = "web\public" },
-            [ordered]@{ destinationRelativePath = "web\data" },
-            [ordered]@{ destinationRelativePath = "web\.next\server" },
-            [ordered]@{ destinationRelativePath = "web\.next\static" },
-            [ordered]@{ destinationRelativePath = "packages\contracts\dist" }
+            [ordered]@{ source = "web\src"; destinationRelativePath = "web\src" },
+            [ordered]@{ source = "web\public"; destinationRelativePath = "web\public" },
+            [ordered]@{ source = "web\data"; destinationRelativePath = "web\data" },
+            [ordered]@{ source = "web\.next\server"; destinationRelativePath = "web\.next\server" },
+            [ordered]@{ source = "web\.next\static"; destinationRelativePath = "web\.next\static" },
+            [ordered]@{ source = "packages\contracts\dist"; destinationRelativePath = "packages\contracts\dist" }
         )
         copyFiles = @(
             New-HashRecord -BasePath $packageDir -Path (Join-Path $packageDir "package.json") -Kind "workspace-package-json"
@@ -254,6 +255,44 @@ try {
     Assert-Equal "passed" $result.status "Verifier must emit passed status for a valid fixture."
     Assert-Equal "fixture-platform-web" $result.versionId "Verifier must preserve the manifest version id."
     Assert-Equal "web-next" $result.target "Verifier must preserve the Platform Web target."
+
+    $relocatedPackageDir = Join-Path $tempRoot "relocated\renamed-platform-package"
+    New-Item -ItemType Directory -Path (Split-Path -Parent $relocatedPackageDir) -Force | Out-Null
+    Copy-Item -LiteralPath $packageDir -Destination $relocatedPackageDir -Recurse -Force
+    $relocatedOutput = & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $scriptPath -PackageDir $relocatedPackageDir 2>&1
+    $relocatedExitCode = $LASTEXITCODE
+    Assert-Equal 0 $relocatedExitCode "Verifier must accept a package moved after build. Output: $($relocatedOutput -join [Environment]::NewLine)"
+    $relocatedResult = ($relocatedOutput -join [Environment]::NewLine) | ConvertFrom-Json
+    Assert-Equal "passed" $relocatedResult.status "Relocated package verification must emit passed status."
+
+    $unsafeManifestPath = Join-Path $relocatedPackageDir "manifest.json"
+    $unsafeManifest = Get-Content -Raw -LiteralPath $unsafeManifestPath | ConvertFrom-Json
+    $unsafeManifest.webDestination = [System.IO.Path]::GetFullPath((Join-Path $relocatedPackageDir "web"))
+    Write-Text -Path $unsafeManifestPath -Text (($unsafeManifest | ConvertTo-Json -Depth 12) + [Environment]::NewLine)
+    $previousErrorActionPreference = $ErrorActionPreference
+    try {
+        $ErrorActionPreference = "Continue"
+        $unsafeOutput = & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $scriptPath -PackageDir $relocatedPackageDir 2>&1
+        $unsafeExitCode = $LASTEXITCODE
+    } finally {
+        $ErrorActionPreference = $previousErrorActionPreference
+    }
+    Assert-True ($unsafeExitCode -ne 0) "Verifier must reject an absolute webDestination."
+    Assert-Contains ($unsafeOutput -join [Environment]::NewLine) "safe package-relative path" "Verifier failure must explain unsafe manifest paths."
+
+    $unsafeManifest.webDestination = "web"
+    $unsafeManifest.copyFiles[0].path = "..\outside-package.json"
+    Write-Text -Path $unsafeManifestPath -Text (($unsafeManifest | ConvertTo-Json -Depth 12) + [Environment]::NewLine)
+    $previousErrorActionPreference = $ErrorActionPreference
+    try {
+        $ErrorActionPreference = "Continue"
+        $escapedPathOutput = & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $scriptPath -PackageDir $relocatedPackageDir 2>&1
+        $escapedPathExitCode = $LASTEXITCODE
+    } finally {
+        $ErrorActionPreference = $previousErrorActionPreference
+    }
+    Assert-True ($escapedPathExitCode -ne 0) "Verifier must reject hash records that escape the package directory."
+    Assert-Contains ($escapedPathOutput -join [Environment]::NewLine) "safe package-relative path" "Verifier failure must explain escaped hash record paths."
 
     New-Item -ItemType Directory -Path (Join-Path $packageDir "web\node_modules") -Force | Out-Null
     $previousErrorActionPreference = $ErrorActionPreference

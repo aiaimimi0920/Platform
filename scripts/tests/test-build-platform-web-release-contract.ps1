@@ -115,8 +115,20 @@ try {
     Assert-True (Test-Path -LiteralPath (Join-Path $stubDestination "packages\contracts\package.json") -PathType Leaf) "Build mode must copy @neuro/contracts package metadata."
 
     $manifest = Get-Content -LiteralPath (Join-Path $stubDestination "manifest.json") -Raw | ConvertFrom-Json
+    Assert-Equal 2 $manifest.schemaVersion "Build manifest must use the relocatable schema."
+    Assert-Equal "." $manifest.packageRoot "Build manifest package root must be package-relative."
+    Assert-Equal "web" $manifest.webDestination "Build manifest web destination must be package-relative."
+    Assert-True ($manifest.PSObject.Properties.Name -notcontains "repoRoot") "Build manifest must not disclose the source repository path."
+    Assert-True ($manifest.PSObject.Properties.Name -notcontains "releaseRoot") "Build manifest must not bind the package to its original release root."
+    Assert-True ($manifest.PSObject.Properties.Name -notcontains "destination") "Build manifest must not bind the package to its original destination."
+    Assert-True (@($manifest.commands | ForEach-Object { [string]$_.workingDirectory }) -notcontains $repoRoot) "Build manifest command provenance must not contain absolute repository paths."
+    Assert-True (@($manifest.copyRoots | Where-Object { [System.IO.Path]::IsPathRooted([string]$_.source) }).Count -eq 0) "Build manifest copy provenance must use repository-relative paths."
+    Assert-True (-not (Get-Content -Raw -LiteralPath (Join-Path $stubDestination "BUILD_INFO.txt")).Contains($repoRoot)) "Build info must not disclose the source repository path."
     $buildLogs = @($manifest.buildLogs | ForEach-Object { [string]$_.path })
     Assert-Equal "logs\platform-contracts-build.log,logs\platform-web-build.log" ($buildLogs -join ",") "Build manifest must keep both build logs."
+    foreach ($buildLog in $buildLogs) {
+        Assert-True (-not (Get-Content -Raw -LiteralPath (Join-Path $stubDestination $buildLog)).Contains($repoRoot)) "Build logs must not disclose the source repository path."
+    }
 
     $zipPath = Join-Path $stubDestination "packages\Platform-$stubVersionId-web-next.zip"
     $zipShaPath = "$zipPath.sha256"

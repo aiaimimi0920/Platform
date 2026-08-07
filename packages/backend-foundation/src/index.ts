@@ -6,6 +6,7 @@ export * from "./db/schema";
 export * from "./platform/errors";
 export * from "./platform/http-server";
 export * from "./platform/internal-auth";
+export * from "./platform/internal-request";
 export * from "./platform/feature-modules/schema";
 export * from "./platform/feature-modules/service";
 export * from "./platform/outbox/schema";

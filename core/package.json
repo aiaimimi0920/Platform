@@ -47,6 +47,7 @@
   "devDependencies": {
     "@types/node": "^20.19.27",
     "@types/pg": "^8.15.5",
+    "embedded-postgres": "^18.4.0-beta.17",
     "tsx": "^4.20.6",
     "typescript": "^5.8.3"
   }

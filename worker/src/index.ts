@@ -1,4 +1,5 @@
 import { env } from "@/env";
+import { requestInternalText } from "@neuro/backend-foundation/platform/internal-request";
 import {
   createWorkerHealthState,
   markRecoveredProcessingEvents,
@@ -26,21 +27,27 @@ async function callCoreInternal(pathname: string, body: Record<string, unknown>)
     return null;
   }
 
-  const response = await fetch(`${env.coreInternalUrl.replace(/\/+$/, "")}${pathname}`, {
-    method: "POST",
-    headers: {
-      "content-type": "application/json",
-      "x-internal-api-token": env.internalApiToken,
+  const { response, text } = await requestInternalText(
+    `${env.coreInternalUrl.replace(/\/+$/, "")}${pathname}`,
+    {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-internal-api-token": env.internalApiToken,
+      },
+      body: JSON.stringify(body),
     },
-    body: JSON.stringify(body),
-  });
+    {
+      timeoutMs: env.coreInternalFetchTimeoutMs,
+      timeoutMessage: `Internal core call timed out: ${pathname}`,
+    },
+  );
 
   if (!response.ok) {
-    const responseText = await response.text();
-    throw new Error(`Internal core call failed: ${pathname} ${response.status} ${responseText}`.trim());
+    throw new Error(`Internal core call failed: ${pathname} ${response.status} ${text}`.trim());
   }
 
-  return response.text().then((text) => (text.trim() ? text : null));
+  return text.trim() ? text : null;
 }
 
 async function runBackgroundLoops(

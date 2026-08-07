@@ -13,6 +13,7 @@
     "test:integration:required": "node -e \"console.log('No required integration suites for @neuro/worker')\""
   },
   "dependencies": {
+    "@neuro/backend-foundation": "*",
     "@neuro/contracts": "*",
     "ioredis": "^5.8.2",
     "pg": "^8.16.3"

@@ -68,6 +68,16 @@ describe("independent Platform repository", () => {
     assert(statSync(join(rootDir, "CONTRIBUTING.md")).isFile());
   });
 
+  it("keeps root dependencies scoped to repository-level tooling", () => {
+    const packageMetadata = JSON.parse(read("package.json"));
+    const corePackageMetadata = JSON.parse(read("core/package.json"));
+
+    assert.strictEqual(packageMetadata.dependencies, undefined);
+    assert.strictEqual(packageMetadata.main, undefined);
+    assert.deepStrictEqual(Object.keys(packageMetadata.devDependencies).sort(), ["pg", "tsc-alias", "tsx"]);
+    assert.strictEqual(typeof corePackageMetadata.devDependencies?.["embedded-postgres"], "string");
+  });
+
   it("owns quick CI and Windows release contracts", () => {
     const workflow = read(".github/workflows/ci.yml");
     assert(workflow.includes("name: Platform CI"));

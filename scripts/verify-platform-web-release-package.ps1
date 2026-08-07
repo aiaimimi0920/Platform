@@ -32,6 +32,24 @@ function Assert-Equal {
     }
 }
 
+function Assert-SafeRelativePath {
+    param(
+        [string]$RelativePath,
+        [string]$FieldName,
+        [switch]$AllowCurrentDirectory
+    )
+
+    $isCurrentDirectory = $RelativePath -eq "."
+    if (
+        [string]::IsNullOrWhiteSpace($RelativePath) -or
+        [System.IO.Path]::IsPathRooted($RelativePath) -or
+        $RelativePath -match "(^|[\\/])\.\.([\\/]|$)" -or
+        ($isCurrentDirectory -and (-not $AllowCurrentDirectory))
+    ) {
+        throw "Manifest $FieldName must be a safe package-relative path. Actual=[$RelativePath]"
+    }
+}
+
 function Get-RelativePath {
     param(
         [string]$BasePath,
@@ -71,6 +89,7 @@ function Test-HashRecord {
         [string]$ExpectedSha256
     )
 
+    Assert-SafeRelativePath -RelativePath $RelativePath -FieldName "hash record path"
     $path = Join-Path $packagePath $RelativePath
     Assert-True (Test-Path -LiteralPath $path -PathType Leaf) "Package file missing: $RelativePath"
     $actual = (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash.ToLowerInvariant()
@@ -94,20 +113,31 @@ Assert-True (Test-Path -LiteralPath $manifestPath -PathType Leaf) "Missing manif
 Assert-True (Test-Path -LiteralPath $checksumsPath -PathType Leaf) "Missing checksums.sha256 in Platform Web package directory."
 
 $manifest = Get-Content -Raw -LiteralPath $manifestPath | ConvertFrom-Json
-Assert-Equal 1 $manifest.schemaVersion "Manifest schemaVersion must be 1."
+Assert-Equal 2 $manifest.schemaVersion "Manifest schemaVersion must be 2."
 Assert-Equal "Platform" $manifest.app "Manifest app must be Platform."
 Assert-Equal "web" $manifest.component "Manifest component must be web."
 Assert-Equal "release" $manifest.profile "Manifest profile must be release."
 Assert-Equal "web-next" $manifest.target "Manifest target must be web-next."
 
-$expectedWebDestination = [System.IO.Path]::GetFullPath((Join-Path $packagePath "web"))
-Assert-Equal $expectedWebDestination ([System.IO.Path]::GetFullPath([string]$manifest.webDestination)) "Manifest webDestination must point to release\\Platform\\<versionId>\\web."
+$manifestPackageRoot = [string]$manifest.packageRoot
+$manifestWebDestination = [string]$manifest.webDestination
+Assert-SafeRelativePath -RelativePath $manifestPackageRoot -FieldName "packageRoot" -AllowCurrentDirectory
+Assert-SafeRelativePath -RelativePath $manifestWebDestination -FieldName "webDestination"
+Assert-Equal "." $manifestPackageRoot "Manifest packageRoot must identify the package directory."
+Assert-Equal "web" $manifestWebDestination "Manifest webDestination must identify the package-relative web directory."
 
 $commands = @($manifest.commands | ForEach-Object { [string]$_.display })
 Assert-Equal "npm run build --workspace @neuro/contracts,npm run build --workspace web" ($commands -join ",") "Manifest must record contracts-before-web build order."
 
 $commandLogs = @($manifest.commands | ForEach-Object { [string]$_.logRelativePath })
 Assert-Equal "logs\platform-contracts-build.log,logs\platform-web-build.log" ($commandLogs -join ",") "Manifest must record both Platform Web build logs."
+
+foreach ($command in @($manifest.commands)) {
+    Assert-SafeRelativePath -RelativePath ([string]$command.workingDirectory) -FieldName "commands.workingDirectory" -AllowCurrentDirectory
+}
+foreach ($copyRoot in @($manifest.copyRoots)) {
+    Assert-SafeRelativePath -RelativePath ([string]$copyRoot.source) -FieldName "copyRoots.source"
+}
 
 Assert-PackagePath -RelativePath "web" -Kind "Container"
 Assert-PackagePath -RelativePath "web\src" -Kind "Container"

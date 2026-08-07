@@ -148,6 +148,23 @@ function Get-RelativePath {
     return [System.Uri]::UnescapeDataString($baseUri.MakeRelativeUri($pathUri).ToString()).Replace("/", "\")
 }
 
+function Get-RepoRelativePath {
+    param([string]$Path)
+
+    $repoFullPath = [System.IO.Path]::GetFullPath($repoRoot).TrimEnd("\", "/")
+    $sourceFullPath = [System.IO.Path]::GetFullPath($Path).TrimEnd("\", "/")
+    if ([string]::Equals($repoFullPath, $sourceFullPath, [System.StringComparison]::OrdinalIgnoreCase)) {
+        return "."
+    }
+
+    $relativePath = Get-RelativePath -BasePath $repoFullPath -Path $sourceFullPath
+    if ([System.IO.Path]::IsPathRooted($relativePath) -or $relativePath -match "(^|[\\/])\.\.([\\/]|$)") {
+        throw "Release provenance path is outside the Platform repository: $Path"
+    }
+
+    return $relativePath
+}
+
 function Assert-UnderReleaseRoot {
     param([string]$Path)
 
@@ -195,7 +212,7 @@ function Invoke-BuildCommand {
         "Command: $display"
         "Executable: $executable"
         "Arguments: $($arguments -join ' ')"
-        "Working directory: $workingDirectory"
+        "Working directory: $(Get-RepoRelativePath -Path $workingDirectory)"
         "Started at: $(Get-Date -Format o)"
         ""
     ) -join [Environment]::NewLine
@@ -532,8 +549,7 @@ Profile: release
 Built at: $BuiltAt
 Git HEAD: $GitHead
 Git dirty: $GitDirty
-Repo root: $repoRoot
-Release root: $releaseRoot
+Package root: .
 
 Commands:
 $($commandLines -join [Environment]::NewLine)
@@ -570,7 +586,7 @@ function Invoke-PlatformWebReleaseBuild {
         Invoke-BuildCommand -Command $command -LogPath $logPath
         $commandRecords += [ordered]@{
             display = $command["display"]
-            workingDirectory = $command["workingDirectory"]
+            workingDirectory = Get-RepoRelativePath -Path ([string]$command["workingDirectory"])
             logRelativePath = $command["logRelativePath"]
         }
         $buildLogs += New-FileRecord -BasePath $destination -Path $logPath -Kind "build-log"
@@ -581,7 +597,7 @@ function Invoke-PlatformWebReleaseBuild {
         Copy-DirectorySnapshot -Source $copyRoot["source"] -DestinationRoot $destination -DestinationRelativePath $copyRoot["destinationRelativePath"]
         $copyRootRecords += [ordered]@{
             kind = $copyRoot["kind"]
-            source = $copyRoot["source"]
+            source = Get-RepoRelativePath -Path ([string]$copyRoot["source"])
             destinationRelativePath = $copyRoot["destinationRelativePath"]
         }
     }
@@ -618,7 +634,7 @@ function Invoke-PlatformWebReleaseBuild {
     }
 
     $manifest = [ordered]@{
-        schemaVersion = 1
+        schemaVersion = 2
         app = "Platform"
         component = "web"
         sourceProject = $Spec["sourceProject"]
@@ -629,10 +645,8 @@ function Invoke-PlatformWebReleaseBuild {
         gitDirty = $GitDirty
         profile = "release"
         target = $targetName
-        repoRoot = $repoRoot
-        releaseRoot = $releaseRoot
-        destination = $destination
-        webDestination = [System.IO.Path]::GetFullPath((Join-Path $destination "web"))
+        packageRoot = "."
+        webDestination = "web"
         commands = $commandRecords
         copyRoots = $copyRootRecords
         copyFiles = $copyFileRecords
