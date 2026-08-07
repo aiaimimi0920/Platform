@@ -1,6 +1,7 @@
 [CmdletBinding()]
 param(
     [string]$VersionId = "",
+    [string]$SourceDateEpoch = "",
     [switch]$Force,
     [switch]$NoZip,
     [switch]$DryRun
@@ -69,8 +70,43 @@ function Get-GitDirty {
     }
 }
 
+function Resolve-BuildTimestamp {
+    param([string]$ExplicitSourceDateEpoch)
+
+    $value = $ExplicitSourceDateEpoch
+    if ([string]::IsNullOrWhiteSpace($value)) {
+        $value = $env:SOURCE_DATE_EPOCH
+    }
+    if ([string]::IsNullOrWhiteSpace($value)) {
+        $value = Get-GitText -Arguments @("show", "-s", "--format=%ct", "HEAD")
+    }
+    if ([string]::IsNullOrWhiteSpace($value)) {
+        $value = "0"
+    }
+
+    [long]$epochSeconds = 0
+    if (-not [long]::TryParse($value.Trim(), [ref]$epochSeconds) -or $epochSeconds -lt 0) {
+        throw "Invalid SourceDateEpoch '$value'. Use a non-negative Unix timestamp."
+    }
+
+    try {
+        $timestamp = [System.DateTimeOffset]::FromUnixTimeSeconds($epochSeconds).ToUniversalTime()
+    } catch {
+        throw "Invalid SourceDateEpoch '$value': $($_.Exception.Message)"
+    }
+
+    return [ordered]@{
+        epochSeconds = $epochSeconds
+        timestamp = $timestamp
+        iso8601 = $timestamp.ToString("o", [System.Globalization.CultureInfo]::InvariantCulture)
+    }
+}
+
 function Resolve-VersionId {
-    param([string]$ExplicitVersionId)
+    param(
+        [string]$ExplicitVersionId,
+        [System.DateTimeOffset]$BuildTimestamp
+    )
 
     $value = $ExplicitVersionId
     if ([string]::IsNullOrWhiteSpace($value)) {
@@ -79,7 +115,7 @@ function Resolve-VersionId {
             $shortSha = "nogit"
         }
 
-        $value = "$(Get-Date -Format "yyyyMMdd-HHmmss")-$shortSha"
+        $value = "$($BuildTimestamp.UtcDateTime.ToString("yyyyMMdd-HHmmss", [System.Globalization.CultureInfo]::InvariantCulture))-$shortSha"
     }
 
     if ($value -notmatch "^[A-Za-z0-9._-]+$") {
@@ -200,7 +236,8 @@ function Initialize-Destination {
 function Invoke-BuildCommand {
     param(
         [System.Collections.Specialized.OrderedDictionary]$Command,
-        [string]$LogPath
+        [string]$LogPath,
+        [string]$BuildTimestamp
     )
 
     $display = [string]$Command["display"]
@@ -213,7 +250,7 @@ function Invoke-BuildCommand {
         "Executable: $executable"
         "Arguments: $($arguments -join ' ')"
         "Working directory: $(Get-RepoRelativePath -Path $workingDirectory)"
-        "Started at: $(Get-Date -Format o)"
+        "Build timestamp: $BuildTimestamp"
         ""
     ) -join [Environment]::NewLine
     Write-TextUtf8NoBom -Path $LogPath -Value $header
@@ -235,7 +272,6 @@ function Invoke-BuildCommand {
     $lines = @($output | ForEach-Object { $_.ToString() })
     $footer = @(
         ""
-        "Finished at: $(Get-Date -Format o)"
         "Exit code: $exitCode"
     ) -join [Environment]::NewLine
     $existing = [System.IO.File]::ReadAllText($LogPath)
@@ -328,7 +364,8 @@ function New-ZipPackage {
     param(
         [string]$VersionIdValue,
         [string]$Destination,
-        [string[]]$PayloadRelativePaths
+        [string[]]$PayloadRelativePaths,
+        [System.DateTimeOffset]$EntryTimestamp
     )
 
     $packageDir = Join-Path $Destination "packages"
@@ -362,19 +399,33 @@ function New-ZipPackage {
         Add-Type -AssemblyName System.IO.Compression | Out-Null
         Add-Type -AssemblyName System.IO.Compression.FileSystem | Out-Null
 
+        $minimumZipTimestamp = [System.DateTimeOffset]::new(1980, 1, 1, 0, 0, 0, [System.TimeSpan]::Zero)
+        $maximumZipTimestamp = [System.DateTimeOffset]::new(2107, 12, 31, 23, 59, 58, [System.TimeSpan]::Zero)
+        $zipEntryTimestamp = $EntryTimestamp.ToUniversalTime()
+        if ($zipEntryTimestamp -lt $minimumZipTimestamp) {
+            $zipEntryTimestamp = $minimumZipTimestamp
+        } elseif ($zipEntryTimestamp -gt $maximumZipTimestamp) {
+            $zipEntryTimestamp = $maximumZipTimestamp
+        }
+
         $zipStream = [System.IO.File]::Open($zipPath, [System.IO.FileMode]::CreateNew, [System.IO.FileAccess]::ReadWrite, [System.IO.FileShare]::None)
         try {
             $archive = [System.IO.Compression.ZipArchive]::new($zipStream, [System.IO.Compression.ZipArchiveMode]::Create, $false)
             try {
-                $stagingFiles = Get-ChildItem -LiteralPath $stagingRoot -Recurse -File -Force | Sort-Object FullName
-                foreach ($file in $stagingFiles) {
-                    $entryName = (Get-RelativePath -BasePath $stagingRoot -Path $file.FullName).Replace("\", "/")
-                    [System.IO.Compression.ZipFileExtensions]::CreateEntryFromFile(
-                        $archive,
-                        $file.FullName,
-                        $entryName,
-                        [System.IO.Compression.CompressionLevel]::Optimal
-                    ) | Out-Null
+                [string[]]$stagingFiles = @(Get-ChildItem -LiteralPath $stagingRoot -Recurse -File -Force | ForEach-Object { $_.FullName })
+                [System.Array]::Sort($stagingFiles, [System.StringComparer]::Ordinal)
+                foreach ($filePath in $stagingFiles) {
+                    $entryName = (Get-RelativePath -BasePath $stagingRoot -Path $filePath).Replace("\", "/")
+                    $entry = $archive.CreateEntry($entryName, [System.IO.Compression.CompressionLevel]::Optimal)
+                    $entry.LastWriteTime = $zipEntryTimestamp
+                    $sourceStream = [System.IO.File]::OpenRead($filePath)
+                    $entryStream = $entry.Open()
+                    try {
+                        $sourceStream.CopyTo($entryStream)
+                    } finally {
+                        $entryStream.Dispose()
+                        $sourceStream.Dispose()
+                    }
                 }
             } finally {
                 $archive.Dispose()
@@ -449,7 +500,6 @@ function Get-PlatformWebReleaseSpec {
             New-CopyFileSpec -Source (Join-RepoPath "web\.next\required-server-files.js") -DestinationRelativePath "web\.next\required-server-files.js" -Kind "next-manifest"
             New-CopyFileSpec -Source (Join-RepoPath "web\.next\required-server-files.json") -DestinationRelativePath "web\.next\required-server-files.json" -Kind "next-manifest"
             New-CopyFileSpec -Source (Join-RepoPath "web\.next\routes-manifest.json") -DestinationRelativePath "web\.next\routes-manifest.json" -Kind "next-manifest"
-            New-CopyFileSpec -Source (Join-RepoPath "web\.next\trace") -DestinationRelativePath "web\.next\trace" -Kind "next-trace"
         )
         excludedRelativePaths = @(
             "web\node_modules",
@@ -458,6 +508,7 @@ function Get-PlatformWebReleaseSpec {
             "web\.next\diagnostics",
             "web\.next\types",
             "web\.next\turbopack",
+            "web\.next\trace",
             "web\.next\trace-build",
             "node_modules",
             ".runtime",
@@ -469,7 +520,8 @@ function Get-PlatformWebReleaseSpec {
 function Build-DryRunPlan {
     param(
         [System.Collections.Specialized.OrderedDictionary]$Spec,
-        [string]$VersionIdValue
+        [string]$VersionIdValue,
+        [System.Collections.Specialized.OrderedDictionary]$BuildTimestamp
     )
 
     $destination = [System.IO.Path]::GetFullPath((Join-Path $releaseRoot "Platform\$VersionIdValue"))
@@ -481,6 +533,8 @@ function Build-DryRunPlan {
         component = $Spec["component"]
         sourceProject = $Spec["sourceProject"]
         versionId = $VersionIdValue
+        sourceDateEpoch = $BuildTimestamp["epochSeconds"]
+        builtAt = $BuildTimestamp["iso8601"]
         releaseRoot = $releaseRoot
         target = $targetName
         destination = $destination
@@ -572,24 +626,35 @@ function Invoke-PlatformWebReleaseBuild {
         [string]$VersionIdValue,
         [string]$GitHead,
         [string]$GitShortSha,
-        [object]$GitDirty
+        [object]$GitDirty,
+        [System.Collections.Specialized.OrderedDictionary]$BuildTimestamp
     )
 
-    $builtAt = Get-Date -Format o
+    $builtAt = [string]$BuildTimestamp["iso8601"]
     $destination = [System.IO.Path]::GetFullPath((Join-Path $releaseRoot "Platform\$VersionIdValue"))
     Initialize-Destination -Destination $destination
 
     $commandRecords = @()
     $buildLogs = @()
-    foreach ($command in @($Spec["commands"])) {
-        $logPath = Join-Path $destination $command["logRelativePath"]
-        Invoke-BuildCommand -Command $command -LogPath $logPath
-        $commandRecords += [ordered]@{
-            display = $command["display"]
-            workingDirectory = Get-RepoRelativePath -Path ([string]$command["workingDirectory"])
-            logRelativePath = $command["logRelativePath"]
+    $previousNextBuildId = $env:NEXT_BUILD_ID
+    try {
+        $env:NEXT_BUILD_ID = $VersionIdValue
+        foreach ($command in @($Spec["commands"])) {
+            $logPath = Join-Path $destination $command["logRelativePath"]
+            Invoke-BuildCommand -Command $command -LogPath $logPath -BuildTimestamp $builtAt
+            $commandRecords += [ordered]@{
+                display = $command["display"]
+                workingDirectory = Get-RepoRelativePath -Path ([string]$command["workingDirectory"])
+                logRelativePath = $command["logRelativePath"]
+            }
+            $buildLogs += New-FileRecord -BasePath $destination -Path $logPath -Kind "build-log"
         }
-        $buildLogs += New-FileRecord -BasePath $destination -Path $logPath -Kind "build-log"
+    } finally {
+        if ($null -eq $previousNextBuildId) {
+            Remove-Item Env:NEXT_BUILD_ID -ErrorAction SilentlyContinue
+        } else {
+            $env:NEXT_BUILD_ID = $previousNextBuildId
+        }
     }
 
     $copyRootRecords = @()
@@ -630,7 +695,11 @@ function Invoke-PlatformWebReleaseBuild {
 
     $artifactRecords = @()
     if (-not $NoZip) {
-        $artifactRecords += New-ZipPackage -VersionIdValue $VersionIdValue -Destination $destination -PayloadRelativePaths @("web", "packages", "package.json", "package-lock.json", "tsconfig.base.json", "BUILD_INFO.txt")
+        $artifactRecords += New-ZipPackage `
+            -VersionIdValue $VersionIdValue `
+            -Destination $destination `
+            -PayloadRelativePaths @("web", "packages", "package.json", "package-lock.json", "tsconfig.base.json", "BUILD_INFO.txt") `
+            -EntryTimestamp $BuildTimestamp["timestamp"]
     }
 
     $manifest = [ordered]@{
@@ -639,6 +708,7 @@ function Invoke-PlatformWebReleaseBuild {
         component = "web"
         sourceProject = $Spec["sourceProject"]
         versionId = $VersionIdValue
+        sourceDateEpoch = $BuildTimestamp["epochSeconds"]
         builtAt = $builtAt
         gitHead = $GitHead
         gitShortSha = $GitShortSha
@@ -682,10 +752,11 @@ if (-not (Test-Path -LiteralPath $webRoot -PathType Container)) {
 }
 
 $spec = Get-PlatformWebReleaseSpec
-$resolvedVersionId = Resolve-VersionId -ExplicitVersionId $VersionId
+$buildTimestamp = Resolve-BuildTimestamp -ExplicitSourceDateEpoch $SourceDateEpoch
+$resolvedVersionId = Resolve-VersionId -ExplicitVersionId $VersionId -BuildTimestamp $buildTimestamp["timestamp"]
 
 if ($DryRun) {
-    $dryRunPlan = Build-DryRunPlan -Spec $spec -VersionIdValue $resolvedVersionId
+    $dryRunPlan = Build-DryRunPlan -Spec $spec -VersionIdValue $resolvedVersionId -BuildTimestamp $buildTimestamp
     Write-Output ($dryRunPlan | ConvertTo-Json -Depth 12)
     return
 }
@@ -708,7 +779,8 @@ $summary = Invoke-PlatformWebReleaseBuild `
     -VersionIdValue $resolvedVersionId `
     -GitHead $gitHead `
     -GitShortSha $gitShortSha `
-    -GitDirty $gitDirty
+    -GitDirty $gitDirty `
+    -BuildTimestamp $buildTimestamp
 
 [ordered]@{
     schemaVersion = 1

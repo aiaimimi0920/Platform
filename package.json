@@ -35,7 +35,8 @@
     "web"
   ],
   "scripts": {
-    "ci": "node --test scripts/repository-contract.mjs scripts/smoke.mjs && npm test && npm run typecheck",
+    "ci": "node --test scripts/repository-contract.mjs scripts/smoke.mjs && npm run audit:prod && npm test && npm run typecheck",
+    "audit:prod": "npm audit --omit=dev --audit-level=high",
     "test": "npm run build --workspace @neuro/contracts && npm run test:unit",
     "smoke": "npm run acceptance:ci",
     "smoke:quick": "npm run test && node --test scripts/smoke.mjs",
@@ -65,6 +66,12 @@
     "tsx": "^4.22.4"
   },
   "overrides": {
+    "@auth/core": {
+      "nodemailer": "9.0.5"
+    },
+    "next-auth": {
+      "nodemailer": "9.0.5"
+    },
     "postcss": "8.5.23"
   }
 }

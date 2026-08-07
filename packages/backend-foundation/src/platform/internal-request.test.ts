@@ -3,6 +3,7 @@ import test from "node:test";
 
 import {
   InternalRequestTimeoutError,
+  requestInternalArrayBuffer,
   requestInternalText,
 } from "./internal-request";
 
@@ -85,4 +86,39 @@ test("requestInternalText validates timeout configuration before dispatch", asyn
     /positive number/,
   );
   assert.equal(called, false);
+});
+
+test("requestInternalArrayBuffer returns a fully-read binary response", async () => {
+  const bytes = new Uint8Array([0, 1, 127, 255]);
+  const result = await requestInternalArrayBuffer(
+    "http://internal.test/binary",
+    {},
+    {
+      timeoutMs: 100,
+      fetchFn: async () => new Response(bytes, { status: 206 }),
+    },
+  );
+
+  assert.equal(result.response.status, 206);
+  assert.deepEqual(new Uint8Array(result.arrayBuffer), bytes);
+});
+
+test("requestInternalArrayBuffer bounds a stalled binary response body", async () => {
+  let aborted = false;
+  const fetchFn = async (_input: string | URL | Request, init?: RequestInit): Promise<Response> => {
+    init?.signal?.addEventListener("abort", () => {
+      aborted = true;
+    }, { once: true });
+    return new Response(new ReadableStream({
+      start(controller) {
+        controller.enqueue(new Uint8Array([1]));
+      },
+    }));
+  };
+
+  await assert.rejects(
+    () => requestInternalArrayBuffer("http://internal.test/stalled-binary", {}, { timeoutMs: 20, fetchFn }),
+    InternalRequestTimeoutError,
+  );
+  assert.equal(aborted, true);
 });

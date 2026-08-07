@@ -17,3 +17,12 @@ private contact channel without including sensitive technical details.
   be replaced in every non-local deployment.
 - Revoke exposed credentials before removing them from source. Redaction alone
   does not invalidate an already disclosed credential.
+
+## Dependency Security
+
+- `npm run audit:prod` checks the production dependency graph and is part of the
+  root CI command.
+- Auth.js `0.41.3` declares Nodemailer as an optional peer with an 8.x-only
+  range, although Platform does not configure an Auth.js email provider. The
+  root override keeps that optional peer on the patched `9.0.5` release used by
+  the account worker. Remove the override after Auth.js accepts Nodemailer 9.x.

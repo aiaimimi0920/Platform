@@ -1,12 +1,16 @@
 type AccountEnv = {
   databaseUrl: string;
+  databaseConnectionTimeoutMs: number;
+  databaseQueryTimeoutMs: number;
   redisUrl: string;
   sharedDatabaseUrl: string;
   sharedRedisUrl: string;
   platformInternalUrl: string;
   internalApiToken: string | null;
+  coreInternalFetchTimeoutMs: number;
   aiGatewayInternalUrl: string | null;
   aiGatewayManagementToken: string | null;
+  gatewayInternalFetchTimeoutMs: number;
   obsidianToMiraRate: number;
   emailDeliveryMode: "console" | "smtp";
   emailConsoleExposeVerificationCode: boolean;
@@ -104,6 +108,14 @@ function parsePositiveInt(value: string | undefined, fallback: number) {
   return Math.floor(parsed);
 }
 
+function parseTimeoutMs(value: string | undefined, fallback = 10_000) {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed < 250) {
+    return fallback;
+  }
+  return Math.floor(parsed);
+}
+
 function resolveEmailTaskDefaultRewardCurrency(
   value: string | undefined,
 ): "obsidian" | "mira" {
@@ -129,11 +141,22 @@ const redis = resolveOptionalOverride("ACCOUNT_REDIS_URL", "REDIS_URL");
 
 export const env: AccountEnv = {
   databaseUrl: database.value,
+  databaseConnectionTimeoutMs: parseTimeoutMs(
+    process.env.ACCOUNT_DATABASE_CONNECTION_TIMEOUT_MS ?? process.env.DATABASE_CONNECTION_TIMEOUT_MS,
+    5_000,
+  ),
+  databaseQueryTimeoutMs: parseTimeoutMs(
+    process.env.ACCOUNT_DATABASE_QUERY_TIMEOUT_MS ?? process.env.DATABASE_QUERY_TIMEOUT_MS,
+    30_000,
+  ),
   redisUrl: redis.value,
   sharedDatabaseUrl: database.fallback,
   sharedRedisUrl: redis.fallback,
   platformInternalUrl: resolvePlatformInternalUrl(),
   internalApiToken: process.env.INTERNAL_API_TOKEN?.trim() || null,
+  coreInternalFetchTimeoutMs: parseTimeoutMs(
+    process.env.CORE_INTERNAL_FETCH_TIMEOUT_MS ?? process.env.INTERNAL_FETCH_TIMEOUT_MS,
+  ),
   aiGatewayInternalUrl:
     process.env.AI_GATEWAY_INTERNAL_URL?.trim() ||
     process.env.GATEWAY_INTERNAL_URL?.trim() ||
@@ -143,6 +166,9 @@ export const env: AccountEnv = {
     process.env.GATEWAY_MANAGEMENT_TOKEN?.trim() ||
     process.env.INTERNAL_API_TOKEN?.trim() ||
     null,
+  gatewayInternalFetchTimeoutMs: parseTimeoutMs(
+    process.env.GATEWAY_INTERNAL_FETCH_TIMEOUT_MS ?? process.env.INTERNAL_FETCH_TIMEOUT_MS,
+  ),
   obsidianToMiraRate: resolveRate(),
   emailDeliveryMode: resolveEmailDeliveryMode(process.env.ACCOUNT_EMAIL_DELIVERY_MODE),
   emailConsoleExposeVerificationCode: parseBooleanEnv(

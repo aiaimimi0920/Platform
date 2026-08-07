@@ -1,4 +1,5 @@
 import type { GatewayAccessGrantMode } from "@neuro/contracts";
+import { requestInternalText } from "@neuro/backend-foundation/platform/internal-request";
 import { and, asc, eq, inArray, isNull } from "drizzle-orm";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 
@@ -72,15 +73,14 @@ function resolveGatewayManagementToken() {
   return value;
 }
 
-async function parseGatewayError(response: Response) {
-  const raw = await response.text();
+function parseGatewayError(status: number, raw: string) {
   if (!raw) {
-    return `Gateway request failed with ${response.status}`;
+    return `Gateway request failed with ${status}`;
   }
 
   try {
     const parsed = JSON.parse(raw) as { error?: { message?: string }; message?: string };
-    return parsed.error?.message || parsed.message || `Gateway request failed with ${response.status}`;
+    return parsed.error?.message || parsed.message || `Gateway request failed with ${status}`;
   } catch {
     return raw;
   }
@@ -95,20 +95,27 @@ async function gatewayManagementRequest<T>(
 ): Promise<T> {
   const baseUrl = resolveGatewayInternalBaseUrl();
   const managementToken = resolveGatewayManagementToken();
-  const response = await fetch(`${baseUrl}${pathname}`, {
-    method: init?.method ?? "GET",
-    headers: {
-      "content-type": "application/json",
-      "x-internal-api-key": managementToken,
+  const { response, text } = await requestInternalText(
+    `${baseUrl}${pathname}`,
+    {
+      method: init?.method ?? "GET",
+      headers: {
+        "content-type": "application/json",
+        "x-internal-api-key": managementToken,
+      },
+      body: init?.body === undefined ? undefined : JSON.stringify(init.body),
     },
-    body: init?.body === undefined ? undefined : JSON.stringify(init.body),
-  });
+    {
+      timeoutMs: env.gatewayInternalFetchTimeoutMs,
+      timeoutMessage: `Gateway management request timed out: ${pathname}`,
+    },
+  );
 
   if (!response.ok) {
-    throw new Error(await parseGatewayError(response));
+    throw new Error(parseGatewayError(response.status, text));
   }
 
-  return (await response.json()) as T;
+  return JSON.parse(text) as T;
 }
 
 async function ensureGatewayBundleUserAccessKey(args: { bundleId: string; userId: string }) {

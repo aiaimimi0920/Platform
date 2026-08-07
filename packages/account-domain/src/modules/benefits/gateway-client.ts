@@ -4,6 +4,7 @@ import type {
   GatewayPromptCacheSummaryView,
   GatewayPromptCacheTrendReportView,
 } from "@neuro/contracts";
+import { requestInternalText } from "@neuro/backend-foundation/platform/internal-request";
 
 import { env } from "@/env";
 import { ConflictError } from "@/platform/errors";
@@ -32,14 +33,13 @@ function resolveGatewayManagementToken() {
   return value;
 }
 
-async function parseGatewayError(response: Response) {
-  const raw = await response.text();
+function parseGatewayError(status: number, raw: string) {
   if (!raw) {
-    return `Gateway request failed with ${response.status}`;
+    return `Gateway request failed with ${status}`;
   }
   try {
     const parsed = JSON.parse(raw) as { error?: { message?: string }; message?: string };
-    return parsed.error?.message || parsed.message || `Gateway request failed with ${response.status}`;
+    return parsed.error?.message || parsed.message || `Gateway request failed with ${status}`;
   } catch {
     return raw;
   }
@@ -57,20 +57,27 @@ async function gatewayManagementRequest<T>(
   const managementToken = resolveGatewayManagementToken();
   const search = init?.searchParams?.toString();
   const url = search ? `${baseUrl}${pathname}?${search}` : `${baseUrl}${pathname}`;
-  const response = await fetch(url, {
-    method: init?.method ?? "GET",
-    headers: {
-      "content-type": "application/json",
-      "x-internal-api-key": managementToken,
+  const { response, text } = await requestInternalText(
+    url,
+    {
+      method: init?.method ?? "GET",
+      headers: {
+        "content-type": "application/json",
+        "x-internal-api-key": managementToken,
+      },
+      body: init?.body === undefined ? undefined : JSON.stringify(init.body),
     },
-    body: init?.body === undefined ? undefined : JSON.stringify(init.body),
-  });
+    {
+      timeoutMs: env.gatewayInternalFetchTimeoutMs,
+      timeoutMessage: `Gateway management request timed out: ${pathname}`,
+    },
+  );
 
   if (!response.ok) {
-    throw new Error(await parseGatewayError(response));
+    throw new Error(parseGatewayError(response.status, text));
   }
 
-  return (await response.json()) as T;
+  return JSON.parse(text) as T;
 }
 
 export async function ensureGatewayBenefitProjectViaRust(args: {

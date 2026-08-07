@@ -24,6 +24,10 @@ import type {
   UploadArbitrationEvidenceAttachmentInput,
   UpdateArbitrationCaseStatusInput,
 } from "@neuro/contracts";
+import {
+  requestInternalArrayBuffer,
+  requestInternalText,
+} from "@neuro/backend-foundation/platform/internal-request";
 import { and, asc, desc, eq, inArray, sql, type SQL } from "drizzle-orm";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 
@@ -742,16 +746,23 @@ async function storeRemoteArbitrationAttachment(args: {
   }
 
   const uploadUrl = joinRemoteAttachmentUrl(uploadBaseUrl, args.objectKey);
-  const response = await fetch(uploadUrl, {
-    method: "PUT",
-    headers: {
-      "content-type": args.contentType,
-      ...(env.arbitrationEvidenceRemoteAuthToken
-        ? { authorization: `Bearer ${env.arbitrationEvidenceRemoteAuthToken}` }
-        : {}),
+  const { response } = await requestInternalText(
+    uploadUrl,
+    {
+      method: "PUT",
+      headers: {
+        "content-type": args.contentType,
+        ...(env.arbitrationEvidenceRemoteAuthToken
+          ? { authorization: `Bearer ${env.arbitrationEvidenceRemoteAuthToken}` }
+          : {}),
+      },
+      body: args.buffer,
     },
-    body: args.buffer,
-  });
+    {
+      timeoutMs: env.objectStorageFetchTimeoutMs,
+      timeoutMessage: "Remote arbitration attachment upload timed out",
+    },
+  );
   if (!response.ok) {
     throw new ConflictError(`Remote arbitration attachment upload failed with status ${response.status}`);
   }
@@ -868,16 +879,23 @@ async function readRemoteArbitrationAttachment(args: {
     throw new NotFoundError("Remote arbitration attachment URL is unavailable");
   }
 
-  const response = await fetch(targetUrl, {
-    headers: env.arbitrationEvidenceRemoteAuthToken
-      ? { authorization: `Bearer ${env.arbitrationEvidenceRemoteAuthToken}` }
-      : undefined,
-  });
+  const { response, arrayBuffer } = await requestInternalArrayBuffer(
+    targetUrl,
+    {
+      headers: env.arbitrationEvidenceRemoteAuthToken
+        ? { authorization: `Bearer ${env.arbitrationEvidenceRemoteAuthToken}` }
+        : undefined,
+    },
+    {
+      timeoutMs: env.objectStorageFetchTimeoutMs,
+      timeoutMessage: "Remote arbitration attachment download timed out",
+    },
+  );
   if (!response.ok) {
     throw new NotFoundError("Remote arbitration attachment could not be fetched");
   }
 
-  return Buffer.from(await response.arrayBuffer());
+  return Buffer.from(arrayBuffer);
 }
 
 async function deleteRemoteArbitrationAttachment(args: {
@@ -902,12 +920,19 @@ async function deleteRemoteArbitrationAttachment(args: {
     throw new ConflictError("Remote arbitration attachment URL is unavailable");
   }
 
-  const response = await fetch(targetUrl, {
-    method: "DELETE",
-    headers: env.arbitrationEvidenceRemoteAuthToken
-      ? { authorization: `Bearer ${env.arbitrationEvidenceRemoteAuthToken}` }
-      : undefined,
-  });
+  const { response } = await requestInternalText(
+    targetUrl,
+    {
+      method: "DELETE",
+      headers: env.arbitrationEvidenceRemoteAuthToken
+        ? { authorization: `Bearer ${env.arbitrationEvidenceRemoteAuthToken}` }
+        : undefined,
+    },
+    {
+      timeoutMs: env.objectStorageFetchTimeoutMs,
+      timeoutMessage: "Remote arbitration attachment cleanup timed out",
+    },
+  );
 
   if (!response.ok && response.status !== 404) {
     throw new ConflictError(`Remote arbitration attachment cleanup failed with status ${response.status}`);

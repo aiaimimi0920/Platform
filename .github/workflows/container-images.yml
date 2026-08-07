@@ -9,6 +9,7 @@ on:
       - "V*.*.*"
     paths:
       - ".github/workflows/container-images.yml"
+      - ".dockerignore"
       - "deploy/docker/**"
       - "package.json"
       - "package-lock.json"
@@ -22,6 +23,7 @@ on:
   pull_request:
     paths:
       - ".github/workflows/container-images.yml"
+      - ".dockerignore"
       - "deploy/docker/**"
       - "package.json"
       - "package-lock.json"

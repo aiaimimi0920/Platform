@@ -44,6 +44,12 @@ the zip, installs production dependencies from the lockfile, starts the packaged
 Web workspace on an isolated loopback port, probes `/ready`, records evidence,
 and stops only the process tree it created.
 
+The builder derives a reproducible timestamp from `-SourceDateEpoch`,
+`SOURCE_DATE_EPOCH`, or the current Git commit time, in that order. It uses that
+timestamp for release metadata and every ZIP entry, and uses `versionId` as the
+Next.js build ID. Rebuilding the same source with the same version and source
+timestamp must produce identical ZIP, manifest, and checksum-list hashes.
+
 ## GitHub Release
 
 Tags matching `V*.*.*` are built from the tagged commit. A release is published

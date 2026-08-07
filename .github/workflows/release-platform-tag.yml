@@ -49,6 +49,8 @@ jobs:
           if ($env:PLATFORM_TAG -ne $expectedTag) {
             throw "Tag/package version mismatch. Tag=$env:PLATFORM_TAG Expected=$expectedTag"
           }
+          $sourceDateEpoch = git show -s --format=%ct HEAD
+          "SOURCE_DATE_EPOCH=$sourceDateEpoch" >> $env:GITHUB_ENV
 
       - name: Set up Node.js
         uses: actions/setup-node@v6
@@ -89,6 +91,7 @@ jobs:
           name: platform-web-${{ env.PLATFORM_TAG }}
           path: release/Platform/${{ env.PLATFORM_TAG }}/
           if-no-files-found: error
+          retention-days: 14
 
       - name: Publish GitHub release
         uses: softprops/action-gh-release@v3

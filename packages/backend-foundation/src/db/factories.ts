@@ -1,12 +1,15 @@
 import Redis from "ioredis";
 import { Pool } from "pg";
 
-export function createPgPool(connectionString: string) {
+export function createPgPool(
+  connectionString: string,
+  options?: { connectionTimeoutMs?: number; queryTimeoutMs?: number },
+) {
   return new Pool({
     connectionString,
     ssl: false,
-    // Increase connection timeout to handle slow connections
-    connectionTimeoutMillis: 10000,
+    connectionTimeoutMillis: options?.connectionTimeoutMs ?? 10_000,
+    query_timeout: options?.queryTimeoutMs ?? 30_000,
   });
 }
 

@@ -4,17 +4,17 @@ import type {
   CreateTaskInput,
   TaskView,
 } from "@neuro/contracts";
+import { requestInternalText } from "@neuro/backend-foundation/platform/internal-request";
 
 import { env } from "@/env";
 
-async function parseCoreError(response: Response) {
-  const raw = await response.text();
+function parseCoreError(status: number, raw: string) {
   if (!raw) {
-    return `Core request failed with ${response.status}`;
+    return `Core request failed with ${status}`;
   }
   try {
     const parsed = JSON.parse(raw) as { error?: { message?: string }; message?: string };
-    return parsed.error?.message || parsed.message || `Core request failed with ${response.status}`;
+    return parsed.error?.message || parsed.message || `Core request failed with ${status}`;
   } catch {
     return raw;
   }
@@ -25,21 +25,28 @@ async function coreUserWrite<T>(pathname: string, userId: string, body: unknown)
     throw new Error("INTERNAL_API_TOKEN is required for Email-Native core write integration");
   }
 
-  const response = await fetch(`${env.platformInternalUrl}${pathname}`, {
-    method: "POST",
-    headers: {
-      "content-type": "application/json",
-      "x-internal-api-token": env.internalApiToken,
-      "x-neuro-user-id": userId,
+  const { response, text } = await requestInternalText(
+    `${env.platformInternalUrl}${pathname}`,
+    {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-internal-api-token": env.internalApiToken,
+        "x-neuro-user-id": userId,
+      },
+      body: JSON.stringify(body),
     },
-    body: JSON.stringify(body),
-  });
+    {
+      timeoutMs: env.coreInternalFetchTimeoutMs,
+      timeoutMessage: `Core write request timed out: ${pathname}`,
+    },
+  );
 
   if (!response.ok) {
-    throw new Error(await parseCoreError(response));
+    throw new Error(parseCoreError(response.status, text));
   }
 
-  return (await response.json()) as T;
+  return JSON.parse(text) as T;
 }
 
 export async function createCoreTaskAsUser(userId: string, input: CreateTaskInput) {

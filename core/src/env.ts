@@ -20,11 +20,14 @@ import {
 type CoreEnv = {
   port: number;
   databaseUrl: string;
+  databaseConnectionTimeoutMs: number;
+  databaseQueryTimeoutMs: number;
   redisUrl: string;
   corePublicBaseUrl: string | null;
   internalApiToken: string;
   aiGatewayInternalUrl: string | null;
   aiGatewayManagementToken: string | null;
+  gatewayInternalFetchTimeoutMs: number;
   heavyChatGatewayModel: string | null;
   heavyChatGatewayTimeoutMs: number;
   teaServerUrl: string | null;
@@ -41,6 +44,7 @@ type CoreEnv = {
   objectStoragePublicBaseUrl: string | null;
   objectStorageForcePathStyle: boolean;
   objectStorageSignedUrlTtlSeconds: number;
+  objectStorageFetchTimeoutMs: number;
   externalCallbackMaxSkewSeconds: number;
   externalCallbackSecretGraceSeconds: number;
   externalCallbackProtocolGraceSeconds: number;
@@ -2292,6 +2296,14 @@ export function parseHeavyChatGatewayTimeoutMs(value: string | undefined, fallba
   return Math.max(1_000, Math.floor(parsed));
 }
 
+export function parseInfrastructureTimeoutMs(value: string | undefined, fallback: number, minimum = 250) {
+  const normalized = value?.trim();
+  if (!normalized) return fallback;
+  const parsed = Number(normalized);
+  if (!Number.isFinite(parsed) || parsed < minimum) return fallback;
+  return Math.floor(parsed);
+}
+
 function parseBooleanEnv(value: string | undefined, fallback: boolean) {
   if (!value) return fallback;
   const normalized = value.trim().toLowerCase();
@@ -2355,6 +2367,8 @@ const agentExecutionRuntimeProfiles = parseExecutionRuntimeProfiles({
 export const env: CoreEnv = {
   port: Number(process.env.PORT || 4000),
   databaseUrl: requireEnv("DATABASE_URL"),
+  databaseConnectionTimeoutMs: parseInfrastructureTimeoutMs(process.env.DATABASE_CONNECTION_TIMEOUT_MS, 5_000),
+  databaseQueryTimeoutMs: parseInfrastructureTimeoutMs(process.env.DATABASE_QUERY_TIMEOUT_MS, 30_000),
   redisUrl: requireEnv("REDIS_URL"),
   corePublicBaseUrl: process.env.CORE_PUBLIC_BASE_URL?.trim() || null,
   internalApiToken: requireEnv("INTERNAL_API_TOKEN"),
@@ -2364,6 +2378,10 @@ export const env: CoreEnv = {
     process.env.GATEWAY_MANAGEMENT_TOKEN?.trim() ||
     process.env.INTERNAL_API_TOKEN?.trim() ||
     null,
+  gatewayInternalFetchTimeoutMs: parseInfrastructureTimeoutMs(
+    process.env.GATEWAY_INTERNAL_FETCH_TIMEOUT_MS ?? process.env.INTERNAL_FETCH_TIMEOUT_MS,
+    10_000,
+  ),
   heavyChatGatewayModel: process.env.HEAVY_CHAT_GATEWAY_MODEL?.trim() || null,
   heavyChatGatewayTimeoutMs: parseHeavyChatGatewayTimeoutMs(process.env.HEAVY_CHAT_GATEWAY_TIMEOUT_MS),
   teaServerUrl: process.env.TEA_SERVER_URL?.trim() || process.env.TEA_BASE_URL?.trim() || null,
@@ -2392,6 +2410,10 @@ export const env: CoreEnv = {
   objectStorageSignedUrlTtlSeconds: Math.max(
     60,
     Number(process.env.OBJECT_STORAGE_SIGNED_URL_TTL_SECONDS || 900),
+  ),
+  objectStorageFetchTimeoutMs: parseInfrastructureTimeoutMs(
+    process.env.OBJECT_STORAGE_FETCH_TIMEOUT_MS ?? process.env.INTERNAL_FETCH_TIMEOUT_MS,
+    10_000,
   ),
   externalCallbackMaxSkewSeconds: Math.max(30, Number(process.env.EXTERNAL_CALLBACK_MAX_SKEW_SECONDS || 300)),
   externalCallbackSecretGraceSeconds: Math.max(

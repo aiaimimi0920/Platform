@@ -1,3 +1,5 @@
+import { requestInternalText } from "@neuro/backend-foundation/platform/internal-request";
+
 import { env } from "@/env";
 
 type PlatformDailyMissionKey = "taskApply" | "productPurchase";
@@ -78,19 +80,26 @@ async function coreRead<T>(pathname: string): Promise<T | null> {
   }
 
   try {
-    const response = await fetch(`${resolvePlatformInternalUrl()}${pathname}`, {
-      method: "GET",
-      headers: {
-        "x-internal-api-token": process.env.INTERNAL_API_TOKEN!.trim(),
+    const { response, text } = await requestInternalText(
+      `${resolvePlatformInternalUrl()}${pathname}`,
+      {
+        method: "GET",
+        headers: {
+          "x-internal-api-token": process.env.INTERNAL_API_TOKEN!.trim(),
+        },
       },
-    });
+      {
+        timeoutMs: env.coreInternalFetchTimeoutMs,
+        timeoutMessage: `Core read model request timed out: ${pathname}`,
+      },
+    );
 
     if (!response.ok) {
       console.warn(`[account-domain] core read model request failed: ${pathname} -> ${response.status}`);
       return null;
     }
 
-    return (await response.json()) as T;
+    return JSON.parse(text) as T;
   } catch (error) {
     console.warn(
       `[account-domain] core read model request failed: ${pathname} -> ${error instanceof Error ? error.message : String(error)}`,

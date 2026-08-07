@@ -6,6 +6,8 @@ import * as schema from "@/db/schema";
 
 export const pgPool = new Pool({
   connectionString: env.databaseUrl,
+  connectionTimeoutMillis: env.databaseConnectionTimeoutMs,
+  query_timeout: env.databaseQueryTimeoutMs,
 });
 
 export const db = drizzle(pgPool, { schema });

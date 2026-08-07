@@ -1,5 +1,11 @@
 type FetchLike = (input: string | URL | Request, init?: RequestInit) => Promise<Response>;
 
+type InternalRequestOptions = {
+  timeoutMs: number;
+  timeoutMessage?: string;
+  fetchFn?: FetchLike;
+};
+
 export class InternalRequestTimeoutError extends Error {
   readonly code = "INTERNAL_REQUEST_TIMEOUT";
 
@@ -9,15 +15,12 @@ export class InternalRequestTimeoutError extends Error {
   }
 }
 
-export async function requestInternalText(
+async function requestInternalBody<T>(
   input: string | URL | Request,
   init: RequestInit,
-  options: {
-    timeoutMs: number;
-    timeoutMessage?: string;
-    fetchFn?: FetchLike;
-  },
-): Promise<{ response: Response; text: string }> {
+  options: InternalRequestOptions,
+  readBody: (response: Response) => Promise<T>,
+): Promise<{ response: Response; body: T }> {
   if (!Number.isFinite(options.timeoutMs) || options.timeoutMs < 1) {
     throw new TypeError("Internal request timeout must be a positive number");
   }
@@ -35,8 +38,8 @@ export async function requestInternalText(
 
   const operation = (async () => {
     const response = await fetchFn(input, { ...init, signal });
-    const text = await response.text();
-    return { response, text };
+    const body = await readBody(response);
+    return { response, body };
   })();
   const deadline = new Promise<never>((_resolve, reject) => {
     timeoutHandle = setTimeout(() => {
@@ -55,4 +58,22 @@ export async function requestInternalText(
   } finally {
     if (timeoutHandle) clearTimeout(timeoutHandle);
   }
+}
+
+export async function requestInternalText(
+  input: string | URL | Request,
+  init: RequestInit,
+  options: InternalRequestOptions,
+): Promise<{ response: Response; text: string }> {
+  const { response, body } = await requestInternalBody(input, init, options, (value) => value.text());
+  return { response, text: body };
+}
+
+export async function requestInternalArrayBuffer(
+  input: string | URL | Request,
+  init: RequestInit,
+  options: InternalRequestOptions,
+): Promise<{ response: Response; arrayBuffer: ArrayBuffer }> {
+  const { response, body } = await requestInternalBody(input, init, options, (value) => value.arrayBuffer());
+  return { response, arrayBuffer: body };
 }
