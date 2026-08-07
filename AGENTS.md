@@ -11,6 +11,9 @@ Scope: this repository root and all subdirectories, excluding the external `AIRe
 - Parent-level release orchestration may call Platform-owned scripts, but the standalone Platform checkout must keep its own CI, package, verification, and release entrypoints working.
 - Local integrated compose may use sibling `Gateway/`, `Loom/`, and `Tea/` checkouts. Single-repository CI must use Platform-local validation or the acceptance doubles unless it explicitly checks out those sibling repositories.
 - Never place repository credentials, GitHub tokens, provider credentials, or real environment files in Git remotes, workflow YAML, examples, fixtures, or release evidence.
+- Production Dockerfiles must keep the Node base image pinned by digest through `NODE_IMAGE`; an image refresh requires all six Platform image builds to pass.
+- Version-tag releases must pass `npm run ci` and `npm run test:integration:required` before packaging. Regular CI must retain the AI Gateway Vitest gate.
+- Production deployments must use immutable GHCR `sha-*` tags or digests, inject independent secrets, and retain prior digests as rollback targets. The local read-write `.neuro` Gateway mount is development-only.
 
 ## UI Default
 

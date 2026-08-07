@@ -6,7 +6,15 @@ node_modules
 dist
 **/dist
 npm-debug.log
+.npmrc
+.envrc
+*.pem
+*.key
 coverage
+tmp
+**/tmp
+reports
+**/reports
 .runtime
 **/.runtime
 output

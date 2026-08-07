@@ -35,7 +35,7 @@
     "web"
   ],
   "scripts": {
-    "ci": "node --test scripts/repository-contract.mjs scripts/smoke.mjs && npm run audit:prod && npm run prepare:workspaces && npm run test:unit && npm run typecheck:workspaces",
+    "ci": "node --test scripts/repository-contract.mjs scripts/smoke.mjs && npm run audit:prod && npm run prepare:workspaces && npm run test:unit && npm run test:vitest && npm run typecheck:workspaces",
     "audit:prod": "npm audit --omit=dev --audit-level=high",
     "prepare:workspaces": "npm run build --workspace @neuro/contracts && npm run build --workspace @neuro/backend-foundation && npm run build --workspace @neuro/ai-gateway-domain --ignore-scripts && npm run build --workspace @neuro/account-domain --ignore-scripts",
     "test": "npm run prepare:workspaces && npm run test:unit",

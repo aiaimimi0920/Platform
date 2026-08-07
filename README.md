@@ -194,11 +194,12 @@ npm run ci
 docker compose -f deploy/docker-compose.local.yml config --quiet
 ```
 
-`npm run ci` runs the repository structure contract followed by workspace
-type checking. The compose command renders the integrated developer topology
-without starting services. Building or starting that topology requires the
-sibling repositories described above. Acceptance runs use Platform-local doubles
-and allocate their required environment through `scripts/acceptance/cli.mjs`.
+`npm run ci` runs repository contracts, production dependency auditing,
+workspace unit tests, AI Gateway Vitest suites, and workspace type checking.
+The compose command renders the integrated developer topology without starting
+services. Building or starting that topology requires the sibling repositories
+described above. Acceptance runs use Platform-local doubles and allocate their
+required environment through `scripts/acceptance/cli.mjs`.
 
 The full acceptance inventory remains available through `npm run smoke`. It is a
 larger policy gate than hosted quick CI and may require Docker, browser suites,
@@ -216,6 +217,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\smoke-platform-web
 
 Version tags matching `V*.*.*` run the release workflow and publish the verified
 Web zip, SHA-256 sidecar, manifest, and checksum inventory to GitHub Releases.
+The tag workflow also runs all required integration suites before packaging.
 The container workflow builds six Platform-owned images:
 
 - `ghcr.io/aiaimimi0920/neuro-platform-core`
@@ -225,9 +227,23 @@ The container workflow builds six Platform-owned images:
 - `ghcr.io/aiaimimi0920/neuro-platform-executor`
 - `ghcr.io/aiaimimi0920/neuro-platform-web`
 
+Production deployments must select an immutable `sha-*` tag or registry digest
+for every image. Do not deploy the mutable branch tag as a rollback target. Run
+the matching database migrations before switching long-running services, retain
+the previous image digests for rollback, and keep the sibling Gateway, Loom, and
+Tea revisions compatible with the selected Platform commit.
+
+The production Dockerfiles pin the Node base image by digest through the
+`NODE_IMAGE` build argument. Base-image upgrades must update that digest
+deliberately and pass all six image builds. BuildKit/buildx is required because
+the Dockerfiles use cache mounts.
+
 The local `local-internal-token` values in compose and bootstrap helpers are
 development-only defaults. Production deployments must inject independent
-secrets and must not reuse those values.
+database, Redis, internal API, Gateway, Tea, OAuth, Auth.js, and object-storage
+secrets and must not reuse those values. The local integrated compose also mounts
+the host `.neuro` directory read-write for Gateway development; do not reuse that
+mount in production or on hosts containing unrelated credentials.
 
 ## Migration note
 

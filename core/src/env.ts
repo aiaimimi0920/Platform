@@ -23,6 +23,8 @@ type CoreEnv = {
   databaseConnectionTimeoutMs: number;
   databaseQueryTimeoutMs: number;
   redisUrl: string;
+  redisConnectTimeoutMs: number;
+  redisCommandTimeoutMs: number;
   corePublicBaseUrl: string | null;
   internalApiToken: string;
   aiGatewayInternalUrl: string | null;
@@ -32,6 +34,7 @@ type CoreEnv = {
   heavyChatGatewayTimeoutMs: number;
   teaServerUrl: string | null;
   teaAuthToken: string | null;
+  teaFetchTimeoutMs: number;
   platformOperatorUserIds: string[];
   outboxProcessingLeaseTimeoutMs: number;
   objectStorageDriver: "local" | "s3-compatible";
@@ -2370,6 +2373,8 @@ export const env: CoreEnv = {
   databaseConnectionTimeoutMs: parseInfrastructureTimeoutMs(process.env.DATABASE_CONNECTION_TIMEOUT_MS, 5_000),
   databaseQueryTimeoutMs: parseInfrastructureTimeoutMs(process.env.DATABASE_QUERY_TIMEOUT_MS, 30_000),
   redisUrl: requireEnv("REDIS_URL"),
+  redisConnectTimeoutMs: parseInfrastructureTimeoutMs(process.env.REDIS_CONNECT_TIMEOUT_MS, 5_000),
+  redisCommandTimeoutMs: parseInfrastructureTimeoutMs(process.env.REDIS_COMMAND_TIMEOUT_MS, 10_000),
   corePublicBaseUrl: process.env.CORE_PUBLIC_BASE_URL?.trim() || null,
   internalApiToken: requireEnv("INTERNAL_API_TOKEN"),
   aiGatewayInternalUrl: process.env.AI_GATEWAY_INTERNAL_URL?.trim() || null,
@@ -2386,6 +2391,10 @@ export const env: CoreEnv = {
   heavyChatGatewayTimeoutMs: parseHeavyChatGatewayTimeoutMs(process.env.HEAVY_CHAT_GATEWAY_TIMEOUT_MS),
   teaServerUrl: process.env.TEA_SERVER_URL?.trim() || process.env.TEA_BASE_URL?.trim() || null,
   teaAuthToken: process.env.TEA_AUTH_TOKEN?.trim() || process.env.INTERNAL_API_TOKEN?.trim() || null,
+  teaFetchTimeoutMs: parseInfrastructureTimeoutMs(
+    process.env.TEA_FETCH_TIMEOUT_MS ?? process.env.INTERNAL_FETCH_TIMEOUT_MS,
+    10_000,
+  ),
   platformOperatorUserIds,
   outboxProcessingLeaseTimeoutMs: Math.max(
     5_000,

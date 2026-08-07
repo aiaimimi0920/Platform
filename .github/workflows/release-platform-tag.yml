@@ -66,6 +66,9 @@ jobs:
       - name: Run Platform CI
         run: npm run ci
 
+      - name: Run required integration suites
+        run: npm run test:integration:required
+
       - name: Build Platform Web release
         shell: powershell
         run: .\scripts\build-platform-web-release.ps1 -VersionId $env:PLATFORM_TAG -Force

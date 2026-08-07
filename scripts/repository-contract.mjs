@@ -86,6 +86,7 @@ describe("independent Platform repository", () => {
     assert(workflow.includes("npm run prepare:workspaces"));
     assert(workflow.includes("npm run typecheck:workspaces"));
     assert(workflow.includes("npm run audit:prod"));
+    assert(workflow.includes("npm run test:vitest"));
     assert(workflow.includes("docker compose -f deploy/docker-compose.local.yml config --quiet"));
     assert(workflow.includes("test-build-platform-web-release-contract.ps1 -DryRunOnly"));
     assert(workflow.includes("test-verify-platform-web-release-package-contract.ps1"));
@@ -108,11 +109,19 @@ describe("independent Platform repository", () => {
     ]) {
       assert(workflow.includes(dockerfile), `Container workflow does not build ${dockerfile}`);
       const dockerfileText = read(`deploy/docker/${dockerfile}`);
+      assert.match(
+        dockerfileText,
+        /ARG NODE_IMAGE=node:22-bookworm-slim@sha256:[0-9a-f]{64}/,
+        `${dockerfile} must pin the Node base image by digest`,
+      );
+      assert(dockerfileText.includes("FROM ${NODE_IMAGE} AS build"), `${dockerfile} must use the pinned build image`);
+      assert(dockerfileText.includes("FROM ${NODE_IMAGE} AS runtime"), `${dockerfile} must use the pinned runtime image`);
+      assert(dockerfileText.includes("HEALTHCHECK --interval=30s"), `${dockerfile} must expose standalone readiness`);
       assert(dockerfileText.includes("type=cache,target=/root/.npm"), `${dockerfile} must use the shared npm BuildKit cache`);
       assert(dockerfileText.includes("npm ci --no-audit --no-fund"), `${dockerfile} must avoid duplicate install audits`);
       assert(dockerfileText.includes("npm prune --omit=dev --no-audit --no-fund"), `${dockerfile} must avoid duplicate prune audits`);
     }
-    for (const generatedPath of [".runtime", "output", "release"]) {
+    for (const generatedPath of [".runtime", "output", "release", ".npmrc", "*.pem", "*.key", "tmp", "reports"]) {
       assert(dockerignore.split(/\r?\n/).includes(generatedPath), `Docker context does not exclude ${generatedPath}`);
     }
   });
@@ -124,6 +133,7 @@ describe("independent Platform repository", () => {
     assert(workflow.includes("build-platform-web-release.ps1"));
     assert(workflow.includes("verify-platform-web-release-package.ps1"));
     assert(workflow.includes("smoke-platform-web-release-package.ps1"));
+    assert(workflow.includes("npm run test:integration:required"));
     assert(workflow.includes("softprops/action-gh-release@v3"));
     assert(workflow.includes(".zip.sha256"));
     assert(workflow.includes("checksums.sha256"));

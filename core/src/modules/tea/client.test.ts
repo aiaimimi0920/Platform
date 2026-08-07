@@ -220,4 +220,36 @@ describe("Tea HTTP client", () => {
     assert.equal(requests[0]?.init?.method, "GET");
     assert.equal((requests[0]?.init?.headers as Record<string, string>).authorization, "Bearer tea-token");
   });
+
+  it("aborts a Tea request that does not return headers before the deadline", async () => {
+    let aborted = false;
+    const fetchFn = async (_input: string | URL, init?: RequestInit): Promise<Response> =>
+      new Promise((_resolve, reject) => {
+        init?.signal?.addEventListener(
+          "abort",
+          () => {
+            aborted = true;
+            reject(init.signal?.reason);
+          },
+          { once: true },
+        );
+      });
+    const client = createTeaClient({
+      baseUrl: "http://tea.local",
+      authToken: null,
+      timeoutMs: 20,
+      fetchFn,
+    });
+
+    await assert.rejects(
+      () => client.getStatus(),
+      (error: unknown) => {
+        assert.ok(error instanceof TeaUpstreamError);
+        assert.equal(error.statusCode, 504);
+        assert.match(error.message, /timed out/i);
+        return true;
+      },
+    );
+    assert.equal(aborted, true);
+  });
 });

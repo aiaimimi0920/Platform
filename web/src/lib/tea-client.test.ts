@@ -60,11 +60,13 @@ async function withCapturedFetch<T>(
   const previousCoreUrl = process.env.CORE_INTERNAL_URL;
   const previousInternalToken = process.env.INTERNAL_API_TOKEN;
   const previousTeaToken = process.env.TEA_AUTH_TOKEN;
+  const previousCoreTimeout = process.env.CORE_INTERNAL_FETCH_TIMEOUT_MS;
   const requests: CapturedRequest[] = [];
 
   process.env.CORE_INTERNAL_URL = "http://core-test.local";
   process.env.INTERNAL_API_TOKEN = "internal-token";
   process.env.TEA_AUTH_TOKEN = "tea-daemon-token-that-must-not-reach-web-fetch";
+  process.env.CORE_INTERNAL_FETCH_TIMEOUT_MS = "10000";
   globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
     requests.push({ url: String(input), init });
     return handler(input, init);
@@ -77,6 +79,7 @@ async function withCapturedFetch<T>(
     restoreEnv("CORE_INTERNAL_URL", previousCoreUrl);
     restoreEnv("INTERNAL_API_TOKEN", previousInternalToken);
     restoreEnv("TEA_AUTH_TOKEN", previousTeaToken);
+    restoreEnv("CORE_INTERNAL_FETCH_TIMEOUT_MS", previousCoreTimeout);
   }
 }
 
@@ -418,6 +421,33 @@ test("getTeaTicketComments reads persisted review comments through Platform Core
       assert.equal(requests[0]?.url, "http://core-test.local/internal/tea/tickets/ticket-1/comments");
       assert.equal(requests[0]?.init?.method, "GET");
       assert.equal(getHeader(requests[0]?.init, "authorization"), null);
+    },
+  );
+});
+
+test("Tea Web client aborts a Core request that does not return headers before the deadline", async () => {
+  await withCapturedFetch(
+    (_input, init) =>
+      new Promise((_resolve, reject) => {
+        init?.signal?.addEventListener(
+          "abort",
+          () => reject(init.signal?.reason),
+          { once: true },
+        );
+      }),
+    async () => {
+      process.env.CORE_INTERNAL_FETCH_TIMEOUT_MS = "250";
+      let guard: ReturnType<typeof setTimeout> | undefined;
+      try {
+        await Promise.race([
+          assert.rejects(() => getTeaStatus(userContext), /timeout|abort/i),
+          new Promise<never>((_resolve, reject) => {
+            guard = setTimeout(() => reject(new Error("Core request deadline did not abort")), 1_000);
+          }),
+        ]);
+      } finally {
+        if (guard) clearTimeout(guard);
+      }
     },
   );
 });

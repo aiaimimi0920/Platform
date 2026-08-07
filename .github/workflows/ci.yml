@@ -68,6 +68,9 @@ jobs:
           fi
           exit "$test_status"
 
+      - name: Test AI Gateway Vitest suites
+        run: npm run test:vitest
+
       - name: Test account domain
         run: npm test --workspace @neuro/account-domain --ignore-scripts
 

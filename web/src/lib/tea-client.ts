@@ -1,5 +1,7 @@
 import type { InternalUserContext } from "@neuro/contracts";
 
+import { createUpstreamDeadlineSignal, parseUpstreamTimeoutMs } from "./upstream-deadline";
+
 export type TeaTicketStatus =
   | "draft"
   | "open"
@@ -486,14 +488,19 @@ async function coreTeaRequest<T>(pathname: string, options: CoreTeaRequestOption
     headers["x-neuro-username"] = options.userContext.username;
   }
 
+  const upstreamSignal = createUpstreamDeadlineSignal(
+    new AbortController().signal,
+    parseUpstreamTimeoutMs(process.env.CORE_INTERNAL_FETCH_TIMEOUT_MS, 10_000),
+  );
   const response = await fetch(buildCoreUrl(pathname, options.query), {
     ...noStoreFetchOptions,
     method: options.method ?? "GET",
     headers,
     body: hasJsonBody ? JSON.stringify(options.body) : undefined,
+    signal: upstreamSignal,
   });
 
-  const responseBody = await parseResponseBody(response);
+  const responseBody = parseResponseBody(await response.text());
   if (!response.ok) {
     const apiError = normalizeApiError(responseBody);
     throw new TeaWebClientError(response.status, apiError.message, apiError.code, responseBody);
@@ -521,8 +528,7 @@ function buildCoreUrl(
   return url.toString();
 }
 
-async function parseResponseBody(response: Response): Promise<unknown> {
-  const text = await response.text();
+function parseResponseBody(text: string): unknown {
   if (!text) {
     return null;
   }

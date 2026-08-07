@@ -1,3 +1,8 @@
+import {
+  InternalRequestTimeoutError,
+  requestInternalText,
+} from "@neuro/backend-foundation/platform/internal-request";
+
 export type TeaJson = unknown;
 
 export type TeaQuery = Record<string, string | number | boolean | null | undefined>;
@@ -8,6 +13,7 @@ export type TeaClientConfig = {
   baseUrl: string;
   authToken: string | null;
   fetchFn?: TeaFetch;
+  timeoutMs?: number;
 };
 
 export type CreateTeaTicketRequest = {
@@ -71,8 +77,21 @@ export function createTeaClient(config: TeaClientConfig) {
       init.body = JSON.stringify(options.body);
     }
 
-    const response = await fetchFn(url, init);
-    const responseBody = await parseResponseBody(response);
+    let response: Response;
+    let responseText: string;
+    try {
+      ({ response, text: responseText } = await requestInternalText(url, init, {
+        timeoutMs: config.timeoutMs ?? 10_000,
+        timeoutMessage: "Tea upstream request timed out",
+        fetchFn: (input, requestInit) => fetchFn(input as string | URL, requestInit),
+      }));
+    } catch (error) {
+      if (error instanceof InternalRequestTimeoutError) {
+        throw new TeaUpstreamError(504, error.message, null);
+      }
+      throw error;
+    }
+    const responseBody = parseResponseBody(response, responseText);
 
     if (!response.ok) {
       throw new TeaUpstreamError(response.status, extractErrorMessage(responseBody, response.status), responseBody);
@@ -136,12 +155,12 @@ function buildUrl(baseUrl: string, path: string, query?: TeaQuery): string {
   return url.toString();
 }
 
-async function parseResponseBody(response: Response): Promise<unknown> {
+function parseResponseBody(response: Response, text: string): unknown {
   const contentType = response.headers.get("content-type") ?? "";
   if (contentType.toLowerCase().includes("application/json")) {
-    return response.json();
+    return JSON.parse(text) as unknown;
   }
-  return response.text();
+  return text;
 }
 
 function extractErrorMessage(responseBody: unknown, statusCode: number): string {

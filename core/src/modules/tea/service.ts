@@ -10,6 +10,7 @@ export function getDefaultTeaClient() {
   return createTeaClient({
     baseUrl: env.teaServerUrl,
     authToken: env.teaAuthToken,
+    timeoutMs: env.teaFetchTimeoutMs,
   });
 }
 
@@ -29,6 +30,9 @@ export function toPlatformTeaError(error: unknown): Error {
   }
   if (error.statusCode === 409) {
     return new ConflictError(error.message);
+  }
+  if (error.statusCode === 504) {
+    return new HttpError(504, "INTERNAL_SERVER_ERROR", error.message);
   }
 
   return new HttpError(error.statusCode === 403 ? 403 : 502, "BAD_REQUEST", error.message);

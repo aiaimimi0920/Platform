@@ -6,11 +6,13 @@ import {
   PutObjectTaggingCommand,
   S3Client,
 } from "@aws-sdk/client-s3";
+import { NodeHttpHandler } from "@smithy/node-http-handler";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { mkdir, readFile, stat, unlink, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 import { env } from "@/env";
+import { resolveObjectStoragePath } from "./path";
 
 type PutObjectArgs = {
   objectKey: string;
@@ -99,6 +101,11 @@ function getS3CompatibleClient() {
       accessKeyId: env.objectStorageAccessKeyId as string,
       secretAccessKey: env.objectStorageSecretAccessKey as string,
     },
+    requestHandler: new NodeHttpHandler({
+      connectionTimeout: env.objectStorageFetchTimeoutMs,
+      requestTimeout: env.objectStorageFetchTimeoutMs,
+      socketTimeout: env.objectStorageFetchTimeoutMs,
+    }),
   });
 
   return objectStorageClient;
@@ -175,7 +182,7 @@ export async function putObject(args: PutObjectArgs) {
   const metadata = normalizeObjectMetadata(args.metadata);
   const tags = normalizeObjectTags(args.tags);
   if (env.objectStorageDriver === "local") {
-    const absolutePath = path.join(getObjectStorageRoot(), ...args.objectKey.split("/"));
+    const absolutePath = resolveObjectStoragePath(getObjectStorageRoot(), args.objectKey);
     await mkdir(path.dirname(absolutePath), { recursive: true });
     await writeFile(absolutePath, args.body);
     return {
@@ -203,7 +210,7 @@ export async function putObject(args: PutObjectArgs) {
 
 export async function readObject(args: ReadObjectArgs) {
   if (env.objectStorageDriver === "local") {
-    const absolutePath = path.join(getObjectStorageRoot(), ...args.objectKey.split("/"));
+    const absolutePath = resolveObjectStoragePath(getObjectStorageRoot(), args.objectKey);
     return readFile(absolutePath);
   }
 
@@ -219,7 +226,7 @@ export async function readObject(args: ReadObjectArgs) {
 
 export async function deleteObject(args: DeleteObjectArgs) {
   if (env.objectStorageDriver === "local") {
-    const absolutePath = path.join(getObjectStorageRoot(), ...args.objectKey.split("/"));
+    const absolutePath = resolveObjectStoragePath(getObjectStorageRoot(), args.objectKey);
     await unlink(absolutePath).catch(() => undefined);
     return;
   }
@@ -318,7 +325,7 @@ export async function createSignedWriteUrl(args: SignedWriteUrlArgs): Promise<Si
 
 export async function getObjectMetadata(args: ObjectMetadataArgs): Promise<ObjectMetadataView> {
   if (env.objectStorageDriver === "local") {
-    const absolutePath = path.join(getObjectStorageRoot(), ...args.objectKey.split("/"));
+    const absolutePath = resolveObjectStoragePath(getObjectStorageRoot(), args.objectKey);
     try {
       const file = await stat(absolutePath);
       return {
