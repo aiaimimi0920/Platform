@@ -25,6 +25,8 @@ export function MissionCenterContainer({ enabled, userId }: MissionCenterProps) 
   const wasOpenRef = useRef(false);
   const titleId = useId();
   const panelErrorToastRef = useRef<string | null>(null);
+  const panelRequestRef = useRef<{ controller: AbortController; id: number } | null>(null);
+  const panelRequestIdRef = useRef(0);
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [panel, setPanel] = useState<MissionPanelView | null>(null);
@@ -37,10 +39,16 @@ export function MissionCenterContainer({ enabled, userId }: MissionCenterProps) 
       return;
     }
 
+    panelRequestRef.current?.controller.abort();
+    const requestId = panelRequestIdRef.current + 1;
+    panelRequestIdRef.current = requestId;
+    const controller = new AbortController();
+    panelRequestRef.current = { controller, id: requestId };
     setLoading(true);
     try {
       const response = await fetch("/api/account-missions/panel", {
         cache: "no-store",
+        signal: controller.signal,
       });
       const payload = (await response.json()) as {
         error?: string;
@@ -51,10 +59,16 @@ export function MissionCenterContainer({ enabled, userId }: MissionCenterProps) 
         throw new Error(payload.error || "福利中心暂时不可用。");
       }
 
+      if (controller.signal.aborted || panelRequestIdRef.current !== requestId) {
+        return;
+      }
       setPanel(payload.panel);
       setSelectedTab(preferredTab ?? (hasCheckinFollowupAction(payload.panel.checkin) ? "checkin" : payload.panel.defaultTab));
       panelErrorToastRef.current = null;
     } catch (error) {
+      if (controller.signal.aborted || panelRequestIdRef.current !== requestId) {
+        return;
+      }
       const message = error instanceof Error ? error.message : "福利中心暂时不可用。";
       if (panelErrorToastRef.current !== message) {
         pushToast({
@@ -65,7 +79,10 @@ export function MissionCenterContainer({ enabled, userId }: MissionCenterProps) 
         panelErrorToastRef.current = message;
       }
     } finally {
-      setLoading(false);
+      if (panelRequestRef.current?.id === requestId) {
+        panelRequestRef.current = null;
+        setLoading(false);
+      }
     }
   }
 
@@ -156,7 +173,7 @@ export function MissionCenterContainer({ enabled, userId }: MissionCenterProps) 
     let cancelled = false;
 
     async function syncPanel() {
-      if (cancelled) {
+      if (cancelled || panelRequestRef.current) {
         return;
       }
       await refreshPanel();
@@ -170,6 +187,9 @@ export function MissionCenterContainer({ enabled, userId }: MissionCenterProps) 
     return () => {
       cancelled = true;
       window.clearInterval(intervalId);
+      panelRequestRef.current?.controller.abort();
+      panelRequestRef.current = null;
+      panelRequestIdRef.current += 1;
     };
   }, [enabled, userId]);
 

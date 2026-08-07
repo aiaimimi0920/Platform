@@ -163,6 +163,9 @@ Assert-Contains $script "web\src\app\ready\route.ts" "Verifier must require the 
 Assert-Contains $script "packages\contracts\package.json" "Verifier must require @neuro/contracts package metadata."
 Assert-Contains $script "web/src/app/ready/route.ts" "Verifier must validate the readiness route inside the zip."
 Assert-Contains $script "packages/contracts/package.json" "Verifier must validate @neuro/contracts metadata inside the zip."
+Assert-Contains $script "Duplicate checksums.sha256 entry" "Verifier must reject duplicate checksum entries."
+Assert-Contains $script "checksums.sha256 must contain exactly one entry" "Verifier must reject extra checksum entries."
+Assert-Contains $script "sidecarFileName" "Verifier must bind the zip sidecar to its zip filename."
 
 $tempRoot = Join-Path $env:TEMP ("neuro-platform-web-verify-contract-" + [System.Guid]::NewGuid().ToString("N"))
 New-Item -ItemType Directory -Path $tempRoot -Force | Out-Null
@@ -263,6 +266,26 @@ try {
     }
     Assert-True ($badExitCode -ne 0) "Verifier must fail when excluded web node_modules exists."
     Assert-Contains ($badOutput -join [Environment]::NewLine) "excluded path" "Verifier failure must explain excluded path violations."
+
+    Remove-Item -LiteralPath (Join-Path $packageDir "web\node_modules") -Recurse -Force
+    $checksumLines = Get-Content -LiteralPath (Join-Path $packageDir "checksums.sha256")
+    $firstChecksum = [string]$checksumLines[0]
+    $firstHash = ($firstChecksum -split "\s+", 2)[0]
+    [System.IO.File]::AppendAllText(
+        (Join-Path $packageDir "checksums.sha256"),
+        "$firstHash  unexpected.txt`r`n",
+        [System.Text.ASCIIEncoding]::new()
+    )
+    $previousErrorActionPreference = $ErrorActionPreference
+    try {
+        $ErrorActionPreference = "Continue"
+        $extraOutput = & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $scriptPath -PackageDir $packageDir 2>&1
+        $extraExitCode = $LASTEXITCODE
+    } finally {
+        $ErrorActionPreference = $previousErrorActionPreference
+    }
+    Assert-True ($extraExitCode -ne 0) "Verifier must fail when checksums.sha256 contains an extra entry."
+    Assert-Contains ($extraOutput -join [Environment]::NewLine) "extra entry" "Verifier failure must explain extra checksum entries."
 } finally {
     Remove-Item -LiteralPath $tempRoot -Recurse -Force -ErrorAction SilentlyContinue
 }

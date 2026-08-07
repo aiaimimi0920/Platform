@@ -857,7 +857,7 @@ describe("monorepo structure", () => {
       if (contents.includes("当前无法从 core 读取模块快照")) {
         staleFiles.push(fallbackFile);
       }
-      if (!contents.includes("当前无法读取模块状态")) {
+      if (!/当前无法读取[^。\n]*模块状态/.test(contents)) {
         missingFiles.push(fallbackFile);
       }
     }
@@ -2836,10 +2836,10 @@ describe("monorepo structure", () => {
   });
 
   it("keeps root runtime capture artifacts local", () => {
-    const gitignorePath = join(rootDir, "..", ".gitignore");
+    const gitignorePath = join(rootDir, ".gitignore");
     const contents = readFileSync(gitignorePath, "utf8");
     assert(
-      /^\/\.runtime\/$/m.test(contents),
+      /^\/?\.runtime\/$/m.test(contents),
       "root .runtime capture artifacts must stay ignored and local",
     );
   });

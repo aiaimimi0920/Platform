@@ -1,4 +1,4 @@
-FROM node:20-bookworm-slim AS build
+FROM node:22-bookworm-slim AS build
 
 WORKDIR /app
 
@@ -28,18 +28,20 @@ COPY web web
 RUN npm run build --workspace @neuro/contracts
 RUN npm run build --workspace @neuro/backend-foundation
 RUN npm run build --workspace @neuro/web
+RUN npm prune --omit=dev
 
-FROM node:20-bookworm-slim AS runtime
+FROM node:22-bookworm-slim AS runtime
 
 WORKDIR /app
 ENV NODE_ENV=production
 
-COPY --from=build /app/package.json /app/package-lock.json /app/
-COPY --from=build /app/node_modules /app/node_modules
-COPY --from=build /app/packages/backend-foundation /app/packages/backend-foundation
-COPY --from=build /app/packages/contracts /app/packages/contracts
-COPY --from=build /app/web /app/web
+COPY --from=build --chown=node:node /app/package.json /app/package-lock.json /app/
+COPY --from=build --chown=node:node /app/node_modules /app/node_modules
+COPY --from=build --chown=node:node /app/packages/backend-foundation /app/packages/backend-foundation
+COPY --from=build --chown=node:node /app/packages/contracts /app/packages/contracts
+COPY --from=build --chown=node:node /app/web /app/web
 
 WORKDIR /app/web
+USER node
 EXPOSE 3000
 CMD ["npm", "run", "start"]

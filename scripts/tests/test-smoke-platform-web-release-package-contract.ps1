@@ -41,7 +41,7 @@ Assert-Contains $script "[int]`$Port = 0" "Smoke script must support dynamic loo
 Assert-Contains $script "[switch]`$KeepArtifacts" "Smoke script must support keeping extracted artifacts for debugging."
 Assert-Contains $script "[switch]`$SkipInstall" "Smoke script must support skipping dependency installation for already-prepared extracts."
 Assert-Contains $script "verify-platform-web-release-package.ps1" "Smoke script must validate the release package before extraction."
-Assert-Contains $script "Expand-Archive" "Smoke script must run from an extracted zip package, not the original release directory."
+Assert-Contains $script "function Expand-ZipPackage" "Smoke script must extract the zip into an isolated runtime directory."
 Assert-Contains $script "ExtractToDirectory" "Smoke script must use the faster .NET zip extraction path for large Next release archives."
 Assert-Contains $script "npm ci --omit=dev" "Smoke script must install production dependencies from the extracted package by default."
 Assert-Contains $script "npm run start --workspace web" "Smoke script must start the extracted Next workspace."

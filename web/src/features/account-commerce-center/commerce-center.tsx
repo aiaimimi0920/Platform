@@ -57,6 +57,8 @@ export function CommerceCenter({
   const triggerButtonRef = useRef<HTMLButtonElement | null>(null);
   const wasOpenRef = useRef(false);
   const consumedStatusRef = useRef<string | null>(null);
+  const commerceRequestRef = useRef<{ controller: AbortController; id: number } | null>(null);
+  const commerceRequestIdRef = useRef(0);
   const titleId = useId();
 
   const enabled = Boolean(userId) && (productEnabled || marketplaceEnabled);
@@ -81,6 +83,11 @@ export function CommerceCenter({
       return;
     }
 
+    commerceRequestRef.current?.controller.abort();
+    const requestId = commerceRequestIdRef.current + 1;
+    commerceRequestIdRef.current = requestId;
+    const controller = new AbortController();
+    commerceRequestRef.current = { controller, id: requestId };
     const silent = options?.silent ?? false;
     if (!silent) {
       setLoading(true);
@@ -89,15 +96,22 @@ export function CommerceCenter({
     try {
       const response = await fetch("/api/account-commerce/panel", {
         cache: "no-store",
+        signal: controller.signal,
       });
       const payload = (await response.json()) as CommercePanelPayload;
       if (!payload.dependency || !payload.panel) {
         throw new Error(payload.error || COMMERCE_PANEL_UNAVAILABLE_MESSAGE);
       }
+      if (controller.signal.aborted || commerceRequestIdRef.current !== requestId) {
+        return;
+      }
       setPanel(payload.panel);
       setDependency(payload.dependency);
       setError(null);
     } catch (fetchError) {
+      if (controller.signal.aborted || commerceRequestIdRef.current !== requestId) {
+        return;
+      }
       const normalizedError = fetchError instanceof Error ? fetchError : new Error(COMMERCE_PANEL_UNAVAILABLE_MESSAGE);
       setDependency(
         createDependencyFailureResult({
@@ -108,7 +122,8 @@ export function CommerceCenter({
       );
       setError(normalizedError.message);
     } finally {
-      if (!silent) {
+      if (commerceRequestRef.current?.id === requestId) {
+        commerceRequestRef.current = null;
         setLoading(false);
       }
     }
@@ -121,11 +136,17 @@ export function CommerceCenter({
 
     void refreshPanel({ silent: panel !== null });
     const intervalId = window.setInterval(() => {
+      if (commerceRequestRef.current) {
+        return;
+      }
       void refreshPanel({ silent: true });
     }, COMMERCE_POLL_INTERVAL_MS);
 
     return () => {
       window.clearInterval(intervalId);
+      commerceRequestRef.current?.controller.abort();
+      commerceRequestRef.current = null;
+      commerceRequestIdRef.current += 1;
     };
   }, [enabled, open]);
 

@@ -35,6 +35,8 @@ export function useMailboxCenter({ enabled, routeOpen, workspace = false, userId
   const pendingReadIdsRef = useRef(new Set<string>());
   const appliedTargetedMessageIdRef = useRef<string | null>(null);
   const targetedMessageIdRef = useRef<string | null>(null);
+  const mailboxRequestRef = useRef<{ controller: AbortController; id: number } | null>(null);
+  const mailboxRequestIdRef = useRef(0);
   const titleId = useId();
 
   const [messages, setMessages] = useState<MailboxMessageView[]>([]);
@@ -88,10 +90,16 @@ export function useMailboxCenter({ enabled, routeOpen, workspace = false, userId
       return;
     }
 
+    mailboxRequestRef.current?.controller.abort();
+    const requestId = mailboxRequestIdRef.current + 1;
+    mailboxRequestIdRef.current = requestId;
+    const controller = new AbortController();
+    mailboxRequestRef.current = { controller, id: requestId };
     setLoading(true);
     try {
       const response = await fetch("/api/account-mailbox/messages", {
         cache: "no-store",
+        signal: controller.signal,
       });
       const payload = (await response.json()) as {
         error?: string;
@@ -102,10 +110,16 @@ export function useMailboxCenter({ enabled, routeOpen, workspace = false, userId
         throw new Error(payload.error || "邮箱暂时不可用。");
       }
 
+      if (controller.signal.aborted || mailboxRequestIdRef.current !== requestId) {
+        return;
+      }
       syncMailboxState(payload.messages);
       setError(null);
       panelErrorToastRef.current = null;
     } catch (error) {
+      if (controller.signal.aborted || mailboxRequestIdRef.current !== requestId) {
+        return;
+      }
       const message = error instanceof Error ? error.message : "邮箱暂时不可用。";
       setError(message);
       if (panelErrorToastRef.current !== message) {
@@ -117,7 +131,10 @@ export function useMailboxCenter({ enabled, routeOpen, workspace = false, userId
         panelErrorToastRef.current = message;
       }
     } finally {
-      setLoading(false);
+      if (mailboxRequestRef.current?.id === requestId) {
+        mailboxRequestRef.current = null;
+        setLoading(false);
+      }
     }
   }
 
@@ -378,7 +395,7 @@ export function useMailboxCenter({ enabled, routeOpen, workspace = false, userId
     let cancelled = false;
 
     async function syncMailbox() {
-      if (cancelled) {
+      if (cancelled || mailboxRequestRef.current) {
         return;
       }
       await refreshMailbox();
@@ -392,6 +409,9 @@ export function useMailboxCenter({ enabled, routeOpen, workspace = false, userId
     return () => {
       cancelled = true;
       window.clearInterval(intervalId);
+      mailboxRequestRef.current?.controller.abort();
+      mailboxRequestRef.current = null;
+      mailboxRequestIdRef.current += 1;
     };
   }, [enabled, userId]);
 

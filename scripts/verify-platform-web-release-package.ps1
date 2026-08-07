@@ -162,9 +162,19 @@ Test-HashRecord -RelativePath $zipRelative -ExpectedSha256 ([string]$zipRecord.s
 $zipPath = Join-Path $packagePath $zipRelative
 $zipShaPath = "$zipPath.sha256"
 Assert-True (Test-Path -LiteralPath $zipShaPath -PathType Leaf) "Missing .zip.sha256 sidecar for $zipRelative."
-$expectedZipSha = ((Get-Content -Raw -LiteralPath $zipShaPath).Trim() -split "\s+")[0].ToLowerInvariant()
+$sidecarParts = ((Get-Content -Raw -LiteralPath $zipShaPath).Trim() -split "\s+", 2)
+Assert-True ($sidecarParts.Count -eq 2) "Invalid zip SHA256 sidecar format for $zipRelative."
+$expectedZipSha = $sidecarParts[0].Trim().ToLowerInvariant()
+Assert-True ($expectedZipSha -match "^[0-9a-f]{64}$") "Zip SHA256 sidecar must contain a 64-character hexadecimal hash for $zipRelative."
+$sidecarFileName = $sidecarParts[1].Trim().TrimStart("*")
+Assert-Equal ([System.IO.Path]::GetFileName($zipPath)) $sidecarFileName "Zip SHA256 sidecar must name the matching zip artifact."
 $actualZipSha = (Get-FileHash -LiteralPath $zipPath -Algorithm SHA256).Hash.ToLowerInvariant()
 Assert-Equal $expectedZipSha $actualZipSha "Zip sidecar SHA256 mismatch for $zipRelative."
+$zipSidecarRelative = Get-RelativePath -BasePath $packagePath -Path $zipShaPath
+$zipSidecarRecords = @($manifest.artifacts | Where-Object { [string]$_.kind -eq "zip-sha256" })
+Assert-True ($zipSidecarRecords.Count -eq 1) "Manifest must include exactly one Platform Web zip SHA256 sidecar artifact."
+Assert-Equal $zipSidecarRelative ([string]$zipSidecarRecords[0].path) "Manifest zip SHA256 sidecar path must match the zip sidecar file."
+Test-HashRecord -RelativePath $zipSidecarRelative -ExpectedSha256 ([string]$zipSidecarRecords[0].sha256)
 
 Add-Type -AssemblyName System.IO.Compression.FileSystem | Out-Null
 $zip = [System.IO.Compression.ZipFile]::OpenRead($zipPath)
@@ -180,13 +190,24 @@ try {
     $zip.Dispose()
 }
 
-$checksumEntries = @{}
+$checksumEntries = [System.Collections.Generic.Dictionary[string, string]]::new([System.StringComparer]::OrdinalIgnoreCase)
 Get-Content -LiteralPath $checksumsPath | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } | ForEach-Object {
     $parts = $_ -split "\s+", 2
     if ($parts.Count -ne 2) {
         throw "Invalid checksums.sha256 line: $_"
     }
-    $checksumEntries[$parts[1].Trim()] = $parts[0].ToLowerInvariant()
+    $hash = $parts[0].Trim().ToLowerInvariant()
+    $relative = $parts[1].Trim().TrimStart("*")
+    if ($hash -notmatch "^[0-9a-f]{64}$") {
+        throw "Invalid SHA256 hash in checksums.sha256 line: $_"
+    }
+    if ([string]::IsNullOrWhiteSpace($relative) -or [System.IO.Path]::IsPathRooted($relative) -or $relative -match "(^|[\\/])\.\.([\\/]|$)") {
+        throw "Invalid relative path in checksums.sha256 line: $_"
+    }
+    if ($checksumEntries.ContainsKey($relative)) {
+        throw "Duplicate checksums.sha256 entry: $relative"
+    }
+    $checksumEntries.Add($relative, $hash)
 }
 
 $checksumsFullPath = [System.IO.Path]::GetFullPath($checksumsPath)
@@ -200,12 +221,19 @@ $files = Get-ChildItem -LiteralPath $packagePath -Recurse -File |
     } |
     Sort-Object FullName
 
+$fileRelativePaths = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
 foreach ($file in $files) {
     $relative = Get-RelativePath -BasePath $packagePath -Path $file.FullName
+    $fileRelativePaths.Add($relative) | Out-Null
     Assert-True $checksumEntries.ContainsKey($relative) "checksums.sha256 missing entry for $relative."
     $actual = (Get-FileHash -LiteralPath $file.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
     Assert-Equal $checksumEntries[$relative] $actual "checksums.sha256 mismatch for $relative."
 }
+
+foreach ($relative in $checksumEntries.Keys) {
+    Assert-True $fileRelativePaths.Contains($relative) "checksums.sha256 contains an extra entry: $relative"
+}
+Assert-Equal $fileRelativePaths.Count $checksumEntries.Count "checksums.sha256 must contain exactly one entry for every package file."
 
 [ordered]@{
     status = "passed"

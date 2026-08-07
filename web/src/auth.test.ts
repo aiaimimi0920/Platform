@@ -3,7 +3,9 @@ import path from "node:path";
 import test from "node:test";
 import { pathToFileURL } from "node:url";
 
-import { Auth } from "@auth/core";
+import { Auth, type AuthConfig } from "@auth/core";
+
+type StandardAuthConfig = Omit<AuthConfig, "raw">;
 
 function installAuthTestEnvironment() {
   const previous = {
@@ -87,15 +89,15 @@ function createUserSummary(overrides = {}) {
   };
 }
 
-function resolveFetchUrl(input) {
+function resolveFetchUrl(input: Parameters<typeof fetch>[0]) {
   return typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
 }
 
 test("OAuth callback rejects missing callback state before reaching token exchange", async () => {
   const restoreEnvironment = installAuthTestEnvironment();
   const previousFetch = globalThis.fetch;
-  const fetches = [];
-  globalThis.fetch = async (input) => {
+  const fetches: string[] = [];
+  globalThis.fetch = async (input: Parameters<typeof fetch>[0]) => {
     fetches.push(resolveFetchUrl(input));
     return new Response("unexpected", { status: 500 });
   };
@@ -104,7 +106,7 @@ test("OAuth callback rejects missing callback state before reaching token exchan
     const authConfig = await loadAuthConfig();
     const response = await Auth(
       new Request("http://127.0.0.1:3000/api/auth/callback/linuxdo?code=callback-code"),
-      authConfig,
+      authConfig as StandardAuthConfig,
     );
 
     assert.equal(response.status, 302);
@@ -119,8 +121,8 @@ test("OAuth callback rejects missing callback state before reaching token exchan
 test("OAuth callback identity mapping persists the Linux.do identity into JWT and session", async () => {
   const restoreEnvironment = installAuthTestEnvironment();
   const previousFetch = globalThis.fetch;
-  const fetches = [];
-  globalThis.fetch = async (input) => {
+  const fetches: string[] = [];
+  globalThis.fetch = async (input: Parameters<typeof fetch>[0]) => {
     const url = resolveFetchUrl(input);
     fetches.push(url);
     if (url.endsWith("/internal/identity/linuxdo-upsert")) {
@@ -198,7 +200,7 @@ test("repeated account linking keeps the same local user id across Linux.do re-l
     }),
   ];
   let callIndex = 0;
-  globalThis.fetch = async (input) => {
+  globalThis.fetch = async (input: Parameters<typeof fetch>[0]) => {
     const url = resolveFetchUrl(input);
     if (!url.endsWith("/internal/identity/linuxdo-upsert")) {
       throw new Error(`Unexpected fetch: ${url}`);
@@ -248,7 +250,10 @@ test("auth session route returns null for unauthenticated access", async () => {
   const restoreEnvironment = installAuthTestEnvironment();
   try {
     const authConfig = await loadAuthConfig();
-    const response = await Auth(new Request("http://127.0.0.1:3000/api/auth/session"), authConfig);
+    const response = await Auth(
+      new Request("http://127.0.0.1:3000/api/auth/session"),
+      authConfig as StandardAuthConfig,
+    );
     assert.equal(response.status, 200);
     assert.equal(response.headers.get("content-type"), "application/json");
     assert.equal(await response.text(), "null");

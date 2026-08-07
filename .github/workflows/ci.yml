@@ -36,6 +36,12 @@ jobs:
       - name: Run repository contract
         run: node --test scripts/repository-contract.mjs
 
+      - name: Run repository smoke checks
+        run: node --test scripts/smoke.mjs
+
+      - name: Run workspace unit tests
+        run: npm test
+
       - name: Run workspace typecheck
         run: npm run typecheck
 
