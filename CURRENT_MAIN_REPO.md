@@ -1,6 +1,6 @@
 # 当前 Platform 工作目录说明
 
-更新时间：`2026-06-04`
+更新时间：`2026-08-07`
 
 ## 当前正式 Platform 工作目录
 
@@ -9,6 +9,14 @@
 集成开发，默认以本目录为准：
 
 - `C:\Users\Public\nas_home\AI\GameEditor\Neuro\Platform`
+
+该目录现在是独立 Git 仓库的正式工作树，canonical remote 为：
+
+- `https://github.com/aiaimimi0920/Platform.git`
+
+在 Neuro 顶层仓库中，`Platform/` 通过 Git submodule 固定到已验证的
+Platform commit。Platform 自身的 CI、GHCR 镜像与标签发布工作流归本仓库
+`.github/workflows/` 管理；Neuro 父仓只负责跨项目编排与 submodule 指针。
 
 顶层工作区目录为：
 

@@ -1,0 +1,64 @@
+name: Platform CI
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: platform-ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: Validate workspaces and topology
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run repository contract
+        run: node --test scripts/repository-contract.mjs
+
+      - name: Run workspace typecheck
+        run: npm run typecheck
+
+      - name: Validate integrated compose topology
+        run: docker compose -f deploy/docker-compose.local.yml config --quiet
+
+  release-contracts:
+    name: Validate Windows release contracts
+    runs-on: windows-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Validate release build plan
+        shell: powershell
+        run: .\scripts\tests\test-build-platform-web-release-contract.ps1 -DryRunOnly
+
+      - name: Validate release package verifier
+        shell: powershell
+        run: .\scripts\tests\test-verify-platform-web-release-package-contract.ps1
+
+      - name: Validate release runtime smoke contract
+        shell: powershell
+        run: .\scripts\tests\test-smoke-platform-web-release-package-contract.ps1

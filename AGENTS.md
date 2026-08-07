@@ -2,6 +2,16 @@
 
 Scope: this repository root and all subdirectories, excluding the external `AIRead/` repository.
 
+## Repository Architecture
+
+- This directory is the canonical checkout of the independent Platform repository:
+  - `https://github.com/aiaimimi0920/Platform`
+- In the top-level Neuro workspace, it is mounted at `Platform/` as a Git submodule.
+- Platform repository automation is owned here under `.github/workflows/`; do not move Platform CI or image publication back into the parent repository.
+- Parent-level release orchestration may call Platform-owned scripts, but the standalone Platform checkout must keep its own CI, package, verification, and release entrypoints working.
+- Local integrated compose may use sibling `Gateway/`, `Loom/`, and `Tea/` checkouts. Single-repository CI must use Platform-local validation or the acceptance doubles unless it explicitly checks out those sibling repositories.
+- Never place repository credentials, GitHub tokens, provider credentials, or real environment files in Git remotes, workflow YAML, examples, fixtures, or release evidence.
+
 ## UI Default
 
 All future UI work in this repository must use the **NeuroTerminal** (`nt-*`) industrial-terminal design system.

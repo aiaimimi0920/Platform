@@ -2869,7 +2869,6 @@ describe("monorepo structure", () => {
     const filesToCheck = [
       "AGENTS.md",
       "docs/20-ai-gateway/AI网关发布与滚动切流基线.md",
-      "../docs/gateway/baseline/AI网关发布与滚动切流基线.md",
     ];
     const stalePlatformLocalReferencePatterns = [
       /-\s+`deploy\/build-images\.sh`\s+与\s+`deploy\/push-images\.sh`/,
@@ -2891,16 +2890,71 @@ describe("monorepo structure", () => {
     }
   });
 
-  it("has root GitHub Actions validation for Platform", () => {
-    const workflowPath = join(rootDir, "../.github/workflows/package-platform.yml");
+  it("has repository-local GitHub Actions validation for Platform", () => {
+    const workflowPath = join(rootDir, ".github/workflows/ci.yml");
     const contents = readFileSync(workflowPath, "utf8");
-    assert(contents.includes("name: Package Platform"), "Platform workflow has wrong name");
-    assert(contents.includes("Platform/**"), "Platform workflow does not watch Platform paths");
-    assert(contents.includes("npm run smoke"), "Platform workflow does not run the smoke suite");
+    assert(contents.includes("name: Platform CI"), "Platform workflow has wrong name");
+    assert(contents.includes("node --test scripts/repository-contract.mjs"), "Platform workflow does not run the repository contract");
+    assert(contents.includes("npm run typecheck"), "Platform workflow does not run workspace type checking");
     assert(
       contents.includes("docker compose -f deploy/docker-compose.local.yml config --quiet"),
-      "Platform workflow does not validate the local compose topology",
+      "Platform workflow does not validate the integrated compose topology",
     );
+  });
+
+  it("owns GHCR image and tagged Web release workflows", () => {
+    const containerWorkflow = readFileSync(
+      join(rootDir, ".github/workflows/container-images.yml"),
+      "utf8",
+    );
+    assert(containerWorkflow.includes("packages: write"), "Container workflow cannot publish to GHCR");
+    assert(
+      containerWorkflow.includes("github.event_name != 'pull_request'"),
+      "Container workflow must not publish pull request images",
+    );
+    for (const dockerfile of [
+      "core.Dockerfile",
+      "account-api.Dockerfile",
+      "account-worker.Dockerfile",
+      "worker.Dockerfile",
+      "executor.Dockerfile",
+      "web.Dockerfile",
+    ]) {
+      assert(containerWorkflow.includes(dockerfile), `Container workflow does not build ${dockerfile}`);
+    }
+
+    const releaseWorkflow = readFileSync(
+      join(rootDir, ".github/workflows/release-platform-tag.yml"),
+      "utf8",
+    );
+    assert(releaseWorkflow.includes('"V*.*.*"'), "Release workflow does not watch version tags");
+    assert(
+      releaseWorkflow.includes("build-platform-web-release.ps1"),
+      "Release workflow does not build the Platform Web package",
+    );
+    assert(
+      releaseWorkflow.includes("verify-platform-web-release-package.ps1"),
+      "Release workflow does not verify the Platform Web package",
+    );
+    assert(
+      releaseWorkflow.includes("smoke-platform-web-release-package.ps1"),
+      "Release workflow does not runtime-smoke the Platform Web package",
+    );
+    assert(
+      releaseWorkflow.includes("softprops/action-gh-release@v3"),
+      "Release workflow does not publish verified GitHub Release assets",
+    );
+  });
+
+  it("declares the independent repository identity", () => {
+    const packageMetadata = JSON.parse(readFileSync(join(rootDir, "package.json"), "utf8"));
+    assert.strictEqual(
+      packageMetadata.repository?.url,
+      "git+https://github.com/aiaimimi0920/Platform.git",
+    );
+    assert.strictEqual(packageMetadata.license, "ISC");
+    assert(statSync(join(rootDir, "LICENSE")).isFile(), "Independent repository LICENSE is missing");
+    assert(statSync(join(rootDir, "SECURITY.md")).isFile(), "Independent repository security policy is missing");
   });
 
   it("keeps locally referenced docs and rules available", () => {

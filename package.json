@@ -2,6 +2,26 @@
   "name": "neuroloom-platform",
   "private": true,
   "version": "0.1.0",
+  "description": "NeuroLoom's web, account, operator, and service-policy platform.",
+  "homepage": "https://github.com/aiaimimi0920/Platform#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/aiaimimi0920/Platform.git"
+  },
+  "bugs": {
+    "url": "https://github.com/aiaimimi0920/Platform/issues"
+  },
+  "author": "aiaimimi0920",
+  "license": "ISC",
+  "keywords": [
+    "neuroloom",
+    "platform",
+    "nextjs",
+    "ai-gateway"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
   "workspaces": [
     "packages/contracts",
     "packages/backend-foundation",
@@ -15,6 +35,7 @@
     "web"
   ],
   "scripts": {
+    "ci": "node --test scripts/repository-contract.mjs && npm run typecheck",
     "test": "npm run build --workspace @neuro/contracts && npm run test:unit",
     "smoke": "npm run acceptance:ci",
     "smoke:quick": "npm run test && node --test scripts/smoke.mjs",
@@ -158,9 +179,5 @@
   "overrides": {
     "nodemailer": "8.0.10",
     "postcss": "8.5.15"
-  },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "description": ""
+  }
 }

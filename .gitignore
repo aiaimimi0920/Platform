@@ -1,10 +1,70 @@
-# Platform-local generated outputs.
-# Keep package source under src/ as TypeScript; build outputs belong in dist/.
+# OS and editor state
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Local configuration and credentials. Sanitized examples stay tracked.
+.env
+.env.*
+!.env.example
+!**/.env.example
+!deploy/env/*.env.example
+*.local
+*.secret
+*.secrets.*
+*.pem
+*.key
+*.p12
+*.pfx
+*.jks
+*.crt
+*.der
+
+# Node, Next.js, and TypeScript outputs
+node_modules/
+**/node_modules/
+.next/
+**/.next/
+dist/
+**/dist/
+build/
+**/build/
+coverage/
+**/coverage/
+*.tsbuildinfo
+
+# Platform-local generated contract bindings. Source remains TypeScript.
 packages/contracts/src/*.d.ts
 packages/contracts/src/*.js
 packages/contracts/src/*.js.map
 
-# Local browser/e2e traces; acceptance evidence belongs under .runtime/.
+# Runtime state, release output, logs, and temporary evidence
+.runtime/
+**/.runtime/
+.tmp/
+tmp/
+temp/
+output/
+release/
+logs/
+*.log
+*.pid
+*.trace
+*.har
+.cache/
+.turbo/
+test-results/
+playwright-report/
 .playwright/
 .playwright-cli/
 .playwright-mcp/
+
+# Local databases and exports
+*.sqlite
+*.sqlite3
+*.db
+*.dump
+*.bak

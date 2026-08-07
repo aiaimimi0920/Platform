@@ -1,14 +1,37 @@
 # NeuroLoom Platform
 
+[![Platform CI](https://github.com/aiaimimi0920/Platform/actions/workflows/ci.yml/badge.svg)](https://github.com/aiaimimi0920/Platform/actions/workflows/ci.yml)
+[![Container Images](https://github.com/aiaimimi0920/Platform/actions/workflows/container-images.yml/badge.svg)](https://github.com/aiaimimi0920/Platform/actions/workflows/container-images.yml)
+
 NeuroLoom Platform is the website and public service layer for the Neuro system.
 
 It owns the official web surface, account flows, product/benefit surfaces,
 operator pages, account-domain services, quota and entitlement policy, and the
 website-side integration points used to call Neuro Gateway.
 
+## Repository
+
+The canonical source repository is:
+
+`https://github.com/aiaimimi0920/Platform`
+
+Clone it as a standalone workspace with:
+
+```powershell
+git clone https://github.com/aiaimimi0920/Platform.git
+cd Platform
+npm ci
+npm run ci
+```
+
+The top-level Neuro workspace checks this repository out at `Platform/` as a Git
+submodule. Platform remains independently buildable; integrated local compose
+expects compatible `Gateway/`, `Loom/`, and `Tea/` sibling checkouts when their
+real services are enabled.
+
 ## Project boundary
 
-Platform is one project inside the top-level Neuro workspace:
+Platform is an independent project that participates in the top-level Neuro workspace:
 
 - `../Gateway/` owns the independently runnable AI API gateway runtime.
 - `../Loom/` owns the AI brain and orchestration runtime.
@@ -164,18 +187,45 @@ touches unknown processes.
 ## Local validation
 
 ```powershell
-npm install
-npm run build --workspace @neuro/contracts
-npm run typecheck -ws --if-present
-npm test
-node --test scripts/smoke.mjs
-docker compose -f deploy/docker-compose.local.yml config
+npm ci
+npm run ci
+docker compose -f deploy/docker-compose.local.yml config --quiet
 ```
 
-The full build/test set can be slow on this Windows/network-drive workspace. For
-migration validation, start with `node --test scripts/smoke.mjs`, workspace
-package discovery, and `docker compose ... config`, then expand to typecheck/build
-when needed.
+`npm run ci` runs the repository structure contract followed by workspace
+type checking. The compose command renders the integrated developer topology
+without starting services. Building or starting that topology requires the
+sibling repositories described above. Acceptance runs use Platform-local doubles
+and allocate their required environment through `scripts/acceptance/cli.mjs`.
+
+The full acceptance inventory remains available through `npm run smoke`. It is a
+larger policy gate than hosted quick CI and may require Docker, browser suites,
+and explicit external-surface evidence depending on the selected mode.
+
+## Release and images
+
+Build and verify a versioned Platform Web release on Windows:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\build-platform-web-release.ps1 -VersionId <versionId>
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\verify-platform-web-release-package.ps1 -PackageDir .\release\Platform\<versionId>
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\smoke-platform-web-release-package.ps1 -PackageDir .\release\Platform\<versionId>
+```
+
+Version tags matching `V*.*.*` run the release workflow and publish the verified
+Web zip, SHA-256 sidecar, manifest, and checksum inventory to GitHub Releases.
+The container workflow builds six Platform-owned images:
+
+- `ghcr.io/aiaimimi0920/neuro-platform-core`
+- `ghcr.io/aiaimimi0920/neuro-platform-account-api`
+- `ghcr.io/aiaimimi0920/neuro-platform-account-worker`
+- `ghcr.io/aiaimimi0920/neuro-platform-worker`
+- `ghcr.io/aiaimimi0920/neuro-platform-executor`
+- `ghcr.io/aiaimimi0920/neuro-platform-web`
+
+The local `local-internal-token` values in compose and bootstrap helpers are
+development-only defaults. Production deployments must inject independent
+secrets and must not reuse those values.
 
 ## Migration note
 

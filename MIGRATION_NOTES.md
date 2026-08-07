@@ -1,4 +1,13 @@
-﻿# Platform Migration Notes
+# Platform Migration Notes
+
+## Independent repository phase
+
+As of `2026-08-07`, this Platform tree is maintained as the independent GitHub
+repository `https://github.com/aiaimimi0920/Platform` and is checked out by the
+top-level Neuro workspace as the `Platform/` submodule. Platform owns its
+repository metadata, CI, image publication, and Web release workflow. The Neuro
+parent repository retains only cross-project orchestration and the pinned
+submodule commit.
 
 Source project:
 
