@@ -15,6 +15,7 @@ type GatewayEnv = {
   objectStorageSecretAccessKey: string | null;
   objectStorageForcePathStyle: boolean;
   modelsCacheTtlSeconds: number;
+  providerFetchTimeoutMs: number;
   usesDedicatedDatabase: boolean;
   usesDedicatedRedis: boolean;
 };
@@ -118,6 +119,7 @@ export const env: GatewayEnv = {
     false,
   ),
   modelsCacheTtlSeconds: parsePositiveInt(process.env.AI_GATEWAY_MODELS_CACHE_TTL_SECONDS, 60),
+  providerFetchTimeoutMs: parsePositiveInt(process.env.AI_GATEWAY_PROVIDER_FETCH_TIMEOUT_MS, 10_000),
   usesDedicatedDatabase: database.usesDedicated,
   usesDedicatedRedis: redis.usesDedicated,
 };

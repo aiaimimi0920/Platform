@@ -13,7 +13,7 @@ COPY services/account-worker/package.json services/account-worker/package.json
 COPY worker/package.json worker/package.json
 COPY web/package.json web/package.json
 
-RUN npm ci
+RUN --mount=type=cache,target=/root/.npm,sharing=locked npm ci --no-audit --no-fund
 
 COPY packages/backend-foundation packages/backend-foundation
 COPY packages/account-domain packages/account-domain
@@ -28,7 +28,7 @@ COPY web web
 RUN npm run build --workspace @neuro/contracts
 RUN npm run build --workspace @neuro/backend-foundation
 RUN npm run build --workspace @neuro/web
-RUN npm prune --omit=dev
+RUN npm prune --omit=dev --no-audit --no-fund
 
 FROM node:22-bookworm-slim AS runtime
 

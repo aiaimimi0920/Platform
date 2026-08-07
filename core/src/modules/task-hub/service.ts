@@ -11,6 +11,7 @@ import type {
   TaskLifecycleAction,
   TaskView,
 } from "@neuro/contracts";
+import { mapWithConcurrency } from "@neuro/backend-foundation/async/map-with-concurrency";
 import { and, count, desc, eq, inArray, ne, or, sql } from "drizzle-orm";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 import {
@@ -799,6 +800,8 @@ type DispatchCandidate =
   | ({ kind: "application" } & DispatchScoredApplication)
   | ({ kind: "proposal" } & DispatchScoredProposal);
 
+const DISPATCH_SCORING_CONCURRENCY = 12;
+
 async function buildLegacyScoredApplications(
   tx: NodePgDatabase<typeof schema>,
   pendingApplications: typeof taskApplications.$inferSelect[],
@@ -807,8 +810,10 @@ async function buildLegacyScoredApplications(
   const applicantRows = await tx.select().from(users).where(inArray(users.id, applicantIds));
   const userMap = new Map(applicantRows.map((user) => [user.id, user]));
 
-  return Promise.all(
-    pendingApplications.map(async (application) => {
+  return mapWithConcurrency(
+    pendingApplications,
+    DISPATCH_SCORING_CONCURRENCY,
+    async (application) => {
       const user = userMap.get(application.applicantUserId);
       const stats = await getApplicantStatsInTx(tx, application.applicantUserId);
       const totalHandled = stats.completedCount + stats.defaultCount;
@@ -823,7 +828,7 @@ async function buildLegacyScoredApplications(
         defaultRate,
         reputationScore: 0,
       };
-    }),
+    },
   );
 }
 
@@ -863,8 +868,10 @@ async function buildLegacyScoredProposals(
   const capabilityMap = await getEnabledCapabilityCodeMapInTx(tx, pendingProposals.map((proposal) => proposal.agentId));
   const preferredCodes = normalizeCapabilityCodes(task.preferredCapabilityCodes);
 
-  return Promise.all(
-    pendingProposals.map(async (proposal) => {
+  return mapWithConcurrency(
+    pendingProposals,
+    DISPATCH_SCORING_CONCURRENCY,
+    async (proposal) => {
       const user = userMap.get(proposal.proposerUserId);
       const stats = await getApplicantStatsInTx(tx, proposal.proposerUserId);
       const totalHandled = stats.completedCount + stats.defaultCount;
@@ -882,7 +889,7 @@ async function buildLegacyScoredProposals(
         defaultRate,
         reputationScore: 0,
       };
-    }),
+    },
   );
 }
 

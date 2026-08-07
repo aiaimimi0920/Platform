@@ -83,7 +83,9 @@ describe("independent Platform repository", () => {
     assert(workflow.includes("name: Platform CI"));
     assert(workflow.includes("actions/checkout@v5"));
     assert(workflow.includes("node --test scripts/repository-contract.mjs"));
-    assert(workflow.includes("npm run typecheck"));
+    assert(workflow.includes("npm run prepare:workspaces"));
+    assert(workflow.includes("npm run typecheck:workspaces"));
+    assert(workflow.includes("npm run audit:prod"));
     assert(workflow.includes("docker compose -f deploy/docker-compose.local.yml config --quiet"));
     assert(workflow.includes("test-build-platform-web-release-contract.ps1 -DryRunOnly"));
     assert(workflow.includes("test-verify-platform-web-release-package-contract.ps1"));
@@ -92,6 +94,7 @@ describe("independent Platform repository", () => {
 
   it("builds all Platform-owned images without publishing pull requests", () => {
     const workflow = read(".github/workflows/container-images.yml");
+    const dockerignore = read(".dockerignore");
     assert(workflow.includes("packages: write"));
     assert(workflow.includes("github.event_name != 'pull_request'"));
     assert(workflow.includes("ghcr.io/${{ github.repository_owner }}/neuro-platform-${{ matrix.image }}"));
@@ -104,6 +107,13 @@ describe("independent Platform repository", () => {
       "web.Dockerfile",
     ]) {
       assert(workflow.includes(dockerfile), `Container workflow does not build ${dockerfile}`);
+      const dockerfileText = read(`deploy/docker/${dockerfile}`);
+      assert(dockerfileText.includes("type=cache,target=/root/.npm"), `${dockerfile} must use the shared npm BuildKit cache`);
+      assert(dockerfileText.includes("npm ci --no-audit --no-fund"), `${dockerfile} must avoid duplicate install audits`);
+      assert(dockerfileText.includes("npm prune --omit=dev --no-audit --no-fund"), `${dockerfile} must avoid duplicate prune audits`);
+    }
+    for (const generatedPath of [".runtime", "output", "release"]) {
+      assert(dockerignore.split(/\r?\n/).includes(generatedPath), `Docker context does not exclude ${generatedPath}`);
     }
   });
 
@@ -117,6 +127,8 @@ describe("independent Platform repository", () => {
     assert(workflow.includes("softprops/action-gh-release@v3"));
     assert(workflow.includes(".zip.sha256"));
     assert(workflow.includes("checksums.sha256"));
+    assert.match(workflow, /permissions:\s+contents: read/);
+    assert.match(workflow, /jobs:\s+release:\s+name:[^\n]+\s+permissions:\s+contents: write/);
   });
 
   it("does not contain Google API-key-shaped literals in documentation", () => {

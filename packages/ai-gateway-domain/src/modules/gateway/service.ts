@@ -253,6 +253,17 @@ import {
   NotFoundError,
   UnauthorizedError,
 } from "@neuro/backend-foundation/platform/errors";
+import { mapWithConcurrency } from "@neuro/backend-foundation/async/map-with-concurrency";
+import { requestInternalText } from "@neuro/backend-foundation/platform/internal-request";
+
+const ANALYSIS_EXPORT_READ_CONCURRENCY = 12;
+
+function requestGatewayProviderText(url: string, init: RequestInit, operation: string) {
+  return requestInternalText(url, init, {
+    timeoutMs: env.providerFetchTimeoutMs,
+    timeoutMessage: `${operation} timed out`,
+  });
+}
 
 type GatewayApiKeyRow = typeof gatewayApiKeys.$inferSelect;
 type GatewayAnalysisAnomalyIncidentHistoryRow = typeof gatewayAnalysisAnomalyIncidentHistory.$inferSelect;
@@ -2581,12 +2592,13 @@ async function discoverProviderModels(row: GatewayProviderAccountRow) {
     payload.adapter === "openai_compatible"
       ? payload.modelsPath?.trim() || "/models"
       : payload.modelsPath?.trim() || "/models";
-  const response = await fetch(
+  const { response, text } = await requestGatewayProviderText(
     `${payload.baseUrl.replace(/\/+$/, "")}${endpointPath.startsWith("/") ? endpointPath : `/${endpointPath}`}`,
     {
       method: "GET",
       headers: buildGatewayProviderHeaders(payload) ?? undefined,
     },
+    "Provider models discovery",
   );
 
   if (!response.ok) {
@@ -2594,7 +2606,7 @@ async function discoverProviderModels(row: GatewayProviderAccountRow) {
     throw new ConflictError(`Provider models discovery failed with status ${response.status}.`);
   }
 
-  const body = (await response.json()) as Record<string, unknown>;
+  const body = JSON.parse(text) as Record<string, unknown>;
   const modelIds = parseGatewayProviderModelsResponse(payload, body);
   if (modelIds.length > 0) {
     await writeCachedProviderModels(row.id, modelIds);
@@ -2630,10 +2642,14 @@ async function probeGatewayProviderAccount(row: GatewayProviderAccountRow) {
   }
 
   if (payload.adapter === "grok_compatible") {
-    const response = await fetch(payload.baseUrl.replace(/\/+$/, ""), {
-      method: "GET",
-      headers: buildGatewayProviderHeaders(payload) ?? undefined,
-    });
+    const { response } = await requestGatewayProviderText(
+      payload.baseUrl.replace(/\/+$/, ""),
+      {
+        method: "GET",
+        headers: buildGatewayProviderHeaders(payload) ?? undefined,
+      },
+      "Provider probe",
+    );
     if (response.status >= 500) {
       throw new ConflictError(`Provider probe failed with status ${response.status}.`);
     }
@@ -2649,12 +2665,13 @@ async function probeGatewayProviderAccount(row: GatewayProviderAccountRow) {
       "balancePath" in payload && typeof payload.balancePath === "string" && payload.balancePath.trim()
         ? payload.balancePath.trim()
         : "/v1/credits/balance";
-    const response = await fetch(
+    const { response } = await requestGatewayProviderText(
       `${payload.baseUrl.replace(/\/+$/, "")}${balancePath.startsWith("/") ? balancePath : `/${balancePath}`}`,
       {
         method: "GET",
         headers: buildGatewayProviderHeaders(payload) ?? undefined,
       },
+      "Provider probe",
     );
     if (!response.ok) {
       throw new ConflictError(`Provider probe failed with status ${response.status}.`);
@@ -2663,12 +2680,13 @@ async function probeGatewayProviderAccount(row: GatewayProviderAccountRow) {
   }
 
   if (payload.adapter === "producer_compatible") {
-    const response = await fetch(
+    const { response } = await requestGatewayProviderText(
       `${payload.baseUrl.replace(/\/+$/, "")}/__api/billing/credits`,
       {
         method: "GET",
         headers: buildGatewayProviderHeaders(payload) ?? undefined,
       },
+      "Provider probe",
     );
     if (!response.ok) {
       throw new ConflictError(`Provider probe failed with status ${response.status}.`);
@@ -2677,10 +2695,14 @@ async function probeGatewayProviderAccount(row: GatewayProviderAccountRow) {
   }
 
   if (payload.adapter === "udio_compatible") {
-    const response = await fetch(`${payload.baseUrl.replace(/\/+$/, "")}/api/users/current`, {
-      method: "GET",
-      headers: buildGatewayProviderHeaders(payload) ?? undefined,
-    });
+    const { response } = await requestGatewayProviderText(
+      `${payload.baseUrl.replace(/\/+$/, "")}/api/users/current`,
+      {
+        method: "GET",
+        headers: buildGatewayProviderHeaders(payload) ?? undefined,
+      },
+      "Provider probe",
+    );
     if (!response.ok) {
       throw new ConflictError(`Provider probe failed with status ${response.status}.`);
     }
@@ -2698,14 +2720,23 @@ async function probeGatewayProviderAccount(row: GatewayProviderAccountRow) {
       }
     }
 
-    const response = await fetch(payload.baseUrl.replace(/\/+$/, ""), {
-      method: "HEAD",
-      headers,
-    }).catch(async () =>
-      fetch(payload.baseUrl.replace(/\/+$/, ""), {
-        method: "GET",
+    const providerUrl = payload.baseUrl.replace(/\/+$/, "");
+    const { response } = await requestGatewayProviderText(
+      providerUrl,
+      {
+        method: "HEAD",
         headers,
-      }),
+      },
+      "Provider HEAD probe",
+    ).catch(() =>
+      requestGatewayProviderText(
+        providerUrl,
+        {
+          method: "GET",
+          headers,
+        },
+        "Provider GET probe",
+      ),
     );
 
     if (response.status >= 500) {
@@ -5798,8 +5829,10 @@ export async function exportGatewayAnalysisRowsForOperator(
   const textMode = normalizeAnalysisTextMode(filters.textMode);
   const maxTextChars = Math.max(0, Math.min(filters.maxTextChars ?? 4_000, 32_000));
 
-  const exportedRows = await Promise.all(
-    rows.map(async (row) => {
+  const exportedRows = await mapWithConcurrency(
+    rows,
+    ANALYSIS_EXPORT_READ_CONCURRENCY,
+    async (row) => {
       const [requestArtifact, responseArtifact] = await Promise.all([
         row.requestArtifactObjectKey
           ? readGatewayObject(row.requestArtifactObjectKey)
@@ -5820,7 +5853,7 @@ export async function exportGatewayAnalysisRowsForOperator(
         textMode,
         maxTextChars,
       });
-    }),
+    },
   );
 
   return {

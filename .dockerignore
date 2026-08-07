@@ -7,6 +7,12 @@ dist
 **/dist
 npm-debug.log
 coverage
+.runtime
+**/.runtime
+output
+**/output
+release
+**/release
 *.local
 .env
 .env.*

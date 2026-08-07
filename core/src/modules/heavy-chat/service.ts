@@ -17,9 +17,12 @@ import {
   type HeavyChatThreadRecord,
 } from "./types";
 import type { HeavyChatActionType } from "@neuro/contracts";
+import { mapWithConcurrency } from "@neuro/backend-foundation/async/map-with-concurrency";
 import type { HeavyChatActionResult } from "./action-bridge";
 import { validateManagedHeavyAgentInput } from "../agent-registry/managed-heavy-validation";
 import { HttpError } from "../../platform/errors";
+
+const SNAPSHOT_READ_CONCURRENCY = 12;
 
 export type ManagedHeavyAgentResolution = {
   id: string;
@@ -306,15 +309,17 @@ export function createHeavyChatService(options: HeavyChatServiceOptions) {
       ]);
 
       const [bindings, slotProjects, messagesByThread] = await Promise.all([
-        Promise.all(slots.map((slot) => repository.findAgentBindingForSlot(ownerUserId, slot.id))),
-        Promise.all(
-          slots.map((slot) =>
-            repository.listProjectsForSlot(ownerUserId, slot.id).then((boundProjects) =>
-              boundProjects.map((project) => ({ slotId: slot.id, projectId: project.id })),
-            ),
+        mapWithConcurrency(slots, SNAPSHOT_READ_CONCURRENCY, (slot) =>
+          repository.findAgentBindingForSlot(ownerUserId, slot.id),
+        ),
+        mapWithConcurrency(slots, SNAPSHOT_READ_CONCURRENCY, (slot) =>
+          repository.listProjectsForSlot(ownerUserId, slot.id).then((boundProjects) =>
+            boundProjects.map((project) => ({ slotId: slot.id, projectId: project.id })),
           ),
         ),
-        Promise.all(threads.map((thread) => repository.listMessages(ownerUserId, thread.id))),
+        mapWithConcurrency(threads, SNAPSHOT_READ_CONCURRENCY, (thread) =>
+          repository.listMessages(ownerUserId, thread.id),
+        ),
       ]);
 
       return {

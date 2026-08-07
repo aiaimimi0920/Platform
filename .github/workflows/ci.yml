@@ -33,27 +33,30 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Audit production dependencies
+        run: npm run audit:prod
+
       - name: Run repository contract
         run: node --test scripts/repository-contract.mjs
 
       - name: Run repository smoke checks
         run: node --test scripts/smoke.mjs
 
-      - name: Build shared contracts
-        run: npm run build --workspace @neuro/contracts
+      - name: Build workspace dependencies
+        run: npm run prepare:workspaces
 
       - name: Test contracts
-        run: npm test --workspace @neuro/contracts
+        run: npm test --workspace @neuro/contracts --ignore-scripts
 
       - name: Test backend foundation
-        run: npm test --workspace @neuro/backend-foundation
+        run: npm test --workspace @neuro/backend-foundation --ignore-scripts
 
       - name: Test AI Gateway domain
         shell: bash
         run: |
           log_file="$RUNNER_TEMP/ai-gateway-domain-tests.log"
           set +e
-          npm test --workspace @neuro/ai-gateway-domain 2>&1 | tee "$log_file"
+          npm test --workspace @neuro/ai-gateway-domain --ignore-scripts 2>&1 | tee "$log_file"
           test_status=${PIPESTATUS[0]}
           set -e
           if (( test_status != 0 )); then
@@ -66,28 +69,28 @@ jobs:
           exit "$test_status"
 
       - name: Test account domain
-        run: npm test --workspace @neuro/account-domain
+        run: npm test --workspace @neuro/account-domain --ignore-scripts
 
       - name: Test account API
-        run: npm test --workspace @neuro/account-api
+        run: npm test --workspace @neuro/account-api --ignore-scripts
 
       - name: Test account worker
-        run: npm test --workspace @neuro/account-worker
+        run: npm test --workspace @neuro/account-worker --ignore-scripts
 
       - name: Test Platform Core
-        run: npm test --workspace @neuro/core
+        run: npm test --workspace @neuro/core --ignore-scripts
 
       - name: Test executor
-        run: npm test --workspace @neuro/executor
+        run: npm test --workspace @neuro/executor --ignore-scripts
 
       - name: Test worker
-        run: npm test --workspace @neuro/worker
+        run: npm test --workspace @neuro/worker --ignore-scripts
 
       - name: Test Web
-        run: npm test --workspace @neuro/web
+        run: npm test --workspace @neuro/web --ignore-scripts
 
       - name: Run workspace typecheck
-        run: npm run typecheck
+        run: npm run typecheck:workspaces
 
       - name: Validate integrated compose topology
         run: docker compose -f deploy/docker-compose.local.yml config --quiet

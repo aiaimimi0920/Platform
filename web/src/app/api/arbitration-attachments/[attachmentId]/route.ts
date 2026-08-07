@@ -1,4 +1,5 @@
 import { auth } from "@/auth";
+import { createUpstreamDeadlineSignal, parseUpstreamTimeoutMs } from "@/lib/upstream-deadline";
 
 type RouteContext = {
   params: Promise<{
@@ -19,7 +20,14 @@ function buildHeaders(userId: string, username?: string | null) {
   return headers;
 }
 
-export async function GET(_request: Request, context: RouteContext) {
+function resolveAttachmentFetchTimeoutMs() {
+  const value =
+    process.env.ARBITRATION_ATTACHMENT_FETCH_TIMEOUT_MS ??
+    process.env.CORE_INTERNAL_FETCH_TIMEOUT_MS;
+  return parseUpstreamTimeoutMs(value, 30_000);
+}
+
+export async function GET(request: Request, context: RouteContext) {
   const session = await auth();
   if (!session?.user?.id) {
     return new Response("Unauthorized", { status: 401 });
@@ -27,11 +35,13 @@ export async function GET(_request: Request, context: RouteContext) {
 
   const { attachmentId } = await context.params;
   const coreInternalUrl = process.env.CORE_INTERNAL_URL || "http://127.0.0.1:4000";
+  const upstreamSignal = createUpstreamDeadlineSignal(request.signal, resolveAttachmentFetchTimeoutMs());
   const accessResponse = await fetch(`${coreInternalUrl}/v1/arbitrations/attachments/${attachmentId}/access`, {
     method: "GET",
     headers: buildHeaders(session.user.id, session.user.username),
     cache: "no-store",
     redirect: "manual",
+    signal: upstreamSignal,
   });
 
   if (accessResponse.ok) {
@@ -48,6 +58,7 @@ export async function GET(_request: Request, context: RouteContext) {
     method: "GET",
     headers: buildHeaders(session.user.id, session.user.username),
     cache: "no-store",
+    signal: upstreamSignal,
   });
 
   if (!response.ok) {
