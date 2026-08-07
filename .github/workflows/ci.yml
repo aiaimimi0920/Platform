@@ -49,7 +49,21 @@ jobs:
         run: npm test --workspace @neuro/backend-foundation
 
       - name: Test AI Gateway domain
-        run: npm test --workspace @neuro/ai-gateway-domain
+        shell: bash
+        run: |
+          log_file="$RUNNER_TEMP/ai-gateway-domain-tests.log"
+          set +e
+          npm test --workspace @neuro/ai-gateway-domain 2>&1 | tee "$log_file"
+          test_status=${PIPESTATUS[0]}
+          set -e
+          if (( test_status != 0 )); then
+            grep -E 'not ok|failureType:|error:|code:|stack:|ERR_' "$log_file" | head -n 80 | while IFS= read -r line; do
+              line=${line//'%'/'%25'}
+              line=${line//$'\r'/'%0D'}
+              echo "::error title=AI Gateway domain test failure::$line"
+            done
+          fi
+          exit "$test_status"
 
       - name: Test account domain
         run: npm test --workspace @neuro/account-domain
