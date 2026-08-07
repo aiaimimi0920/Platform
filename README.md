@@ -142,12 +142,15 @@ Review/action routes currently exposed by Platform Web include:
 Focused Web Tea tests:
 
 ```powershell
-cd Platform
-node --test --import tsx web/src/lib/tea-client.test.ts web/src/lib/tea-route-utils.test.ts web/src/lib/tea-api-handlers.test.ts web/src/lib/tea-detail-controls.test.ts web/src/lib/tea-web-ui-smoke-harness-contract.test.ts
+node --test --import tsx web/src/lib/tea-client.test.ts web/src/lib/tea-route-utils.test.ts web/src/lib/tea-api-handlers.test.ts web/src/lib/tea-detail-controls.test.ts web/src/lib/tea-settings-page-contract.test.ts
 ```
 
+The cross-product Tea smoke harnesses are owned by the parent Neuro repository
+because they build and start both Platform and Tea. When Platform is checked out
+as `Neuro/Platform`, run these commands from the Neuro repository root.
+
 To prove the browser-facing Platform Web handlers can operate through Platform
-Core HTTP against a real `tea-daemon`, run the root smoke harness:
+Core HTTP against a real `tea-daemon`, run:
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\smoke-platform-web-tea-real.ps1
@@ -163,8 +166,7 @@ in detail responses and both export formats, that Platform Web does not send
 to the Tea daemon.
 
 To prove the actual Next.js Tea UI still works through Local Dev auth, server
-actions, redirects, downloads, and the same Web -> Core -> Tea boundary, run the
-browser-level product smoke from the Neuro workspace root:
+actions, redirects, downloads, and the same Web -> Core -> Tea boundary, run:
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\smoke-platform-web-tea-ui-real.ps1 -KeepArtifacts

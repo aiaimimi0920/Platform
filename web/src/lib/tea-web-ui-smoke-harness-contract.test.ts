@@ -3,31 +3,35 @@ import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import test from "node:test";
 
-function findRepoRoot(startDir: string) {
+function findPlatformRoot(startDir: string) {
   let current = resolve(startDir);
   for (;;) {
     if (
-      existsSync(resolve(current, "Platform", "web", "package.json")) &&
-      existsSync(resolve(current, "scripts"))
+      existsSync(resolve(current, "package.json")) &&
+      existsSync(resolve(current, "web", "package.json"))
     ) {
       return current;
     }
     const parent = resolve(current, "..");
     if (parent === current) {
-      throw new Error(`Unable to locate Neuro repo root from ${startDir}`);
+      throw new Error(`Unable to locate Platform repo root from ${startDir}`);
     }
     current = parent;
   }
 }
 
-const repoRoot = findRepoRoot(process.cwd());
-const harnessPath = resolve(repoRoot, "scripts", "smoke-platform-web-tea-ui-real.ps1");
-const nextConfigPath = resolve(repoRoot, "Platform", "web", "next.config.ts");
+const platformRoot = findPlatformRoot(process.cwd());
+const neuroRoot = resolve(platformRoot, "..");
+const harnessPath = resolve(neuroRoot, "scripts", "smoke-platform-web-tea-ui-real.ps1");
+const nextConfigPath = resolve(platformRoot, "web", "next.config.ts");
 const harnessExists = existsSync(harnessPath);
 const harnessSource = harnessExists ? readFileSync(harnessPath, "utf8") : "";
 const nextConfigSource = existsSync(nextConfigPath) ? readFileSync(nextConfigPath, "utf8") : "";
+const neuroHarnessTestOptions = {
+  skip: harnessExists ? false : "requires the parent Neuro integration harness",
+};
 
-test("Platform Web Tea UI real smoke harness exists and uses isolated product services", () => {
+test("Platform Web Tea UI real smoke harness exists and uses isolated product services", neuroHarnessTestOptions, () => {
   assert.equal(harnessExists, true, "expected root smoke-platform-web-tea-ui-real.ps1 to exist");
   assert.match(harnessSource, /platform-web-tea-ui-real-\$runId/);
   assert.match(harnessSource, /\[guid\]::NewGuid\(\)/);
@@ -38,7 +42,7 @@ test("Platform Web Tea UI real smoke harness exists and uses isolated product se
   assert.match(harnessSource, /summary\.json/);
 });
 
-test("Platform Web Tea UI real smoke drives the actual Next UI with local dev auth", () => {
+test("Platform Web Tea UI real smoke drives the actual Next UI with local dev auth", neuroHarnessTestOptions, () => {
   assert.match(harnessSource, /DEV_AUTH_BYPASS_ENABLED/);
   assert.match(harnessSource, /NEXTAUTH_SECRET/);
   assert.match(harnessSource, /使用 Local Dev 登录/);
@@ -56,7 +60,7 @@ test("Platform Web Tea UI real smoke drives the actual Next UI with local dev au
   assert.match(harnessSource, /提交评论/);
 });
 
-test("Platform Web Tea UI real smoke verifies lifecycle, downloads, and credential boundary evidence", () => {
+test("Platform Web Tea UI real smoke verifies lifecycle, downloads, and credential boundary evidence", neuroHarnessTestOptions, () => {
   assert.match(harnessSource, /loom\.tea_ticket_decompose\.v1/);
   assert.match(harnessSource, /审批/);
   assert.match(harnessSource, /执行/);
@@ -72,7 +76,7 @@ test("Platform Web Tea UI real smoke verifies lifecycle, downloads, and credenti
   assert.match(harnessSource, /json_download_contains_comment/);
 });
 
-test("Platform Web Tea UI real smoke records cleanup and refuses unsafe port collisions", () => {
+test("Platform Web Tea UI real smoke records cleanup and refuses unsafe port collisions", neuroHarnessTestOptions, () => {
   assert.match(harnessSource, /Assert-NoPreexistingPortListeners/);
   assert.match(harnessSource, /blocked_preexisting_listener/);
   assert.match(harnessSource, /cleanup_phase/);
@@ -83,9 +87,12 @@ test("Platform Web Tea UI real smoke records cleanup and refuses unsafe port col
   assert.match(harnessSource, /port_listener_count_after_stop/);
 });
 
-test("Platform Web Tea UI real smoke isolates Next dev artifacts from shared .next lock", () => {
+test("Platform Web supports an isolated Next distDir", () => {
   assert.match(nextConfigSource, /NEXT_DIST_DIR/);
   assert.match(nextConfigSource, /distDir/);
+});
+
+test("Platform Web Tea UI real smoke isolates Next dev artifacts from shared .next lock", neuroHarnessTestOptions, () => {
   assert.match(harnessSource, /\$nextDistRunId\s*=\s*\$runId\.Replace\("-", ""\)\.Substring\(0,\s*12\)/);
   assert.match(harnessSource, /\.nt-\$nextDistRunId/);
   assert.match(harnessSource, /NEXT_DIST_DIR/);
@@ -94,7 +101,7 @@ test("Platform Web Tea UI real smoke isolates Next dev artifacts from shared .ne
   assert.doesNotMatch(harnessSource, /web\\\.next\\dev\\lock/);
 });
 
-test("Platform Web Tea UI real smoke restores tsconfig after isolated Next distDir writes", () => {
+test("Platform Web Tea UI real smoke restores tsconfig after isolated Next distDir writes", neuroHarnessTestOptions, () => {
   assert.match(harnessSource, /webTsconfigPath/);
   assert.match(harnessSource, /ReadAllBytes/);
   assert.match(harnessSource, /WriteAllBytes/);

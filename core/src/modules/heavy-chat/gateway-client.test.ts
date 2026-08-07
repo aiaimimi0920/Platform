@@ -853,6 +853,22 @@ describe("heavy-chat Gateway client", { concurrency: false }, () => {
     const chunks: string[] = [];
     let cancelled = false;
     let lateTimer: ReturnType<typeof setTimeout> | undefined;
+    const transport: TestTransport = async (request) => {
+      const requestId = request.headers.get("x-request-id");
+      assert.ok(requestId);
+      const headers = {
+        "content-type": "application/json",
+        "x-request-id": requestId,
+        "x-correlation-id": correlationId,
+      };
+      if (request.url.endsWith("benefit-projects/ensure")) {
+        return new Response(JSON.stringify({ project: { id: "stalled-stream-project" } }), { headers });
+      }
+      if (request.url.endsWith("/api-access")) {
+        return new Response(JSON.stringify({ token: PROJECT_TOKEN }), { headers });
+      }
+      return new Response(null, { headers, status: 200 });
+    };
     const { fetchFn, requests } = createCapturingFetch(({ request, response }) => {
       if (new URL(request.url).pathname !== "/v1/chat/completions") return response;
       const requestId = request.headers.get("x-request-id");
@@ -871,7 +887,7 @@ describe("heavy-chat Gateway client", { concurrency: false }, () => {
                   `data: ${JSON.stringify({ choices: [{ delta: { content: "late" }, finish_reason: null }] })}\n\n`,
                 ),
               );
-            }, 80);
+            }, 2_000);
           },
           cancel() {
             cancelled = true;
@@ -887,8 +903,8 @@ describe("heavy-chat Gateway client", { concurrency: false }, () => {
           status: 200,
         },
       );
-    });
-    const client = createClient(gatewayBaseUrl, fetchFn, 30);
+    }, transport);
+    const client = createClient("http://gateway-stalled-stream.invalid", fetchFn, 500);
 
     await assert.rejects(
       () =>
@@ -917,7 +933,6 @@ describe("heavy-chat Gateway client", { concurrency: false }, () => {
         });
       },
     );
-    await new Promise((resolve) => setTimeout(resolve, 120));
     assert.equal(cancelled, true);
     assert.deepEqual(chunks, ["partial"]);
   });
