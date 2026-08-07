@@ -57,7 +57,7 @@ jobs:
           test_status=${PIPESTATUS[0]}
           set -e
           if (( test_status != 0 )); then
-            grep -E 'not ok|failureType:|error:|code:|stack:|ERR_' "$log_file" | head -n 80 | while IFS= read -r line; do
+            grep -E 'not ok|failureType:|[Ee]rror:|Cannot find module|Require stack|code:|stack:|ERR_' "$log_file" | head -n 80 | while IFS= read -r line; do
               line=${line//'%'/'%25'}
               line=${line//$'\r'/'%0D'}
               echo "::error title=AI Gateway domain test failure::$line"
