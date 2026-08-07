@@ -274,3 +274,4 @@ $standard = Get-Content -Raw -LiteralPath $standardPath
 Assert-Contains $standard "verify-platform-web-release-package.ps1" "Release standard must document the Platform Web verifier."
 
 Write-Host "Platform Web release package verifier contract passed."
+$global:LASTEXITCODE = 0
