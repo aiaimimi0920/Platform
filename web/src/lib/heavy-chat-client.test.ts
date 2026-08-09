@@ -10,6 +10,7 @@ import type {
 } from "@neuro/contracts";
 
 import {
+  bindHeavyChatManagedAgent,
   createHeavyChatThread,
   getHeavyChatMessagePage,
   getHeavyChatSnapshot,
@@ -91,6 +92,32 @@ test("heavy chat snapshot request sends only internal and authenticated user con
       assert.equal(readHeader(requests[0]?.init, "x-neuro-provider-user-id"), "provider-1");
       assert.equal(readHeader(requests[0]?.init, "x-neuro-username"), "alice");
       assert.equal(readHeader(requests[0]?.init, "authorization"), null);
+    },
+  );
+});
+
+test("heavy chat agent binding uses the owner-scoped Core route and PUT envelope", async () => {
+  const binding = {
+    id: "binding-1",
+    ownerUserId: "user-1",
+    slotId: "slot/one",
+    agentId: "agent-heavy-1",
+    createdAt: "2026-07-19T08:00:00.000Z",
+    updatedAt: "2026-07-19T08:00:00.000Z",
+  };
+  await withCapturedFetch(
+    () => jsonResponse({ binding }),
+    async (requests) => {
+      assert.deepEqual(
+        await bindHeavyChatManagedAgent(userContext, "slot/one", "agent-heavy-1"),
+        binding,
+      );
+      assert.equal(
+        requests[0]?.url,
+        "http://core-heavy-chat.local/v1/me/heavy-chat/slots/slot%2Fone/agent-binding",
+      );
+      assert.equal(requests[0]?.init?.method, "PUT");
+      assert.equal(requests[0]?.init?.body, JSON.stringify({ agentId: "agent-heavy-1" }));
     },
   );
 });

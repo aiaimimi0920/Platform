@@ -51,6 +51,21 @@ if (!databaseUrl) {
         accountPoolWithEvents.on("error", () => undefined);
       }
 
+      const operatorCode = {
+        code: "INTEGRATION-UNIQUE-CODE",
+        active: true,
+        rewards: [{ kind: "walletGrant" as const, currency: "obsidian", amount: 5 }],
+        maxUses: 1,
+      };
+      await serviceModule.upsertRedemptionCode(operatorCode);
+      await assert.rejects(
+        () => serviceModule.upsertRedemptionCode(operatorCode),
+        (error: unknown) => {
+          assert.equal((error as { statusCode?: number }).statusCode, 409);
+          assert.equal((error as { code?: string }).code, "CONFLICT");
+          return true;
+        },
+      );
       await serviceModule.createMailboxMessage({
         userId: "mail-owner",
         title: "Concurrency-safe reward delivery",

@@ -1027,8 +1027,9 @@ export async function listSuppliedAgentMarketplaceExecutions(
   userContext: InternalUserContext,
   limit = 20,
 ) {
+  const boundedLimit = Math.min(100, Math.max(1, Math.floor(limit)));
   const response = await coreRequest<{ executions: AgentExecutionView[] }>(
-    `/v1/agents/marketplace/supplier-executions?limit=${encodeURIComponent(String(Math.max(1, Math.floor(limit))))}`,
+    `/v1/agents/marketplace/supplier-executions?limit=${encodeURIComponent(String(boundedLimit))}`,
     {
       userContext,
     },

@@ -79,7 +79,12 @@ describe("independent Platform repository", () => {
 
     assert.strictEqual(packageMetadata.dependencies, undefined);
     assert.strictEqual(packageMetadata.main, undefined);
-    assert.deepStrictEqual(Object.keys(packageMetadata.devDependencies).sort(), ["pg", "tsc-alias", "tsx"]);
+    assert.deepStrictEqual(Object.keys(packageMetadata.devDependencies).sort(), [
+      "@playwright/test",
+      "pg",
+      "tsc-alias",
+      "tsx",
+    ]);
     assert.strictEqual(typeof corePackageMetadata.devDependencies?.["embedded-postgres"], "string");
   });
 

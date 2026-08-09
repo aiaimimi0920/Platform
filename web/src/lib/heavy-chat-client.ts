@@ -6,6 +6,7 @@ import type {
   HeavyChatMessageAttemptResult,
   HeavyChatMessagePage,
   HeavyChatSendMessageResult,
+  HeavyChatSlotAgentBindingView,
   HeavyChatSnapshot,
   HeavyChatThreadView,
   InternalUserContext,
@@ -22,7 +23,7 @@ import {
 
 type HeavyChatCoreRequestOptions = {
   body?: unknown;
-  method?: "GET" | "POST";
+  method?: "GET" | "POST" | "PUT";
   userContext: InternalUserContext;
 };
 
@@ -146,6 +147,22 @@ export async function getHeavyChatSnapshot(userContext: InternalUserContext): Pr
     userContext,
   });
   return response.snapshot;
+}
+
+export async function bindHeavyChatManagedAgent(
+  userContext: InternalUserContext,
+  slotId: string,
+  agentId: string,
+): Promise<HeavyChatSlotAgentBindingView> {
+  const response = await heavyChatCoreRequest<{ binding: HeavyChatSlotAgentBindingView }>(
+    `/v1/me/heavy-chat/slots/${encodeURIComponent(slotId)}/agent-binding`,
+    {
+      method: "PUT",
+      body: { agentId },
+      userContext,
+    },
+  );
+  return response.binding;
 }
 
 export async function getHeavyChatMessagePage(

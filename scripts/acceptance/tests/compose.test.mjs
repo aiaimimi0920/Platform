@@ -520,6 +520,19 @@ test("Gateway double proves management to project token to chat runtime boundary
   assert.equal(unauthorized.status, 401);
   assert.equal((await responseJson(unauthorized)).fixture, true);
 
+  const unavailableCatalog = await fetch(`${baseUrl}/v1/internal/gateway/access/catalog`, {
+    headers: {
+      "x-internal-api-key": "management-token",
+      "x-request-id": "gateway-catalog-request",
+      "x-correlation-id": "gateway-catalog-correlation",
+    },
+  });
+  const unavailableCatalogBody = await responseJson(unavailableCatalog);
+  assert.equal(unavailableCatalog.status, 503);
+  assert.equal(unavailableCatalog.headers.get("x-request-id"), "gateway-catalog-request");
+  assert.equal(unavailableCatalog.headers.get("x-correlation-id"), "gateway-catalog-correlation");
+  assert.equal(unavailableCatalogBody.error.code, "FIXTURE_CATALOG_UNAVAILABLE");
+
   const ensured = await fetch(`${baseUrl}/v1/internal/gateway/benefit-projects/ensure`, {
     method: "POST",
     headers: {

@@ -50,6 +50,11 @@ import { assertUserContext, withInternalRequest } from "../../platform/internal-
 
 export type HeavyChatRouterService = {
   getSnapshot(ownerUserId: string): Promise<HeavyChatSnapshotRecord>;
+  bindManagedAgent(
+    ownerUserId: string,
+    slotId: string,
+    agentId: string,
+  ): Promise<HeavyChatSlotAgentBindingRecord>;
   getMessagePage(
     ownerUserId: string,
     threadId: string,
@@ -77,6 +82,10 @@ const createThreadSchema = z.object({
   slotId: identifierSchema,
   projectId: identifierSchema.optional().nullable(),
   title: z.string().trim().min(1).max(200),
+});
+
+const bindManagedAgentSchema = z.object({
+  agentId: identifierSchema,
 });
 
 const sendMessageSchema = z.object({
@@ -343,6 +352,25 @@ export function createHeavyChatRouter(options: HeavyChatRouterOptions = {}): Fas
         throw normalizeHeavyChatError(error);
       }
     });
+
+    app.put<{ Params: { slotId: string }; Body: unknown }>(
+      "/v1/me/heavy-chat/slots/:slotId/agent-binding",
+      { preHandler: withInternalRequest },
+      async (request) => {
+        const { userId } = assertUserContext(request);
+        const payload = parseRequestBody(bindManagedAgentSchema, request.body);
+        try {
+          const binding = await (await getService()).bindManagedAgent(
+            userId,
+            request.params.slotId,
+            payload.agentId,
+          );
+          return { binding: toBindingView(binding) };
+        } catch (error) {
+          throw normalizeHeavyChatError(error);
+        }
+      },
+    );
 
     app.post<{ Body: unknown }>(
       "/v1/me/heavy-chat/threads",

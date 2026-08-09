@@ -7,9 +7,13 @@ import {
   type OperatorProductBundleOption,
 } from "@/components/products/operator-product-editor";
 import { auth } from "@/auth";
+import { DependencyState } from "@/components/dependency-state";
 import { getFeatureSnapshot, listOperatorProducts } from "@/lib/core-client";
 import { getGatewayAccessCatalog } from "@/lib/account-client";
-import { buildGatewayCatalogUnavailableNotice } from "@/lib/gateway-catalog-notice";
+import {
+  createDependencyFailureResult,
+  type DependencyResult,
+} from "@/lib/dependency-result";
 import { isPlatformOperatorUserId } from "@/lib/platform-session";
 
 type ProductOpsPageProps = {
@@ -17,6 +21,11 @@ type ProductOpsPageProps = {
     status?: string;
     message?: string;
   }>;
+};
+
+type BundleCatalogResult = {
+  bundles: OperatorProductBundleOption[];
+  dependency: DependencyResult<OperatorProductBundleOption[]> | null;
 };
 
 export default async function ProductOpsPage({ searchParams }: ProductOpsPageProps) {
@@ -65,12 +74,17 @@ export default async function ProductOpsPage({ searchParams }: ProductOpsPagePro
           status: bundle.status,
           projectId: bundle.projectId,
         })),
-        notice: null,
-      }))
+        dependency: null,
+      }) satisfies BundleCatalogResult)
       .catch((error) => ({
         bundles: [] as OperatorProductBundleOption[],
-        notice: buildGatewayCatalogUnavailableNotice(error),
-      })),
+        dependency: createDependencyFailureResult<OperatorProductBundleOption[]>({
+          error,
+          message: "Gateway bundle 目录暂不可用；商品库存和优惠码管理仍可继续使用。",
+          source: "gateway-access-catalog",
+          unauthorizedMessage: "当前运营账户无权读取 Gateway bundle 目录。",
+        }),
+      }) satisfies BundleCatalogResult),
   ]);
   const redirectTo = "/ops/products";
 
@@ -87,11 +101,16 @@ export default async function ProductOpsPage({ searchParams }: ProductOpsPagePro
         {status && message ? (
           <p className={`ops-alert ops-alert--${status}`}>{message}</p>
         ) : null}
-        {bundleCatalogResult.notice ? (
-          <div className="ops-alert ops-alert--warning" role="status" aria-live="polite">
-            <strong className="ops-alert__title">{bundleCatalogResult.notice.title}</strong>
-            <span className="ops-alert__body">{bundleCatalogResult.notice.body}</span>
-            <span className="ops-alert__detail">{bundleCatalogResult.notice.detail}</span>
+        {bundleCatalogResult.dependency ? (
+          <div style={{ display: "grid", gap: 10 }}>
+            <DependencyState
+              diagnostics
+              label="Gateway bundle 目录"
+              result={bundleCatalogResult.dependency}
+            />
+            <Link className="ops-form__submit" href="/ops/products">
+              重试 Gateway bundle 目录
+            </Link>
           </div>
         ) : null}
 

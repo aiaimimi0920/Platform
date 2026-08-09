@@ -34,6 +34,7 @@ import {
   listActiveMarketplaceListings,
 } from "@/modules/redemption-mailbox-marketplace/repository";
 import { mailboxAttachments, mailboxMessages, marketplaceListings, redemptionCodes, redemptionCodeUsages } from "@/modules/redemption-mailbox-marketplace/schema";
+import { BadRequestError, ConflictError, NotFoundError } from "@/platform/errors";
 import { enqueueOutboxEvent } from "@/platform/outbox/service";
 
 function now() {
@@ -145,7 +146,7 @@ async function checkRedeemRateLimit(userId: string) {
     await redis.expire(key, REDEEM_RATE_LIMIT_WINDOW_SECONDS);
   }
   if (current > REDEEM_RATE_LIMIT_MAX) {
-    throw new Error("操作过于频繁，请稍后再试");
+    throw new BadRequestError("操作过于频繁，请稍后再试");
   }
 }
 
@@ -218,33 +219,12 @@ export async function upsertRedemptionCode(input: UpsertRedemptionCodeInput & { 
   const legacyAmount = firstReward?.kind === "walletGrant" ? firstReward.amount : null;
   const legacyProductId = firstReward?.kind === "itemGrant" ? firstReward.productId : null;
 
-  const [result] = await db
-    .insert(redemptionCodes)
-    .values({
-      id: codeId,
-      code: input.code,
-      active: input.active,
-      rewardKind: legacyKind,
-      currency: legacyCurrency,
-      amount: legacyAmount,
-      productId: legacyProductId,
-      maxUses: input.maxUses,
-      usedCount: 0,
-      startsAt: input.startsAt ? new Date(input.startsAt) : null,
-      expiresAt: input.expiresAt ? new Date(input.expiresAt) : null,
-      exclusionGroup: input.exclusionGroup ?? null,
-      eligibility: input.eligibility ? JSON.stringify(input.eligibility) : null,
-      rewards: JSON.stringify(input.rewards),
-      mailTitle: input.mailTitle ?? null,
-      mailBody: input.mailBody ?? null,
-      batchLabel: input.batchLabel ?? null,
-      description: input.description ?? null,
-      createdAt,
-      updatedAt: createdAt,
-    })
-    .onConflictDoUpdate({
-      target: redemptionCodes.id,
-      set: {
+  let result: typeof redemptionCodes.$inferSelect;
+  try {
+    [result] = await db
+      .insert(redemptionCodes)
+      .values({
+        id: codeId,
         code: input.code,
         active: input.active,
         rewardKind: legacyKind,
@@ -252,6 +232,7 @@ export async function upsertRedemptionCode(input: UpsertRedemptionCodeInput & { 
         amount: legacyAmount,
         productId: legacyProductId,
         maxUses: input.maxUses,
+        usedCount: 0,
         startsAt: input.startsAt ? new Date(input.startsAt) : null,
         expiresAt: input.expiresAt ? new Date(input.expiresAt) : null,
         exclusionGroup: input.exclusionGroup ?? null,
@@ -261,10 +242,42 @@ export async function upsertRedemptionCode(input: UpsertRedemptionCodeInput & { 
         mailBody: input.mailBody ?? null,
         batchLabel: input.batchLabel ?? null,
         description: input.description ?? null,
-        updatedAt: now(),
-      },
-    })
-    .returning();
+        createdAt,
+        updatedAt: createdAt,
+      })
+      .onConflictDoUpdate({
+        target: redemptionCodes.id,
+        set: {
+          code: input.code,
+          active: input.active,
+          rewardKind: legacyKind,
+          currency: legacyCurrency,
+          amount: legacyAmount,
+          productId: legacyProductId,
+          maxUses: input.maxUses,
+          startsAt: input.startsAt ? new Date(input.startsAt) : null,
+          expiresAt: input.expiresAt ? new Date(input.expiresAt) : null,
+          exclusionGroup: input.exclusionGroup ?? null,
+          eligibility: input.eligibility ? JSON.stringify(input.eligibility) : null,
+          rewards: JSON.stringify(input.rewards),
+          mailTitle: input.mailTitle ?? null,
+          mailBody: input.mailBody ?? null,
+          batchLabel: input.batchLabel ?? null,
+          description: input.description ?? null,
+          updatedAt: now(),
+        },
+      })
+      .returning();
+  } catch (error) {
+    const cause = error && typeof error === "object" && "cause" in error ? error.cause : null;
+    if (
+      (error && typeof error === "object" && "code" in error && error.code === "23505") ||
+      (cause && typeof cause === "object" && "code" in cause && cause.code === "23505")
+    ) {
+      throw new ConflictError("兑换码已存在，请使用新的编码");
+    }
+    throw error;
+  }
 
   return mapRedemptionCodeView(result);
 }
@@ -322,29 +335,29 @@ export async function redeemCodeForUser(userId: string, code: string): Promise<R
 
   const redemptionCode = await getRedemptionCodeByCode(code);
   if (!redemptionCode || !redemptionCode.active) {
-    throw new Error("兑换码不存在或已失效");
+    throw new BadRequestError("兑换码不存在或已失效");
   }
 
   // Time window check
   const currentTime = now();
   if (redemptionCode.startsAt && redemptionCode.startsAt > currentTime) {
-    throw new Error("兑换码尚未开放");
+    throw new BadRequestError("兑换码尚未开放");
   }
   if (redemptionCode.expiresAt && redemptionCode.expiresAt < currentTime) {
-    throw new Error("兑换码已过期");
+    throw new BadRequestError("兑换码已过期");
   }
 
   // Eligibility check
   const eligibility = parseEligibility(redemptionCode);
   if (eligibility) {
     const [user] = await db.select().from(users).where(eq(users.id, userId)).limit(1);
-    if (!user) throw new Error("用户不存在");
+    if (!user) throw new NotFoundError("用户不存在");
 
     if (eligibility.minTrustLevel != null && (user.trustLevel ?? 0) < eligibility.minTrustLevel) {
-      throw new Error(`不满足兑换条件：需要信任等级 ${eligibility.minTrustLevel} 以上`);
+      throw new BadRequestError(`不满足兑换条件：需要信任等级 ${eligibility.minTrustLevel} 以上`);
     }
     if (eligibility.userIds && eligibility.userIds.length > 0 && !eligibility.userIds.includes(userId)) {
-      throw new Error("不满足兑换条件：该码仅限指定用户使用");
+      throw new BadRequestError("不满足兑换条件：该码仅限指定用户使用");
     }
   }
 
@@ -354,7 +367,7 @@ export async function redeemCodeForUser(userId: string, code: string): Promise<R
     .from(redemptionCodeUsages)
     .where(and(eq(redemptionCodeUsages.redemptionCodeId, redemptionCode.id), eq(redemptionCodeUsages.userId, userId)));
   if (existingUsage) {
-    throw new Error("该兑换码已被使用");
+    throw new ConflictError("该兑换码已被使用");
   }
 
   // Exclusion group check
@@ -372,19 +385,19 @@ export async function redeemCodeForUser(userId: string, code: string): Promise<R
       .limit(1);
 
     if (groupUsage) {
-      throw new Error("同组兑换码已使用，每组只能兑换一个");
+      throw new ConflictError("同组兑换码已使用，每组只能兑换一个");
     }
   }
 
   // Max uses check
   if (redemptionCode.usedCount >= redemptionCode.maxUses) {
-    throw new Error("兑换码使用次数已达上限");
+    throw new ConflictError("兑换码使用次数已达上限");
   }
 
   // Resolve rewards
   const rewards = parseRewards(redemptionCode);
   if (rewards.length === 0) {
-    throw new Error("兑换码奖励配置不完整");
+    throw new ConflictError("兑换码奖励配置不完整");
   }
 
   return db.transaction(async (tx) => {

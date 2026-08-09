@@ -60,6 +60,7 @@ if (!databaseUrl) {
   try {
     const {
       createOrder,
+      ensureDefaultProducts,
       getUserItems,
       getUserOrders,
       rollbackOrderAsOperator,
@@ -83,6 +84,12 @@ if (!databaseUrl) {
     const operatorUserId = "operator-1";
     const buyerUserId = "order-buyer";
     const customProductId = "product_test_one_time_delivery";
+
+    await Promise.all(Array.from({ length: 4 }, () => ensureDefaultProducts()));
+    const seededProductRows = await pool.query<{ id: string }>(
+      `select id from products where id in ('product_vip_30', 'product_codex_refill_1d') order by id`,
+    );
+    assert.equal(seededProductRows.rows.length, 2);
 
     await seedUser(pool, {
       userId: buyerUserId,

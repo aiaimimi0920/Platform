@@ -3,8 +3,11 @@
 import { redirect } from "next/navigation";
 import type { UpsertRedemptionCodeInput, RedemptionRewardEntry } from "@neuro/contracts";
 
-import { requirePlatformOperatorUserContext } from "@/lib/platform-session";
 import { upsertOperatorRedemptionCode, generateOperatorRedemptionCodeBatch } from "@/lib/core-client";
+import { buildStatusRedirect, toMessage } from "@/lib/platform-action-utils";
+import { requirePlatformOperatorUserContext } from "@/lib/platform-session";
+
+const redemptionCodesPath = "/ops/account/redemption-codes";
 
 function parseRewardsFromForm(formData: FormData): RedemptionRewardEntry[] {
   const rewards: RedemptionRewardEntry[] = [];
@@ -63,15 +66,12 @@ export async function createRedemptionCodeAction(formData: FormData) {
   try {
     const input = buildInputFromForm(formData);
     if (input.code.length < 3) {
-      redirect("/ops/account/redemption-codes?status=error&message=兑换码至少 3 个字符");
-      return;
+      redirect(buildStatusRedirect(redemptionCodesPath, "error", "兑换码至少 3 个字符"));
     }
     await upsertOperatorRedemptionCode(userContext, input);
-    redirect("/ops/account/redemption-codes?status=success&message=兑换码已创建");
+    redirect(buildStatusRedirect(redemptionCodesPath, "success", "兑换码已创建"));
   } catch (error) {
-    if (error instanceof Error && error.message === "NEXT_REDIRECT") throw error;
-    const message = error instanceof Error ? error.message : "创建失败";
-    redirect(`/ops/account/redemption-codes?status=error&message=${encodeURIComponent(message)}`);
+    redirect(buildStatusRedirect(redemptionCodesPath, "error", toMessage(error, "创建失败")));
   }
 }
 
@@ -79,18 +79,15 @@ export async function updateRedemptionCodeAction(formData: FormData) {
   const userContext = await requirePlatformOperatorUserContext();
   const codeId = formData.get("codeId")?.toString();
   if (!codeId) {
-    redirect("/ops/account/redemption-codes?status=error&message=缺少兑换码 ID");
-    return;
+    redirect(buildStatusRedirect(redemptionCodesPath, "error", "缺少兑换码 ID"));
   }
 
   try {
     const input = buildInputFromForm(formData);
     await upsertOperatorRedemptionCode(userContext, input, codeId);
-    redirect("/ops/account/redemption-codes?status=success&message=兑换码已更新");
+    redirect(buildStatusRedirect(redemptionCodesPath, "success", "兑换码已更新"));
   } catch (error) {
-    if (error instanceof Error && error.message === "NEXT_REDIRECT") throw error;
-    const message = error instanceof Error ? error.message : "更新失败";
-    redirect(`/ops/account/redemption-codes?status=error&message=${encodeURIComponent(message)}`);
+    redirect(buildStatusRedirect(redemptionCodesPath, "error", toMessage(error, "更新失败")));
   }
 }
 
@@ -100,19 +97,16 @@ export async function toggleRedemptionCodeAction(formData: FormData) {
   const currentActive = formData.get("currentActive") === "true";
 
   if (!codeId) {
-    redirect("/ops/account/redemption-codes?status=error&message=缺少兑换码 ID");
-    return;
+    redirect(buildStatusRedirect(redemptionCodesPath, "error", "缺少兑换码 ID"));
   }
 
   try {
     const input = buildInputFromForm(formData);
     input.active = !currentActive;
     await upsertOperatorRedemptionCode(userContext, input, codeId);
-    redirect(`/ops/account/redemption-codes?status=success&message=兑换码已${currentActive ? "停用" : "启用"}`);
+    redirect(buildStatusRedirect(redemptionCodesPath, "success", `兑换码已${currentActive ? "停用" : "启用"}`));
   } catch (error) {
-    if (error instanceof Error && error.message === "NEXT_REDIRECT") throw error;
-    const message = error instanceof Error ? error.message : "操作失败";
-    redirect(`/ops/account/redemption-codes?status=error&message=${encodeURIComponent(message)}`);
+    redirect(buildStatusRedirect(redemptionCodesPath, "error", toMessage(error, "操作失败")));
   }
 }
 
@@ -123,14 +117,12 @@ export async function generateBatchAction(formData: FormData) {
     const count = Number(formData.get("batchCount")) || 10;
     const codePrefix = formData.get("batchPrefix")?.toString().trim() || "";
     if (codePrefix.length < 2) {
-      redirect("/ops/account/redemption-codes?status=error&message=码前缀至少 2 个字符");
-      return;
+      redirect(buildStatusRedirect(redemptionCodesPath, "error", "码前缀至少 2 个字符"));
     }
 
     const rewards = parseRewardsFromForm(formData);
     if (rewards.length === 0) {
-      redirect("/ops/account/redemption-codes?status=error&message=至少需要一条奖励配置");
-      return;
+      redirect(buildStatusRedirect(redemptionCodesPath, "error", "至少需要一条奖励配置"));
     }
 
     const minTrustLevel = formData.get("eligibility_minTrustLevel")?.toString().trim();
@@ -153,10 +145,8 @@ export async function generateBatchAction(formData: FormData) {
       },
     });
 
-    redirect(`/ops/account/redemption-codes?status=success&message=已批量生成 ${count} 个兑换码`);
+    redirect(buildStatusRedirect(redemptionCodesPath, "success", `已批量生成 ${count} 个兑换码`));
   } catch (error) {
-    if (error instanceof Error && error.message === "NEXT_REDIRECT") throw error;
-    const message = error instanceof Error ? error.message : "批量生成失败";
-    redirect(`/ops/account/redemption-codes?status=error&message=${encodeURIComponent(message)}`);
+    redirect(buildStatusRedirect(redemptionCodesPath, "error", toMessage(error, "批量生成失败")));
   }
 }

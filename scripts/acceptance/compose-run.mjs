@@ -59,6 +59,7 @@ export async function runComposeStage({
   let childEnvironment = null;
   let commandResult = null;
   let psResult = null;
+  let browserResult = null;
   let cleanupResult = null;
   let primaryError = null;
 
@@ -72,6 +73,7 @@ export async function runComposeStage({
     childEnvironment = { ...process.env, ...environmentValues };
     const args = [
       "compose",
+      ...(stage === "startup" ? ["--parallel", "2"] : []),
       "-p",
       environment.projectName,
       "--env-file",
@@ -112,6 +114,27 @@ export async function runComposeStage({
         timeoutMs: 2 * 60 * 1000,
       });
       await mkdir(stageEvidenceDir, { recursive: true });
+      if (psResult?.exitCode === 0) {
+        const browserReportPath = path.join(stageEvidenceDir, "browser-results.json");
+        const browserArtifactDir = path.join(stageEvidenceDir, "browser-artifacts");
+        browserResult = await executeCommand({
+          command: process.execPath,
+          args: [
+            path.join(resolvedPlatformRoot, "node_modules", "@playwright", "test", "cli.js"),
+            "test",
+            "--config",
+            path.join(resolvedPlatformRoot, "playwright.config.ts"),
+          ],
+          cwd: resolvedPlatformRoot,
+          env: {
+            ...childEnvironment,
+            PLATFORM_ACCEPTANCE_WEB_URL: `http://127.0.0.1:${environmentValues.WEB_HOST_PORT}`,
+            PLATFORM_ACCEPTANCE_BROWSER_ARTIFACT_DIR: browserArtifactDir,
+            PLAYWRIGHT_JSON_OUTPUT_FILE: browserReportPath,
+          },
+          timeoutMs: 20 * 60 * 1000,
+        });
+      }
       await writeFile(
         path.join(stageEvidenceDir, "compose-startup.json"),
         `${JSON.stringify(
@@ -123,6 +146,7 @@ export async function runComposeStage({
             recordedAt: new Date().toISOString(),
             upExitCode: commandResult.exitCode,
             psExitCode: psResult?.exitCode ?? null,
+            browserExitCode: browserResult?.exitCode ?? null,
             ps: psResult?.stdout ?? null,
           },
           null,
@@ -152,7 +176,10 @@ export async function runComposeStage({
 
   if (primaryError) throw primaryError;
   const exitCode =
-    commandResult?.exitCode === 0 && (stage !== "startup" || psResult?.exitCode === 0) ? 0 : 1;
+    commandResult?.exitCode === 0 &&
+    (stage !== "startup" || (psResult?.exitCode === 0 && browserResult?.exitCode === 0))
+      ? 0
+      : 1;
   return {
     stage,
     runId: safeRunId,
@@ -161,6 +188,7 @@ export async function runComposeStage({
     exitCode,
     commandResult,
     psResult,
+    browserResult,
     cleanupResult,
   };
 }

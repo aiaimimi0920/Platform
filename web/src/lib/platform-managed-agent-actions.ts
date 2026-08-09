@@ -3,6 +3,10 @@
 import { redirect } from "next/navigation";
 
 import {
+  bindHeavyChatManagedAgent,
+  getHeavyChatSnapshot,
+} from "@/lib/heavy-chat-client";
+import {
   addAgentCapability,
   createAgent,
   deleteAgent,
@@ -457,13 +461,15 @@ export async function saveManagedHeavyAgentAction(formData: FormData) {
       (agent) => agent.hostingMode === "managed_heavy" || agent.hostingMode === "registry_only",
     );
 
+    let savedAgent: Awaited<ReturnType<typeof createAgent>>;
+
     if (agentId) {
       const existingAgent = existingHeavyAgents.find((agent) => agent.id === agentId) ?? null;
       if (!existingAgent) {
         redirect(buildStatusRedirect(redirectTo, "error", "未找到可编辑的重度智能体。"));
       }
 
-      await updateAgent(userContext, agentId, {
+      savedAgent = await updateAgent(userContext, agentId, {
         name,
         description,
         runtimeEndpoint: existingAgent.runtimeEndpoint,
@@ -481,34 +487,44 @@ export async function saveManagedHeavyAgentAction(formData: FormData) {
         enabled,
       });
 
-      redirect(buildStatusRedirect(successRedirectTo, "success", "重度智能体已更新。"));
+    } else {
+      if (existingHeavyAgents.length >= 1) {
+        redirect(buildStatusRedirect(redirectTo, "error", "当前仅允许 1 个自创建重度槽位，更多槽位请先购买。"));
+      }
+
+      savedAgent = await createAgent(userContext, {
+        name,
+        description,
+        sourceType: "platform",
+        hostingMode: "managed_heavy",
+        runtimeEndpoint: null,
+        authMode: "none",
+        runtimeAuthToken: null,
+        managedServiceId: null,
+        managedProviderLabel: null,
+        managedApiBaseUrl: null,
+        managedModel: null,
+        managedApiKey: null,
+        managedSystemPrompt: null,
+        managedPromptTemplate: null,
+        managedTaskCategory: null,
+        managedCapabilitySummary: null,
+        enabled,
+      });
     }
 
-    if (existingHeavyAgents.length >= 1) {
-      redirect(buildStatusRedirect(redirectTo, "error", "当前仅允许 1 个自创建重度槽位，更多槽位请先购买。"));
+    const snapshot = await getHeavyChatSnapshot(userContext);
+    const defaultSlot = snapshot.slots.find((slot) => slot.kind === "default");
+    if (!defaultSlot) {
+      throw new Error("Heavy chat default slot is unavailable");
     }
+    await bindHeavyChatManagedAgent(userContext, defaultSlot.id, savedAgent.id);
 
-    await createAgent(userContext, {
-      name,
-      description,
-      sourceType: "platform",
-      hostingMode: "managed_heavy",
-      runtimeEndpoint: null,
-      authMode: "none",
-      runtimeAuthToken: null,
-      managedServiceId: null,
-      managedProviderLabel: null,
-      managedApiBaseUrl: null,
-      managedModel: null,
-      managedApiKey: null,
-      managedSystemPrompt: null,
-      managedPromptTemplate: null,
-      managedTaskCategory: null,
-      managedCapabilitySummary: null,
-      enabled,
-    });
-
-    redirect(buildStatusRedirect(successRedirectTo, "success", "重度智能体已创建。"));
+    redirect(buildStatusRedirect(
+      successRedirectTo,
+      "success",
+      agentId ? "重度智能体已更新。" : "重度智能体已创建。",
+    ));
   } catch (error) {
     const message = toMessage(error, agentId ? "重度智能体更新失败，请稍后重试。" : "重度智能体创建失败，请稍后重试。");
     redirect(buildStatusRedirect(redirectTo, "error", message));

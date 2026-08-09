@@ -86,13 +86,6 @@ function npmInvocation(args) {
   return { command: process.execPath, args: [npmCliPath, ...args] };
 }
 
-function missingSuiteCommand(message) {
-  return {
-    command: process.execPath,
-    args: ["-e", `console.error(${JSON.stringify(message)}); process.exit(1)`],
-  };
-}
-
 export function createRequiredInventory({
   platformRoot = defaultPlatformRoot,
   evidenceDir = path.join(platformRoot, ".runtime", "acceptance", "inventory-preview"),
@@ -116,11 +109,20 @@ export function createRequiredInventory({
       timeoutMs,
     };
   };
-  const missingBrowser = (id, journey) => ({
+  const browserReportPath = path.resolve(evidenceDir, "compose", "startup", "browser-results.json");
+  const browserEvidence = (id, journey) => ({
     id,
     layer: "required",
+    command: process.execPath,
+    args: [
+      path.join(platformRoot, "scripts", "acceptance", "browser-evidence.mjs"),
+      "--journey",
+      journey,
+      "--report",
+      browserReportPath,
+    ],
     cwd: platformRoot,
-    ...missingSuiteCommand(`Required browser suite is not implemented yet: ${journey}`),
+    timeoutMs: 2 * 60 * 1000,
   });
 
   return [
@@ -172,10 +174,10 @@ export function createRequiredInventory({
       cwd: platformRoot,
       timeoutMs: 50 * 60 * 1000,
     },
-    missingBrowser("browser-owner", "Owner"),
-    missingBrowser("browser-visitor", "Visitor"),
-    missingBrowser("browser-operator", "Operator"),
-    missingBrowser("browser-errors", "dependency error"),
+    browserEvidence("browser-owner", "owner"),
+    browserEvidence("browser-visitor", "visitor"),
+    browserEvidence("browser-operator", "operator"),
+    browserEvidence("browser-errors", "errors"),
     {
       id: "external-gateway",
       layer: "externalBoundary",

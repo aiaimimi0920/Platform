@@ -27,14 +27,7 @@ type ManagedHeavyRoleSectionProps = {
   storeVisible: boolean;
 };
 
-const DEFAULT_HEAVY_SLOT_ID = "slot-default-heavy";
 const MANAGED_HEAVY_TOTAL_SLOT_LIMIT = 2;
-
-function buildHeavyChatHref(slotId: string) {
-  const params = new URLSearchParams();
-  params.set("slotId", slotId);
-  return `/chat?${params.toString()}`;
-}
 
 function buildHeavyHref(
   selfHref: string,
@@ -113,7 +106,6 @@ export function ManagedHeavyRoleSection({
     !editingAgent && !canCreateCustomSlot
       ? "当前仅允许 1 个自创建重度槽位，更多槽位请先购买。"
       : null;
-  const defaultHeavyChatHref = buildHeavyChatHref(DEFAULT_HEAVY_SLOT_ID);
 
   return (
     <>
@@ -207,7 +199,7 @@ export function ManagedHeavyRoleSection({
 
             <div className="app-agent-center-heavy-overview-surface">
               <div className="app-agent-center-light-grid app-agent-center-light-grid--heavy-default">
-                <MimiExtensionsEditor openHref={defaultHeavyChatHref} target={topNavTarget} />
+                <MimiExtensionsEditor openHref="/chat" target={topNavTarget} />
 
                 {agents.map((agent) => {
                   const editHref = buildHeavyHref(selfHref, {

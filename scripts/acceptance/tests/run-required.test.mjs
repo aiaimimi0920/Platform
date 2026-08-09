@@ -262,6 +262,17 @@ test("required inventory exposes stable required and external-boundary ids", asy
     assert.match(suite.args[0], /external-probe\.mjs$/);
     assert.deepEqual(suite.args.slice(-2), ["--target", target]);
   }
+  for (const journey of ["owner", "visitor", "operator", "errors"]) {
+    const suite = inventory.find((item) => item.id === `browser-${journey}`);
+    assert.ok(suite);
+    assert.match(suite.args[0], /browser-evidence\.mjs$/);
+    assert.deepEqual(suite.args.slice(1, 3), ["--journey", journey]);
+    assert.deepEqual(suite.args.slice(3, 5), [
+      "--report",
+      path.resolve(".runtime/acceptance/inventory-preview/compose/startup/browser-results.json"),
+    ]);
+    assert.doesNotMatch(suite.args.join(" "), /not implemented/i);
+  }
 });
 
 test("required inventory rejects missing root acceptance scripts", async () => {
@@ -358,6 +369,95 @@ test("Compose acceptance stage always cleans its owned environment and records t
   assert.deepEqual(calls.map(([kind]) => kind), ["create", "execute", "cleanup"]);
   assert.deepEqual(calls[1][1].args.slice(-2), ["config", "--quiet"]);
   assert.equal(calls[1][1].env.POSTGRES_VOLUME_NAME, "owned-volume");
+});
+
+test("Compose startup runs the desktop/mobile browser matrix before owned cleanup", async () => {
+  const { runComposeStage } = await import("../compose-run.mjs");
+  const evidenceDir = await mkdtemp(path.join(os.tmpdir(), "platform-compose-browser-"));
+  const calls = [];
+  const environment = {
+    runId: "platform-startup-browser-child",
+    projectName: "platform-startup-browser-child",
+    paths: {
+      evidenceDir: path.join(evidenceDir, "owned"),
+      envFile: path.join(evidenceDir, "resources", "acceptance.env"),
+    },
+  };
+
+  const result = await runComposeStage({
+    stage: "startup",
+    runId: "platform-startup-browser-parent",
+    evidenceDir,
+    platformRoot: "C:/platform",
+    createEnvironment: async () => environment,
+    readEnvironment: async () => ({ WEB_HOST_PORT: "45678" }),
+    executeCommand: async (input) => {
+      calls.push(["execute", input]);
+      if (input.args.includes("ps")) {
+        return { exitCode: 0, durationMs: 1, stdout: "[]", stderr: null };
+      }
+      return { exitCode: 0, durationMs: 1, stdout: "", stderr: null };
+    },
+    cleanupProject: async (input) => {
+      calls.push(["cleanup", input]);
+      return { cleaned: true };
+    },
+  });
+
+  assert.equal(result.exitCode, 0);
+  assert.deepEqual(calls.map(([kind]) => kind), ["execute", "execute", "execute", "cleanup"]);
+  assert.deepEqual(calls[0][1].args.slice(1, 3), ["--parallel", "2"]);
+  const browserCall = calls[2][1];
+  assert.equal(browserCall.command, process.execPath);
+  assert.match(browserCall.args[0], /node_modules[\\/]@playwright[\\/]test[\\/]cli\.js$/);
+  assert.deepEqual(browserCall.args.slice(1), [
+    "test",
+    "--config",
+    path.resolve("C:/platform/playwright.config.ts"),
+  ]);
+  assert.equal(browserCall.env.PLATFORM_ACCEPTANCE_WEB_URL, "http://127.0.0.1:45678");
+  assert.equal(
+    browserCall.env.PLAYWRIGHT_JSON_OUTPUT_FILE,
+    path.join(path.resolve(evidenceDir), "compose", "startup", "browser-results.json"),
+  );
+  assert.equal(result.browserResult.exitCode, 0);
+});
+
+test("Compose startup fails but still cleans its project when the browser matrix fails", async () => {
+  const { runComposeStage } = await import("../compose-run.mjs");
+  const evidenceDir = await mkdtemp(path.join(os.tmpdir(), "platform-compose-browser-fail-"));
+  let executeCount = 0;
+  let cleanupCount = 0;
+  const result = await runComposeStage({
+    stage: "startup",
+    runId: "platform-startup-browser-failure",
+    evidenceDir,
+    platformRoot: "C:/platform",
+    createEnvironment: async () => ({
+      runId: "platform-startup-browser-failure-child",
+      projectName: "platform-startup-browser-failure-child",
+      paths: {
+        evidenceDir: path.join(evidenceDir, "owned"),
+        envFile: path.join(evidenceDir, "resources", "acceptance.env"),
+      },
+    }),
+    readEnvironment: async () => ({ WEB_HOST_PORT: "45679" }),
+    executeCommand: async (input) => {
+      executeCount += 1;
+      if (input.args.includes("ps")) return { exitCode: 0, stdout: "[]", stderr: null };
+      if (input.args.includes("--config")) return { exitCode: 1, stdout: "failed", stderr: null };
+      return { exitCode: 0, stdout: "", stderr: null };
+    },
+    cleanupProject: async () => {
+      cleanupCount += 1;
+      return { cleaned: true };
+    },
+  });
+
+  assert.equal(executeCount, 3);
+  assert.equal(cleanupCount, 1);
+  assert.equal(result.browserResult.exitCode, 1);
+  assert.equal(result.exitCode, 1);
 });
 
 test("Compose acceptance stage cleans an owned environment when reading its env file fails", async () => {

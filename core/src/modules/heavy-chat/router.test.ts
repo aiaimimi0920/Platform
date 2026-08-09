@@ -29,6 +29,17 @@ function slotRecord(ownerUserId = "user-a") {
   };
 }
 
+function bindingRecord(ownerUserId = "user-a", slotId = "slot-1", agentId = "agent-heavy-1") {
+  return {
+    id: "binding-1",
+    ownerUserId,
+    slotId,
+    agentId,
+    createdAt: NOW,
+    updatedAt: NOW,
+  };
+}
+
 function threadRecord(ownerUserId = "user-a") {
   return {
     id: "thread-1",
@@ -97,6 +108,11 @@ type RouterService = {
     hasMore: boolean;
     nextBeforeSequence: number | null;
   }>;
+  bindManagedAgent(
+    ownerUserId: string,
+    slotId: string,
+    agentId: string,
+  ): Promise<ReturnType<typeof bindingRecord>>;
   createThread(
     ownerUserId: string,
     input: { slotId: string; projectId?: string | null; title: string },
@@ -157,6 +173,9 @@ function createRouterService(overrides: Partial<RouterService> = {}): RouterServ
         hasMore: false,
         nextBeforeSequence: null,
       };
+    },
+    async bindManagedAgent(ownerUserId, slotId, agentId) {
+      return bindingRecord(ownerUserId, slotId, agentId);
     },
     async createThread(ownerUserId, input) {
       return { ...threadRecord(ownerUserId), slotId: input.slotId, projectId: input.projectId ?? null, title: input.title };
@@ -266,6 +285,36 @@ describe("heavy chat router", () => {
       assert.equal(response.json().snapshot.slots[0].createdAt, NOW.toISOString());
       assert.equal(response.json().snapshot.messages[0].updatedAt, NOW.toISOString());
       assert.equal(response.json().snapshot.messagePages[0].threadId, "thread-1");
+    } finally {
+      await app.close();
+    }
+  });
+
+  it("binds a managed-heavy agent to an owner-scoped slot and serializes the binding", async () => {
+    let captured: { ownerUserId: string; slotId: string; agentId: string } | null = null;
+    const service = createRouterService({
+      async bindManagedAgent(ownerUserId, slotId, agentId) {
+        captured = { ownerUserId, slotId, agentId };
+        return bindingRecord(ownerUserId, slotId, agentId);
+      },
+    });
+    const app = await buildRouterTestServer(service);
+    try {
+      const response = await app.inject({
+        method: "PUT",
+        url: "/v1/me/heavy-chat/slots/slot-1/agent-binding",
+        headers: authHeaders("user-a"),
+        payload: { agentId: "agent-heavy-1", ownerUserId: "user-b" },
+      });
+
+      assert.equal(response.statusCode, 200);
+      assert.deepEqual(captured, {
+        ownerUserId: "user-a",
+        slotId: "slot-1",
+        agentId: "agent-heavy-1",
+      });
+      assert.equal(response.json().binding.ownerUserId, "user-a");
+      assert.equal(response.json().binding.createdAt, NOW.toISOString());
     } finally {
       await app.close();
     }

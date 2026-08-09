@@ -259,6 +259,17 @@ export function createGatewayDoubleServer({
           return;
         }
 
+        if (request.method === "GET" && url.pathname === "/v1/internal/gateway/access/catalog") {
+          fixtureError(
+            response,
+            requestId,
+            correlationId,
+            503,
+            "FIXTURE_CATALOG_UNAVAILABLE",
+          );
+          return;
+        }
+
         if (request.method === "POST" && url.pathname === "/v1/internal/gateway/benefit-projects/ensure") {
           const serviceId = safeId(body.serviceId, "service");
           const userId = safeId(body.userId, "user");

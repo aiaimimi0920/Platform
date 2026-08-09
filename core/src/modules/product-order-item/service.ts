@@ -598,7 +598,7 @@ async function upsertProductDefinitionInTx(args: {
 }): Promise<ProductOperatorMutationResult> {
   assertProductDefinitionConsistency(args.input);
   const timestamp = now();
-  const [existing] = await args.tx.select().from(products).where(eq(products.id, args.productId)).limit(1);
+  let [existing] = await args.tx.select().from(products).where(eq(products.id, args.productId)).limit(1);
 
   if (!existing) {
     const [created] = await args.tx
@@ -629,30 +629,38 @@ async function upsertProductDefinitionInTx(args: {
         createdAt: timestamp,
         updatedAt: timestamp,
       })
+      .onConflictDoNothing({ target: products.id })
       .returning();
 
-    await args.tx.delete(productSeedTombstones).where(eq(productSeedTombstones.productId, args.productId));
+    if (created) {
+      await args.tx.delete(productSeedTombstones).where(eq(productSeedTombstones.productId, args.productId));
 
-    await enqueueOutboxEvent(
-      "product.updated",
-      {
-        productId: args.productId,
-        active: args.input.active,
-        previousActive: null,
+      await enqueueOutboxEvent(
+        "product.updated",
+        {
+          productId: args.productId,
+          active: args.input.active,
+          previousActive: null,
+          changedFields: [...productDefinitionComparableFields],
+          source: args.source,
+          actorUserId: args.actorUserId ?? null,
+          updatedAt: timestamp.toISOString(),
+        },
+        args.tx,
+      );
+
+      return {
+        product: toProductOperatorView(created),
+        created: true,
+        eventName: "product.updated",
         changedFields: [...productDefinitionComparableFields],
-        source: args.source,
-        actorUserId: args.actorUserId ?? null,
-        updatedAt: timestamp.toISOString(),
-      },
-      args.tx,
-    );
+      };
+    }
 
-    return {
-      product: toProductOperatorView(created),
-      created: true,
-      eventName: "product.updated",
-      changedFields: [...productDefinitionComparableFields],
-    };
+    [existing] = await args.tx.select().from(products).where(eq(products.id, args.productId)).limit(1);
+    if (!existing) {
+      throw new Error(`Product conflict did not resolve to a persisted row: ${args.productId}`);
+    }
   }
 
   const changedFields = getProductDefinitionChangedFields(existing, args.input);
@@ -2432,9 +2440,9 @@ function sortSummaryBuckets(bucketMap: Map<string, number>) {
 }
 
 let _defaultProductsEnsured = false;
+let _defaultProductsEnsurePromise: Promise<void> | null = null;
 
-export async function ensureDefaultProducts() {
-  if (_defaultProductsEnsured) return;
+async function ensureDefaultProductsOnce() {
   const deletedSeedRows = await db
     .select({ productId: productSeedTombstones.productId })
     .from(productSeedTombstones)
@@ -2454,7 +2462,20 @@ export async function ensureDefaultProducts() {
       }),
     );
   }
-  _defaultProductsEnsured = true;
+}
+
+export async function ensureDefaultProducts() {
+  if (_defaultProductsEnsured) return;
+  if (!_defaultProductsEnsurePromise) {
+    _defaultProductsEnsurePromise = ensureDefaultProductsOnce()
+      .then(() => {
+        _defaultProductsEnsured = true;
+      })
+      .finally(() => {
+        _defaultProductsEnsurePromise = null;
+      });
+  }
+  await _defaultProductsEnsurePromise;
 }
 
 export async function listProductsForOperator(): Promise<ProductOperatorView[]> {
