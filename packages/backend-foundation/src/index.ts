@@ -2,6 +2,7 @@ export { env } from "./env";
 export { db, pgPool } from "./db/client";
 export { redis } from "./db/redis";
 export { createPgPool, createRedisClient } from "./db/factories";
+export * from "./db/postgres-migrations";
 export * from "./db/schema";
 export * from "./platform/errors";
 export * from "./platform/http-server";

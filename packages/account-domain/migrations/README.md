@@ -8,6 +8,8 @@ Rules:
 - The runner is `npm run db:migrate --workspace @neuro/account-domain`.
 - The runner uses `ACCOUNT_DATABASE_URL` when provided and falls back to `DATABASE_URL`.
 - Applied files are recorded in `account_schema_migrations`.
+- Concurrent Account runner instances serialize through the database-scoped `neuro-account-schema-migrations` session advisory lock.
+- Each ordinary migration executes in its own transaction. Do not add `CREATE INDEX CONCURRENTLY` until the shared runner defines an explicit no-transaction migration contract.
 
 Current boundary:
 

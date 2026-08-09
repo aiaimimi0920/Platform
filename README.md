@@ -236,6 +236,12 @@ the matching database migrations before switching long-running services, retain
 the previous image digests for rollback, and keep the sibling Gateway, Loom, and
 Tea revisions compatible with the selected Platform commit.
 
+Core, AI Gateway domain, and Account domain migration runners serialize
+concurrent instances with database-scoped PostgreSQL advisory locks held on the
+same session for the complete run. Ordinary migration files remain individually
+transactional. Online index creation requires a future explicit no-transaction
+contract; do not place `CREATE INDEX CONCURRENTLY` in the current migration files.
+
 The production Dockerfiles pin the Node base image by digest through the
 `NODE_IMAGE` build argument. Base-image upgrades must update that digest
 deliberately and pass all six image builds. BuildKit/buildx is required because

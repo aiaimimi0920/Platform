@@ -49,6 +49,7 @@ describe("independent Platform repository", () => {
       "deploy/docker-compose.local.yml",
       "deploy/acceptance/docker-compose.acceptance.yml",
       "docs/40-engineering/platform-release-artifact-standard.md",
+      "docs/40-engineering/PostgreSQL迁移并发与事务基线.md",
     ]) {
       assert(statSync(join(rootDir, requiredPath)).isFile(), `Missing repository path: ${requiredPath}`);
     }
@@ -93,11 +94,24 @@ describe("independent Platform repository", () => {
     assert(workflow.includes("test-smoke-platform-web-release-package-contract.ps1"));
   });
 
-  it("serializes Core schema migrations across concurrent deploy processes", () => {
-    const migrationRunner = read("core/src/scripts/migrate.ts");
-    assert(migrationRunner.includes("pg_advisory_lock"));
-    assert(migrationRunner.includes("pg_advisory_unlock"));
-    assert(migrationRunner.includes("neuro-core-schema-migrations"));
+  it("serializes every schema migration runner and preserves cleanup boundaries", () => {
+    const sharedMigrationRunner = read("packages/backend-foundation/src/db/postgres-migrations.ts");
+    assert(sharedMigrationRunner.includes("pg_advisory_lock"));
+    assert(sharedMigrationRunner.includes("pg_advisory_unlock"));
+    assert(sharedMigrationRunner.includes("current_database()"));
+    assert(sharedMigrationRunner.includes("rollbackPreservingPrimaryError"));
+    assert(sharedMigrationRunner.includes("await pool.end()"));
+
+    for (const [relativePath, lockName, tableName] of [
+      ["core/src/scripts/migrate.ts", "neuro-core-schema-migrations", "schema_migrations"],
+      ["packages/account-domain/src/scripts/migrate.ts", "neuro-account-schema-migrations", "account_schema_migrations"],
+      ["packages/ai-gateway-domain/src/scripts/migrate.ts", "neuro-gateway-schema-migrations", "gateway_schema_migrations"],
+    ]) {
+      const migrationRunner = read(relativePath);
+      assert(migrationRunner.includes("runPostgresMigrations"));
+      assert(migrationRunner.includes(lockName));
+      assert(migrationRunner.includes(tableName));
+    }
   });
 
   it("builds all Platform-owned images without publishing pull requests", () => {

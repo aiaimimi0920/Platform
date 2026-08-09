@@ -13,6 +13,7 @@ Scope: this repository root and all subdirectories, excluding the external `AIRe
 - Never place repository credentials, GitHub tokens, provider credentials, or real environment files in Git remotes, workflow YAML, examples, fixtures, or release evidence.
 - Production Dockerfiles must keep the Node base image pinned by digest through `NODE_IMAGE`; an image refresh requires all six Platform image builds to pass.
 - Version-tag releases must pass `npm run ci` and `npm run test:integration:required` before packaging. They must also consume the successful `Container Images` push run for the exact tag and commit, validate its six-image immutable digest lock and run attempt, and publish that lock plus its SHA-256 sidecar as release assets. Regular CI must retain the AI Gateway Vitest gate.
+- PostgreSQL schema runners must follow `docs/40-engineering/PostgreSQL迁移并发与事务基线.md`: hold a session-level, database-scoped advisory lock on the same client for the full runner, keep one ordinary migration per transaction, preserve the primary migration error during rollback/cleanup failures, and close the pool on every exit path. `CREATE INDEX CONCURRENTLY` is forbidden until an explicit no-transaction migration contract exists.
 - Production deployments must use immutable GHCR `sha-*` tags or digests, inject independent secrets, and retain prior digests as rollback targets. The local read-write `.neuro` Gateway mount is development-only.
 
 ## UI Default
