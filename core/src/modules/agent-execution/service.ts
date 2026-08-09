@@ -4844,32 +4844,10 @@ async function buildCallbackAuditViewsFromRows(
   };
 }
 
-async function buildCallbackAuditViewsForOperator(
-  args?: Omit<CallbackAuditOperatorQuery, "limit">,
-) {
-  const whereClause = toWhereClause(buildCallbackAuditConditions(args));
-  let query = db.select().from(agentExecutionCallbacks).$dynamic();
-
-  if (whereClause) {
-    query = query.where(whereClause);
-  }
-
-  const rows = await query.orderBy(desc(agentExecutionCallbacks.receivedAt), desc(agentExecutionCallbacks.id));
-  return buildCallbackAuditViewsFromRows(rows, args);
-}
-
-async function listCallbackAuditViewsForOperator(args?: Omit<CallbackAuditOperatorQuery, "limit">) {
-  return (await buildCallbackAuditViewsForOperator(args)).callbacks;
-}
-
-async function listLimitedCallbackAuditViewsForOperator(
-  args: Omit<CallbackAuditOperatorQuery, "limit">,
-  limit: number,
-) {
-  const callbacks: AgentExecutionCallbackAuditView[] = [];
+async function* iterateCallbackAuditViewPagesForOperator(args: Omit<CallbackAuditOperatorQuery, "limit">) {
   let cursor: { receivedAt: Date; id: string } | null = null;
 
-  while (callbacks.length < limit) {
+  while (true) {
     const conditions = buildCallbackAuditConditions(args);
     if (cursor) {
       conditions.push(
@@ -4888,60 +4866,118 @@ async function listLimitedCallbackAuditViewsForOperator(
       .limit(CALLBACK_AUDIT_DERIVED_SCAN_PAGE_SIZE);
     if (rows.length === 0) break;
 
-    const page = await buildCallbackAuditViewsFromRows(rows, args);
-    callbacks.push(...page.callbacks.slice(0, limit - callbacks.length));
+    yield await buildCallbackAuditViewsFromRows(rows, args);
 
     const lastRow = rows.at(-1)!;
     cursor = { receivedAt: lastRow.receivedAt, id: lastRow.id };
     if (rows.length < CALLBACK_AUDIT_DERIVED_SCAN_PAGE_SIZE) break;
   }
+}
+
+async function buildCallbackAuditViewsForOperator(args: Omit<CallbackAuditOperatorQuery, "limit">) {
+  const callbacks: AgentExecutionCallbackAuditView[] = [];
+  const runtimeContextMap = new Map<string, AgentExecutionCallbackRuntimeContextView>();
+
+  for await (const page of iterateCallbackAuditViewPagesForOperator(args)) {
+    callbacks.push(...page.callbacks);
+    for (const [executionId, runtimeContext] of page.runtimeContextMap) {
+      runtimeContextMap.set(executionId, runtimeContext);
+    }
+  }
+
+  return { callbacks, runtimeContextMap };
+}
+
+async function listLimitedCallbackAuditViewsForOperator(
+  args: Omit<CallbackAuditOperatorQuery, "limit">,
+  limit: number,
+) {
+  const callbacks: AgentExecutionCallbackAuditView[] = [];
+
+  for await (const page of iterateCallbackAuditViewPagesForOperator(args)) {
+    callbacks.push(...page.callbacks.slice(0, limit - callbacks.length));
+    if (callbacks.length >= limit) break;
+  }
 
   return callbacks;
 }
 
-function buildCallbackAuditSummaryFromViews(
-  callbacks: AgentExecutionCallbackAuditView[],
+function createCallbackAuditSummaryAccumulator() {
+  return {
+    totalCount: 0,
+    newestReceivedAt: null as string | null,
+    callbackType: new Map<string, number>(),
+    status: new Map<string, number>(),
+    callbackVersion: new Map<string, number>(),
+    secretVersion: new Map<string, number>(),
+    protocolMatch: new Map<string, number>(),
+    secretMatch: new Map<string, number>(),
+    rejectionCategory: new Map<string, number>(),
+    retryability: new Map<string, number>(),
+    remediationPolicyKey: new Map<string, number>(),
+    autoRemediationState: new Map<string, number>(),
+  };
+}
+
+type CallbackAuditSummaryAccumulator = ReturnType<typeof createCallbackAuditSummaryAccumulator>;
+
+function incrementCallbackAuditSummaryBucket(bucket: Map<string, number>, value: string | null | undefined) {
+  const normalized = value?.trim();
+  if (!normalized) return;
+  bucket.set(normalized, (bucket.get(normalized) ?? 0) + 1);
+}
+
+function appendCallbackAuditSummaryView(
+  accumulator: CallbackAuditSummaryAccumulator,
+  callback: AgentExecutionCallbackAuditView,
+) {
+  accumulator.totalCount += 1;
+  accumulator.newestReceivedAt ??= callback.receivedAt;
+  incrementCallbackAuditSummaryBucket(accumulator.callbackType, callback.callbackType);
+  incrementCallbackAuditSummaryBucket(accumulator.status, callback.status);
+  incrementCallbackAuditSummaryBucket(accumulator.callbackVersion, String(callback.callbackVersion));
+  incrementCallbackAuditSummaryBucket(accumulator.secretVersion, String(callback.secretVersion));
+  incrementCallbackAuditSummaryBucket(
+    accumulator.protocolMatch,
+    callback.usedPreviousProtocol ? "previous" : "current",
+  );
+  incrementCallbackAuditSummaryBucket(accumulator.secretMatch, callback.usedPreviousSecret ? "previous" : "current");
+  incrementCallbackAuditSummaryBucket(accumulator.remediationPolicyKey, callback.remediationPolicyKey);
+  incrementCallbackAuditSummaryBucket(accumulator.autoRemediationState, callback.autoRemediationState);
+  if (callback.status === "rejected") {
+    incrementCallbackAuditSummaryBucket(accumulator.rejectionCategory, callback.rejectionCategory ?? "none");
+    incrementCallbackAuditSummaryBucket(accumulator.retryability, callback.retryability ?? "inspect");
+  }
+}
+
+function callbackAuditSummaryBuckets(bucket: Map<string, number>) {
+  return buildSummaryBuckets([...bucket.entries()].map(([key, count]) => ({ key, count })));
+}
+
+function buildCallbackAuditSummaryFromAccumulator(
+  accumulator: CallbackAuditSummaryAccumulator,
 ): AgentExecutionCallbackAuditSummaryView {
-  const rejectedCallbacks = callbacks.filter((callback) => callback.status === "rejected");
-  const totalCount = callbacks.length;
-  const byStatus = buildSummaryBucketsFromValues(callbacks.map((callback) => callback.status));
-  const byProtocolMatch = buildSummaryBucketsFromValues(
-    callbacks.map((callback) => (callback.usedPreviousProtocol ? "previous" : "current")),
-  );
-  const bySecretMatch = buildSummaryBucketsFromValues(
-    callbacks.map((callback) => (callback.usedPreviousSecret ? "previous" : "current")),
-  );
-  const byRejectionCategory = buildSummaryBucketsFromValues(
-    rejectedCallbacks.map((callback) => callback.rejectionCategory ?? "none"),
-  );
-  const byRetryability = buildSummaryBucketsFromValues(
-    rejectedCallbacks.map((callback) => callback.retryability ?? "inspect"),
-  );
-  const byRemediationPolicyKey = buildSummaryBucketsFromValues(
-    callbacks.map((callback) => callback.remediationPolicyKey),
-  );
+  const byStatus = callbackAuditSummaryBuckets(accumulator.status);
+  const byProtocolMatch = callbackAuditSummaryBuckets(accumulator.protocolMatch);
+  const bySecretMatch = callbackAuditSummaryBuckets(accumulator.secretMatch);
+  const byRejectionCategory = callbackAuditSummaryBuckets(accumulator.rejectionCategory);
+  const byRetryability = callbackAuditSummaryBuckets(accumulator.retryability);
 
   return {
-    totalCount,
-    newestReceivedAt: callbacks[0]?.receivedAt ?? null,
-    byCallbackType: buildSummaryBucketsFromValues(callbacks.map((callback) => callback.callbackType)),
+    totalCount: accumulator.totalCount,
+    newestReceivedAt: accumulator.newestReceivedAt,
+    byCallbackType: callbackAuditSummaryBuckets(accumulator.callbackType),
     byStatus,
-    byCallbackVersion: buildSummaryBucketsFromValues(
-      callbacks.map((callback) => String(callback.callbackVersion)),
-    ),
-    bySecretVersion: buildSummaryBucketsFromValues(
-      callbacks.map((callback) => String(callback.secretVersion)),
-    ),
+    byCallbackVersion: callbackAuditSummaryBuckets(accumulator.callbackVersion),
+    bySecretVersion: callbackAuditSummaryBuckets(accumulator.secretVersion),
     byProtocolMatch,
     bySecretMatch,
     byRejectionCategory,
     byRetryability,
-    byRemediationPolicyKey,
-    byAutoRemediationState: buildSummaryBucketsFromValues(
-      callbacks.map((callback) => callback.autoRemediationState),
-    ),
+    byRemediationPolicyKey: callbackAuditSummaryBuckets(accumulator.remediationPolicyKey),
+    byAutoRemediationState: callbackAuditSummaryBuckets(accumulator.autoRemediationState),
     recommendations: buildCallbackAuditRecommendations({
-      totalCount,
+      totalCount: accumulator.totalCount,
       byStatus,
       byProtocolMatch,
       bySecretMatch,
@@ -4949,6 +4985,14 @@ function buildCallbackAuditSummaryFromViews(
       byRetryability,
     }),
   };
+}
+
+function buildCallbackAuditSummaryFromViews(
+  callbacks: AgentExecutionCallbackAuditView[],
+): AgentExecutionCallbackAuditSummaryView {
+  const accumulator = createCallbackAuditSummaryAccumulator();
+  for (const callback of callbacks) appendCallbackAuditSummaryView(accumulator, callback);
+  return buildCallbackAuditSummaryFromAccumulator(accumulator);
 }
 
 function buildCallbackRemediationSummaryFromViews(
@@ -5519,7 +5563,7 @@ export async function getCallbackAuditSummaryForOperator(
   args?: CallbackAuditOperatorQuery,
 ): Promise<AgentExecutionCallbackAuditSummaryView> {
   if (hasCallbackAuditDerivedFilters(args)) {
-    const callbacks = await listCallbackAuditViewsForOperator({
+    const scanArgs = {
       agentId: args?.agentId,
       callbackType: args?.callbackType,
       status: args?.status,
@@ -5540,8 +5584,12 @@ export async function getCallbackAuditSummaryForOperator(
       runtimeDecisionSeverity: args?.runtimeDecisionSeverity,
       runtimePressureLevel: args?.runtimePressureLevel,
       runtimeSchedulingDecisionClass: args?.runtimeSchedulingDecisionClass,
-    });
-    return buildCallbackAuditSummaryFromViews(callbacks);
+    } satisfies Omit<CallbackAuditOperatorQuery, "limit">;
+    const accumulator = createCallbackAuditSummaryAccumulator();
+    for await (const page of iterateCallbackAuditViewPagesForOperator(scanArgs)) {
+      for (const callback of page.callbacks) appendCallbackAuditSummaryView(accumulator, callback);
+    }
+    return buildCallbackAuditSummaryFromAccumulator(accumulator);
   }
   const whereClause = toWhereClause(buildCallbackAuditConditions(args));
 
@@ -6826,29 +6874,31 @@ export async function requestRejectedCallbackRetriesByOperator(
   const limit = Math.max(1, Math.min(args?.limit ?? 20, 50));
   const operatorNote = args?.note?.trim() || null;
   if (hasCallbackAuditDerivedFilters(args)) {
-    const candidates = await listCallbackAuditViewsForOperator({
-      agentId: args?.agentId,
-      callbackType: args?.callbackType,
-      status: "rejected",
-      remediationPolicyKey: args?.remediationPolicyKey,
-      callbackVersion: args?.callbackVersion,
-      secretVersion: args?.secretVersion,
-      protocolMatch: args?.protocolMatch,
-      secretMatch: args?.secretMatch,
-      rejectionCategory: args?.rejectionCategory,
-      retryability: args?.retryability,
-      autoRemediationReasonCategory: args?.autoRemediationReasonCategory,
-      autoRemediationReasonDisposition: args?.autoRemediationReasonDisposition,
-      replayPayloadCompatibility: args?.replayPayloadCompatibility,
-      replayPayloadReplayable: args?.replayPayloadReplayable,
-      decisionClass: args?.decisionClass,
-      replayFailureClass: args?.replayFailureClass,
-      runtimeDecisionClass: args?.runtimeDecisionClass,
-      runtimeDecisionSeverity: args?.runtimeDecisionSeverity,
-      runtimePressureLevel: args?.runtimePressureLevel,
-      runtimeSchedulingDecisionClass: args?.runtimeSchedulingDecisionClass,
-    });
-    const scopedCandidates = candidates.slice(0, limit);
+    const scopedCandidates = await listLimitedCallbackAuditViewsForOperator(
+      {
+        agentId: args?.agentId,
+        callbackType: args?.callbackType,
+        status: "rejected",
+        remediationPolicyKey: args?.remediationPolicyKey,
+        callbackVersion: args?.callbackVersion,
+        secretVersion: args?.secretVersion,
+        protocolMatch: args?.protocolMatch,
+        secretMatch: args?.secretMatch,
+        rejectionCategory: args?.rejectionCategory,
+        retryability: args?.retryability,
+        autoRemediationReasonCategory: args?.autoRemediationReasonCategory,
+        autoRemediationReasonDisposition: args?.autoRemediationReasonDisposition,
+        replayPayloadCompatibility: args?.replayPayloadCompatibility,
+        replayPayloadReplayable: args?.replayPayloadReplayable,
+        decisionClass: args?.decisionClass,
+        replayFailureClass: args?.replayFailureClass,
+        runtimeDecisionClass: args?.runtimeDecisionClass,
+        runtimeDecisionSeverity: args?.runtimeDecisionSeverity,
+        runtimePressureLevel: args?.runtimePressureLevel,
+        runtimeSchedulingDecisionClass: args?.runtimeSchedulingDecisionClass,
+      },
+      limit,
+    );
     const results: AgentExecutionCallbackRetryRequestResult[] = [];
     const skippedAuditIds: string[] = [];
 

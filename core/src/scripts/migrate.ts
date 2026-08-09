@@ -3,13 +3,22 @@ import path from "node:path";
 
 import { pgPool } from "../db/client";
 
+const MIGRATION_ADVISORY_LOCK_NAME = "neuro-core-schema-migrations";
+
 async function run() {
   const migrationsDir = path.join(process.cwd(), "migrations");
   const entries = await fs.readdir(migrationsDir);
   const files = entries.filter((entry) => entry.endsWith(".sql")).sort();
 
   const client = await pgPool.connect();
+  let advisoryLockAcquired = false;
   try {
+    await client.query(
+      "select pg_advisory_lock(hashtextextended(current_database() || ':' || $1::text, 0))",
+      [MIGRATION_ADVISORY_LOCK_NAME],
+    );
+    advisoryLockAcquired = true;
+
     await client.query(`
       create table if not exists schema_migrations (
         file_name text primary key,
@@ -33,6 +42,14 @@ async function run() {
       }
     }
   } finally {
+    if (advisoryLockAcquired) {
+      await client
+        .query(
+          "select pg_advisory_unlock(hashtextextended(current_database() || ':' || $1::text, 0))",
+          [MIGRATION_ADVISORY_LOCK_NAME],
+        )
+        .catch((error) => console.error("Failed to release the Core migration advisory lock", error));
+    }
     client.release();
     await pgPool.end();
   }

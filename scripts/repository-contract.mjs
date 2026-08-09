@@ -93,6 +93,13 @@ describe("independent Platform repository", () => {
     assert(workflow.includes("test-smoke-platform-web-release-package-contract.ps1"));
   });
 
+  it("serializes Core schema migrations across concurrent deploy processes", () => {
+    const migrationRunner = read("core/src/scripts/migrate.ts");
+    assert(migrationRunner.includes("pg_advisory_lock"));
+    assert(migrationRunner.includes("pg_advisory_unlock"));
+    assert(migrationRunner.includes("neuro-core-schema-migrations"));
+  });
+
   it("builds all Platform-owned images without publishing pull requests", () => {
     const workflow = read(".github/workflows/container-images.yml");
     const dockerignore = read(".dockerignore");

@@ -255,13 +255,16 @@ import {
 } from "@neuro/backend-foundation/platform/errors";
 import { mapWithConcurrency } from "@neuro/backend-foundation/async/map-with-concurrency";
 import { requestInternalText } from "@neuro/backend-foundation/platform/internal-request";
+import { discoverGatewayProviderModelIds } from "@/modules/gateway/provider-model-discovery";
 
 const ANALYSIS_EXPORT_READ_CONCURRENCY = 12;
+const GATEWAY_PROVIDER_RESPONSE_MAX_BYTES = 1_048_576;
 
 function requestGatewayProviderText(url: string, init: RequestInit, operation: string) {
   return requestInternalText(url, init, {
     timeoutMs: env.providerFetchTimeoutMs,
     timeoutMessage: `${operation} timed out`,
+    maxBodyBytes: GATEWAY_PROVIDER_RESPONSE_MAX_BYTES,
   });
 }
 
@@ -3102,22 +3105,23 @@ export async function listGatewayModelsForProject(projectId: string) {
       .from(gatewayProviderAccounts)
       .where(eq(gatewayProviderAccounts.status, "active"))
       .orderBy(asc(gatewayProviderAccounts.label));
-    for (const row of providerRows) {
-      if (!providerAllowedByRoutePolicy(row, routePolicy?.config ?? null)) {
-        continue;
-      }
-      try {
-        for (const modelId of await discoverProviderModels(row)) {
-          if (routePolicyAllowsModels(routePolicy?.config ?? null, [modelId])) {
-            modelIds.add(modelId);
-          }
-        }
-      } catch {
+    const allowedProviderRows = providerRows.filter((row) =>
+      providerAllowedByRoutePolicy(row, routePolicy?.config ?? null),
+    );
+    const providerModelIds = await discoverGatewayProviderModelIds({
+      providers: allowedProviderRows,
+      discover: discoverProviderModels,
+      async fallback(row) {
         const payload = await readProviderAccountPayload(row);
         const defaultModel =
           "defaultModel" in payload && typeof payload.defaultModel === "string" ? payload.defaultModel.trim() : "";
-        if (defaultModel && routePolicyAllowsModels(routePolicy?.config ?? null, [defaultModel])) {
-          modelIds.add(defaultModel);
+        return defaultModel ? [defaultModel] : [];
+      },
+    });
+    for (const discoveredModelIds of providerModelIds) {
+      for (const modelId of discoveredModelIds) {
+        if (routePolicyAllowsModels(routePolicy?.config ?? null, [modelId])) {
+          modelIds.add(modelId);
         }
       }
     }

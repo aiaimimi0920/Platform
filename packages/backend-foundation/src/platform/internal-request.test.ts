@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  InternalResponseBodyTooLargeError,
   InternalRequestTimeoutError,
   requestInternalArrayBuffer,
   requestInternalText,
@@ -84,6 +85,53 @@ test("requestInternalText validates timeout configuration before dispatch", asyn
         },
       }),
     /positive number/,
+  );
+  assert.equal(called, false);
+});
+
+test("requestInternalText cancels response bodies that exceed the configured byte limit", async () => {
+  let cancelled = false;
+  const response = new Response(
+    new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(new Uint8Array(128));
+      },
+      cancel() {
+        cancelled = true;
+      },
+    }),
+  );
+
+  await assert.rejects(
+    () =>
+      requestInternalText("http://internal.test/oversized", {}, {
+        timeoutMs: 100,
+        maxBodyBytes: 32,
+        fetchFn: async () => response,
+      }),
+    (error: unknown) => {
+      assert.ok(error instanceof InternalResponseBodyTooLargeError);
+      assert.equal(error.code, "INTERNAL_RESPONSE_BODY_TOO_LARGE");
+      assert.equal(error.maxBodyBytes, 32);
+      return true;
+    },
+  );
+  assert.equal(cancelled, true);
+});
+
+test("requestInternalText validates response body limits before dispatch", async () => {
+  let called = false;
+  await assert.rejects(
+    () =>
+      requestInternalText("http://internal.test", {}, {
+        timeoutMs: 100,
+        maxBodyBytes: 0,
+        fetchFn: async () => {
+          called = true;
+          return new Response();
+        },
+      }),
+    /positive integer/,
   );
   assert.equal(called, false);
 });
