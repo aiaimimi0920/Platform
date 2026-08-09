@@ -119,7 +119,7 @@ jobs:
           --output "$env:GITHUB_OUTPUT"
 
       - name: Download matching immutable image lock
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: ${{ steps.image-lock-run.outputs.artifactName }}
           path: .runtime/release-image-lock
@@ -142,7 +142,7 @@ jobs:
           --checksumOutput ".\release\Platform\$env:PLATFORM_TAG\packages\Platform-$env:PLATFORM_TAG-container-images.json.sha256"
 
       - name: Upload verified release package
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: platform-web-${{ env.PLATFORM_TAG }}
           path: release/Platform/${{ env.PLATFORM_TAG }}/

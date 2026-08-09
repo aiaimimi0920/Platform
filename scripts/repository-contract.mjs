@@ -219,6 +219,21 @@ describe("independent Platform repository", () => {
     assert(workflow.includes("container-image-lock.mjs aggregate"));
     assert(workflow.includes("platform-container-image-lock-${{ github.run_id }}-${{ github.run_attempt }}"));
     assert(workflow.includes("retention-days: 90"));
+    for (const action of [
+      "docker/setup-buildx-action@v4",
+      "docker/metadata-action@v6",
+      "docker/build-push-action@v7",
+      "docker/login-action@v4",
+      "actions/upload-artifact@v7",
+      "actions/download-artifact@v8",
+    ]) {
+      assert(workflow.includes(action), `Container workflow must use the Node 24 action: ${action}`);
+    }
+    assert.doesNotMatch(
+      workflow,
+      /(?:setup-buildx-action@v3|metadata-action@v5|build-push-action@v6|login-action@v3|upload-artifact@v4|download-artifact@v4)/,
+      "Container workflow must not regress to Node 20 action majors",
+    );
     const imageLockScript = read("scripts/container-image-lock.mjs");
     assert(imageLockScript.includes("sha256:[0-9a-f]{64}"));
     assert(imageLockScript.includes("Expected ${PLATFORM_CONTAINER_IMAGES.length} image lock entries"));
@@ -286,6 +301,9 @@ describe("independent Platform repository", () => {
     assert.match(workflow, /jobs:\s+release:\s+name:[^\n]+\s+permissions:\s+actions: read\s+contents: write/);
     assert(workflow.includes("opentofu/setup-opentofu@v2"));
     assert(workflow.includes("tofu_version_file: .opentofu-version"));
+    assert(workflow.includes("actions/upload-artifact@v7"));
+    assert(workflow.includes("actions/download-artifact@v8"));
+    assert.doesNotMatch(workflow, /actions\/(?:upload|download)-artifact@v4/);
   });
 
   it("does not contain Google API-key-shaped literals in documentation", () => {
