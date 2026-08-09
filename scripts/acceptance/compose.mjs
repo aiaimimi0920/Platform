@@ -354,6 +354,28 @@ function assertEnvironmentValue(environment, name, expected, pathValue = false) 
   }
 }
 
+function isTransientDockerCleanupFailure(result) {
+  if (result?.timedOut === true) return true;
+  const message = `${result?.error ?? ""}\n${result?.stderr ?? ""}`;
+  return /(?:500\s+Internal Server Error|dockerDesktopLinuxEngine|cannot connect to the Docker daemon|context deadline exceeded|request returned 5\d\d|open \\.\\pipe\\docker)/i.test(message);
+}
+
+function validateRetryDelays(values) {
+  if (!Array.isArray(values) || values.length > 8) {
+    throw new TypeError("Acceptance cleanup retry delays must be an array with at most eight entries");
+  }
+  for (const value of values) {
+    if (!Number.isSafeInteger(value) || value < 0 || value > 60_000) {
+      throw new TypeError("Acceptance cleanup retry delays must contain 0-60000ms safe integers");
+    }
+  }
+  return values;
+}
+
+function wait(delayMs) {
+  return new Promise((resolve) => setTimeout(resolve, delayMs));
+}
+
 export async function cleanupAcceptanceProject({
   runId,
   evidenceDir,
@@ -362,6 +384,7 @@ export async function cleanupAcceptanceProject({
   runtimeRoot,
   executeCommand = runAcceptanceComposeCommand,
   commandTimeoutMs = 120_000,
+  retryDelaysMs = [2_000, 5_000, 15_000, 30_000],
 } = {}) {
   const safeRunId = validateAcceptanceRunId(runId);
   validateAcceptanceRunId(projectName);
@@ -431,13 +454,23 @@ export async function cleanupAcceptanceProject({
     "--volumes",
     "--remove-orphans",
   ];
-  const commandResult = await executeCommand({
-    command: "docker",
-    args,
-    cwd: resolvedPlatformRoot,
-    env: { ...process.env, ...environment },
-    timeoutMs: commandTimeoutMs,
-  });
+  const safeRetryDelays = validateRetryDelays(retryDelaysMs);
+  let commandResult = null;
+  let cleanupAttempts = 0;
+  for (;;) {
+    cleanupAttempts += 1;
+    commandResult = await executeCommand({
+      command: "docker",
+      args,
+      cwd: resolvedPlatformRoot,
+      env: { ...process.env, ...environment },
+      timeoutMs: commandTimeoutMs,
+    });
+    if (commandResult?.exitCode === 0) break;
+    const retryDelay = safeRetryDelays[cleanupAttempts - 1];
+    if (retryDelay === undefined || !isTransientDockerCleanupFailure(commandResult)) break;
+    await wait(retryDelay);
+  }
   if (!commandResult || commandResult.exitCode !== 0) {
     throw new Error(
       `Acceptance Compose cleanup failed with exit code ${commandResult?.exitCode ?? "unknown"}${
@@ -456,6 +489,7 @@ export async function cleanupAcceptanceProject({
         runId: safeRunId,
         projectName,
         cleaned: true,
+        cleanupAttempts,
         finishedAt: new Date().toISOString(),
         durationMs: commandResult.durationMs ?? null,
       },
@@ -468,6 +502,7 @@ export async function cleanupAcceptanceProject({
     cleaned: true,
     runId: safeRunId,
     projectName,
+    cleanupAttempts,
     receiptPath,
   };
 }

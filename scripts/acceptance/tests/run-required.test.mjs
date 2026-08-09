@@ -405,7 +405,7 @@ test("Compose startup runs the desktop/mobile browser matrix before owned cleanu
   });
 
   assert.equal(result.exitCode, 0);
-  assert.deepEqual(calls.map(([kind]) => kind), ["execute", "execute", "execute", "cleanup"]);
+  assert.deepEqual(calls.map(([kind]) => kind), ["execute", "execute", "execute", "execute", "cleanup"]);
   assert.deepEqual(calls[0][1].args.slice(1, 3), ["--parallel", "2"]);
   const browserCall = calls[2][1];
   assert.equal(browserCall.command, process.execPath);
@@ -421,6 +421,12 @@ test("Compose startup runs the desktop/mobile browser matrix before owned cleanu
     path.join(path.resolve(evidenceDir), "compose", "startup", "browser-results.json"),
   );
   assert.equal(result.browserResult.exitCode, 0);
+  assert.equal(result.postBrowserPsResult.exitCode, 0);
+  const startupEvidence = JSON.parse(
+    await readFile(path.join(path.resolve(evidenceDir), "compose", "startup", "compose-startup.json"), "utf8"),
+  );
+  assert.equal(startupEvidence.postBrowserPsExitCode, 0);
+  assert.equal(startupEvidence.postBrowserPs, "[]");
 });
 
 test("Compose startup fails but still cleans its project when the browser matrix fails", async () => {
@@ -454,7 +460,7 @@ test("Compose startup fails but still cleans its project when the browser matrix
     },
   });
 
-  assert.equal(executeCount, 3);
+  assert.equal(executeCount, 4);
   assert.equal(cleanupCount, 1);
   assert.equal(result.browserResult.exitCode, 1);
   assert.equal(result.exitCode, 1);

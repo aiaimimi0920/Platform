@@ -369,6 +369,72 @@ test("cleanup removes only owned resources and preserves evidence", async (t) =>
   assert.equal(foreignEvidenceDir.startsWith(tempRoot), true);
 });
 
+test("cleanup retries only the same owned Compose down after transient Engine failures", async (t) => {
+  const tempRoot = await createTempRoot(t, "platform-compose-cleanup-retry-");
+  const evidenceDir = path.join(tempRoot, "owned-run");
+  const environment = await createTestAcceptanceEnvironment({
+    runId: "platform-acceptance-cleanup-retry",
+    evidenceDir,
+    platformRoot,
+    allocatePorts: async (count) => Array.from({ length: count }, (_, index) => 32700 + index),
+  });
+  const invocations = [];
+
+  const result = await cleanupTestAcceptanceProject({
+    runId: environment.runId,
+    evidenceDir,
+    platformRoot,
+    retryDelaysMs: [0, 0],
+    executeCommand: async (input) => {
+      invocations.push(input);
+      if (invocations.length < 3) {
+        return {
+          exitCode: 1,
+          durationMs: 1,
+          error: "500 Internal Server Error from dockerDesktopLinuxEngine",
+        };
+      }
+      return { exitCode: 0, durationMs: 1, error: null };
+    },
+  });
+
+  assert.equal(result.cleaned, true);
+  assert.equal(result.cleanupAttempts, 3);
+  assert.equal(invocations.length, 3);
+  assert.deepEqual(invocations[0].args, invocations[1].args);
+  assert.deepEqual(invocations[1].args, invocations[2].args);
+  const receipt = JSON.parse(await readFile(result.receiptPath, "utf8"));
+  assert.equal(receipt.cleanupAttempts, 3);
+});
+
+test("cleanup does not retry a non-transient Compose contract failure", async (t) => {
+  const tempRoot = await createTempRoot(t, "platform-compose-cleanup-no-retry-");
+  const evidenceDir = path.join(tempRoot, "owned-run");
+  const environment = await createTestAcceptanceEnvironment({
+    runId: "platform-acceptance-cleanup-no-retry",
+    evidenceDir,
+    platformRoot,
+    allocatePorts: async (count) => Array.from({ length: count }, (_, index) => 32800 + index),
+  });
+  let invocations = 0;
+
+  await assert.rejects(
+    cleanupTestAcceptanceProject({
+      runId: environment.runId,
+      evidenceDir,
+      platformRoot,
+      retryDelaysMs: [0, 0, 0],
+      executeCommand: async () => {
+        invocations += 1;
+        return { exitCode: 1, durationMs: 1, error: "invalid Compose project contract" };
+      },
+    }),
+    /cleanup failed/i,
+  );
+  assert.equal(invocations, 1);
+  await access(environment.paths.ownerFile);
+});
+
 test("cleanup gives Compose the validated owner environment over conflicting host variables", async (t) => {
   const tempRoot = await createTempRoot(t, "platform-compose-env-precedence-");
   const environment = await createTestAcceptanceEnvironment({

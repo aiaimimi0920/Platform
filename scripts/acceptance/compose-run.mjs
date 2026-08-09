@@ -60,6 +60,7 @@ export async function runComposeStage({
   let commandResult = null;
   let psResult = null;
   let browserResult = null;
+  let postBrowserPsResult = null;
   let cleanupResult = null;
   let primaryError = null;
 
@@ -134,6 +135,25 @@ export async function runComposeStage({
           },
           timeoutMs: 20 * 60 * 1000,
         });
+        postBrowserPsResult = await executeCommand({
+          command: "docker",
+          args: [
+            "compose",
+            "-p",
+            environment.projectName,
+            "--env-file",
+            environment.paths.envFile,
+            "-f",
+            composeFile,
+            "ps",
+            "--all",
+            "--format",
+            "json",
+          ],
+          cwd: resolvedPlatformRoot,
+          env: childEnvironment,
+          timeoutMs: 2 * 60 * 1000,
+        });
       }
       await writeFile(
         path.join(stageEvidenceDir, "compose-startup.json"),
@@ -147,7 +167,9 @@ export async function runComposeStage({
             upExitCode: commandResult.exitCode,
             psExitCode: psResult?.exitCode ?? null,
             browserExitCode: browserResult?.exitCode ?? null,
+            postBrowserPsExitCode: postBrowserPsResult?.exitCode ?? null,
             ps: psResult?.stdout ?? null,
+            postBrowserPs: postBrowserPsResult?.stdout ?? null,
           },
           null,
           2,
@@ -177,7 +199,11 @@ export async function runComposeStage({
   if (primaryError) throw primaryError;
   const exitCode =
     commandResult?.exitCode === 0 &&
-    (stage !== "startup" || (psResult?.exitCode === 0 && browserResult?.exitCode === 0))
+    (stage !== "startup" || (
+      psResult?.exitCode === 0
+      && browserResult?.exitCode === 0
+      && postBrowserPsResult?.exitCode === 0
+    ))
       ? 0
       : 1;
   return {
@@ -189,6 +215,7 @@ export async function runComposeStage({
     commandResult,
     psResult,
     browserResult,
+    postBrowserPsResult,
     cleanupResult,
   };
 }

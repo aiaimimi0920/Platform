@@ -47,3 +47,10 @@ Phase 1 的基础设施任务已全部完成（`4/4`），但这不等于 Platfo
 - external-boundary 的 Gateway、Loom、Tea contract probes 通过；Hook source/dependency inventory 证明当前没有 Platform-owned runtime hook 调用点，因此记录为 `not-applicable`，不是 `passed`。
 - Compose render/startup 均为 exit `0`；startup project 的服务均报告 healthy，`.runtime/acceptance/platform-acceptance-p104-runtime5/compose/startup/compose-cleanup.json` 与 `compose/render/compose-cleanup.json` 均记录 `cleaned: true`。cleanup 后本次 run 的容器、网络、volume 均为 `0`，临时 `resources/` 已清理；runtime5 证据目录未发现测试 canary。
 - P1-04 收口结论：Phase 1 acceptance infrastructure 可复现且门禁诚实，但 manifest overall 为 failed；当前 canonical 产品状态仍为 `Platform 产品未完成`，不得据此生成或宣称完整 release。
+
+## 2026-08-10 运行可靠性加固
+
+- dev4 全浏览器矩阵暴露 Docker Desktop Engine API 短暂 HTTP 500：浏览器结束后的首次 owner cleanup 失败，但 Engine 自恢复后使用同一 owner record 的精确 cleanup 成功，scoped container/network/volume 均为 `0`。
+- `cleanupAcceptanceProject` 现在只对 timeout、Docker daemon unavailable、Engine 5xx 等瞬态错误有限退避重试；每次重试复用 owner/env 校验后完全相同的 project、Compose file、env file 和 `down --volumes --remove-orphans` 参数。普通 Compose contract 错误立即失败并保留 owner 资源，不做无意义重试。
+- startup runner 在 Playwright 结束后、cleanup 之前新增第二次 `compose ps --all --format json`，并将 exit code/结果写入 `compose-startup.json`。该诊断本身也是 startup pass 条件，防止浏览器恰好结束后 Engine/容器失效却被误报为通过。
+- 验证：`node --test "scripts/acceptance/tests/*.test.mjs"` 为 `145/145` passed；新增用例覆盖同一 owned cleanup 的两次瞬态失败后成功、非瞬态错误不重试，以及 post-browser process inventory。

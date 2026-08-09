@@ -143,8 +143,9 @@ Platform 只有同时满足下面条件，才允许标记为产品完成。
 - 每次验收使用独立 volume、临时 secret 和临时凭证目录。
 - 验收栈不得挂载宿主真实 `.neuro`。
 - 验收栈不得构建或挂载兄弟项目源码；Gateway/Loom/Tea/Hook 使用固定 image digest、明确 URL 或 Platform 内 test double。
-- cleanup 只能删除本次 project 创建的容器、网络、volume 和临时目录。
+- cleanup 只能删除本次 project 创建的容器、网络、volume 和临时目录；执行前必须验证 owner/env 全部资源元数据。Docker Engine 短暂返回 timeout/5xx/daemon-unavailable 时，只允许以有限退避重试同一个已验证 project 的同一条 `down --volumes --remove-orphans`，不得扩大 label、project 或目录范围；非瞬态 Compose contract 错误不重试。
 - 依赖必须按 `service_healthy` 启动，不以进程已启动替代 ready。
+- 浏览器矩阵结束后、cleanup 之前必须再次记录该 project 的 `compose ps --all` 结果，以区分产品 journey 失败、容器退出和 Docker Engine 诊断失败。
 
 ### 3.3 生产部署清单需与 release artifact 对齐
 
