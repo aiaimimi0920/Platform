@@ -2408,7 +2408,8 @@ a {
   position: fixed;
   right: max(20px, calc(env(safe-area-inset-right, 0px) + 20px));
   bottom: max(20px, calc(env(safe-area-inset-bottom, 0px) + 20px));
-  z-index: 36;
+  /* Header-owned dialogs share the app-nav stacking context at z-index 20. */
+  z-index: 19;
   pointer-events: none;
 }
 

@@ -67,3 +67,15 @@ test("dashboard terminal keeps the hero title visible in the first viewport", ()
     /@media \(max-width: 1100px\)\s*\{\s*\.app-page--dashboard \.mg-terminal-hero\s*\{[\s\S]*?order:\s*-1;[\s\S]*?\}\s*\.app-page--dashboard \.mg-terminal-hero__body\s*\{[\s\S]*?order:\s*-1;/,
   );
 });
+
+test("dashboard ops shortcut stays below navigation-owned modal overlays", () => {
+  const navigationZIndex = Number(globalsCss.match(/\.app-nav\s*\{[^}]*z-index:\s*(\d+);/)?.[1]);
+  const opsShortcutZIndex = Number(globalsCss.match(/\.nt-dashboard-ops-fab-wrap\s*\{[^}]*z-index:\s*(\d+);/)?.[1]);
+
+  assert.ok(Number.isInteger(navigationZIndex), "app navigation must declare an integer z-index");
+  assert.ok(Number.isInteger(opsShortcutZIndex), "dashboard ops shortcut must declare an integer z-index");
+  assert.ok(
+    opsShortcutZIndex < navigationZIndex,
+    `dashboard ops shortcut z-index ${opsShortcutZIndex} must stay below navigation z-index ${navigationZIndex}`,
+  );
+});
