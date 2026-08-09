@@ -17,12 +17,9 @@ import {
   type HeavyChatThreadRecord,
 } from "./types";
 import type { HeavyChatActionType } from "@neuro/contracts";
-import { mapWithConcurrency } from "@neuro/backend-foundation/async/map-with-concurrency";
 import type { HeavyChatActionResult } from "./action-bridge";
 import { validateManagedHeavyAgentInput } from "../agent-registry/managed-heavy-validation";
 import { HttpError } from "../../platform/errors";
-
-const SNAPSHOT_READ_CONCURRENCY = 12;
 
 export type ManagedHeavyAgentResolution = {
   id: string;
@@ -183,18 +180,6 @@ function assertMessageReplay(
   }
 }
 
-function buildGatewayHistory(messages: HeavyChatMessageRecord[], beforeSequence: number) {
-  return messages
-    .filter(
-      (message) =>
-        message.sequence < beforeSequence &&
-        (message.role === "user" || message.role === "assistant" || message.role === "system") &&
-        message.status === "complete" &&
-        message.content.trim(),
-    )
-    .map((message) => ({ role: message.role, content: message.content }));
-}
-
 function validateManagedHeavyAgent(
   ownerUserId: string,
   agent: ManagedHeavyAgentResolution | null,
@@ -257,8 +242,9 @@ export function createHeavyChatService(options: HeavyChatServiceOptions) {
 
     try {
       const { client, model } = requireGatewayClient(options);
-      const history = buildGatewayHistory(
-        await repository.listMessages(ownerUserId, threadId),
+      const history = await repository.listGatewayHistoryMessages(
+        ownerUserId,
+        threadId,
         attempt.message.sequence,
       );
       const response = await client.complete({
@@ -307,28 +293,44 @@ export function createHeavyChatService(options: HeavyChatServiceOptions) {
         repository.listProjects(ownerUserId),
         repository.listThreads(ownerUserId),
       ]);
+      const slotIds = slots.map((slot) => slot.id);
 
-      const [bindings, slotProjects, messagesByThread] = await Promise.all([
-        mapWithConcurrency(slots, SNAPSHOT_READ_CONCURRENCY, (slot) =>
-          repository.findAgentBindingForSlot(ownerUserId, slot.id),
-        ),
-        mapWithConcurrency(slots, SNAPSHOT_READ_CONCURRENCY, (slot) =>
-          repository.listProjectsForSlot(ownerUserId, slot.id).then((boundProjects) =>
-            boundProjects.map((project) => ({ slotId: slot.id, projectId: project.id })),
-          ),
-        ),
-        mapWithConcurrency(threads, SNAPSHOT_READ_CONCURRENCY, (thread) =>
-          repository.listMessages(ownerUserId, thread.id),
+      const [bindings, slotProjectRows, messages] = await Promise.all([
+        repository.listAgentBindingsForSlots(ownerUserId, slotIds),
+        repository.listProjectBindingsForSlots(ownerUserId, slotIds),
+        repository.listMessagesByThreadIds(
+          ownerUserId,
+          threads.map((thread) => thread.id),
         ),
       ]);
+      const messagesByThreadId = new Map<string, HeavyChatMessageRecord[]>();
+      for (const message of messages) {
+        const threadMessages = messagesByThreadId.get(message.threadId) ?? [];
+        threadMessages.push(message);
+        messagesByThreadId.set(message.threadId, threadMessages);
+      }
+      const bindingBySlotId = new Map(bindings.map((binding) => [binding.slotId, binding]));
+      const projectBindingsBySlotId = new Map<string, HeavyChatSlotProjectRecord[]>();
+      for (const binding of slotProjectRows) {
+        const slotBindings = projectBindingsBySlotId.get(binding.slotId) ?? [];
+        slotBindings.push(binding);
+        projectBindingsBySlotId.set(binding.slotId, slotBindings);
+      }
 
       return {
         slots,
         projects,
-        slotProjects: slotProjects.flat(),
-        bindings: bindings.filter((binding): binding is HeavyChatSlotAgentBindingRecord => binding !== null),
+        slotProjects: slots.flatMap((slot) =>
+          (projectBindingsBySlotId.get(slot.id) ?? []).map((binding) => ({
+            slotId: binding.slotId,
+            projectId: binding.projectId,
+          })),
+        ),
+        bindings: slots
+          .map((slot) => bindingBySlotId.get(slot.id) ?? null)
+          .filter((binding): binding is HeavyChatSlotAgentBindingRecord => binding !== null),
         threads,
-        messages: messagesByThread.flat(),
+        messages: threads.flatMap((thread) => messagesByThreadId.get(thread.id) ?? []),
       };
     },
 

@@ -8,7 +8,7 @@ import type {
   HeavyChatReference,
   TransitionHeavyChatMessageInput,
 } from "@neuro/contracts";
-import { and, asc, desc, eq, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, lt, sql } from "drizzle-orm";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 
 import * as databaseSchema from "@/db/schema";
@@ -32,6 +32,7 @@ import {
   HeavyChatInvalidTransitionError,
   HeavyChatOwnershipError,
   HeavyChatSlotLimitError,
+  type HeavyChatGatewayHistoryMessageRecord,
   type HeavyChatMessageAttemptRecord,
   type HeavyChatMessageRecord,
   type HeavyChatProjectRecord,
@@ -94,6 +95,7 @@ export interface HeavyChatStore {
   findSlotAgentBySlot(ownerUserId: string, slotId: string): Promise<HeavyChatSlotAgentBindingRecord | null>;
   findSlotAgentByAgent(ownerUserId: string, agentId: string): Promise<HeavyChatSlotAgentBindingRecord | null>;
   insertSlotAgent(row: HeavyChatSlotAgentBindingRecord): Promise<HeavyChatSlotAgentBindingRecord>;
+  listSlotAgentsBySlotIds(ownerUserId: string, slotIds: string[]): Promise<HeavyChatSlotAgentBindingRecord[]>;
 
   findProjectById(ownerUserId: string, id: string): Promise<HeavyChatProjectRecord | null>;
   listProjects(ownerUserId: string): Promise<HeavyChatProjectRecord[]>;
@@ -101,6 +103,7 @@ export interface HeavyChatStore {
   insertProject(row: HeavyChatProjectRecord): Promise<HeavyChatProjectRecord>;
   findSlotProject(ownerUserId: string, slotId: string, projectId: string): Promise<HeavyChatSlotProjectRecord | null>;
   listSlotProjects(ownerUserId: string, slotId: string): Promise<HeavyChatSlotProjectRecord[]>;
+  listSlotProjectsBySlotIds(ownerUserId: string, slotIds: string[]): Promise<HeavyChatSlotProjectRecord[]>;
   insertSlotProject(row: HeavyChatSlotProjectRecord): Promise<HeavyChatSlotProjectRecord>;
 
   findThreadById(ownerUserId: string, id: string): Promise<HeavyChatThreadRecord | null>;
@@ -135,6 +138,12 @@ export interface HeavyChatStore {
     patch: Partial<HeavyChatMessageRecord>,
   ): Promise<HeavyChatMessageRecord | null>;
   listMessages(ownerUserId: string, threadId: string): Promise<HeavyChatMessageRecord[]>;
+  listMessagesByThreadIds(ownerUserId: string, threadIds: string[]): Promise<HeavyChatMessageRecord[]>;
+  listGatewayHistoryMessages(
+    ownerUserId: string,
+    threadId: string,
+    beforeSequence: number,
+  ): Promise<HeavyChatGatewayHistoryMessageRecord[]>;
   maxMessageAttemptNumber(ownerUserId: string, messageId: string): Promise<number>;
   findMessageAttemptByIdempotencyKey(
     ownerUserId: string,
@@ -288,6 +297,25 @@ class DrizzleHeavyChatStore implements HeavyChatStore {
     return toSlotAgentRecord(inserted);
   }
 
+  async listSlotAgentsBySlotIds(ownerUserId: string, slotIds: string[]) {
+    if (slotIds.length === 0) return [];
+    const rows = await this.database
+      .select()
+      .from(heavyChatSlotAgents)
+      .where(
+        and(
+          eq(heavyChatSlotAgents.ownerUserId, ownerUserId),
+          inArray(heavyChatSlotAgents.slotId, slotIds),
+        ),
+      )
+      .orderBy(
+        asc(heavyChatSlotAgents.slotId),
+        asc(heavyChatSlotAgents.createdAt),
+        asc(heavyChatSlotAgents.id),
+      );
+    return rows.map(toSlotAgentRecord);
+  }
+
   async findProjectById(ownerUserId: string, id: string) {
     const [row] = await this.database
       .select()
@@ -354,6 +382,25 @@ class DrizzleHeavyChatStore implements HeavyChatStore {
       .from(heavyChatSlotProjects)
       .where(and(eq(heavyChatSlotProjects.ownerUserId, ownerUserId), eq(heavyChatSlotProjects.slotId, slotId)))
       .orderBy(asc(heavyChatSlotProjects.createdAt), asc(heavyChatSlotProjects.id));
+    return rows.map(toSlotProjectRecord);
+  }
+
+  async listSlotProjectsBySlotIds(ownerUserId: string, slotIds: string[]) {
+    if (slotIds.length === 0) return [];
+    const rows = await this.database
+      .select()
+      .from(heavyChatSlotProjects)
+      .where(
+        and(
+          eq(heavyChatSlotProjects.ownerUserId, ownerUserId),
+          inArray(heavyChatSlotProjects.slotId, slotIds),
+        ),
+      )
+      .orderBy(
+        asc(heavyChatSlotProjects.slotId),
+        asc(heavyChatSlotProjects.createdAt),
+        asc(heavyChatSlotProjects.id),
+      );
     return rows.map(toSlotProjectRecord);
   }
 
@@ -510,6 +557,48 @@ class DrizzleHeavyChatStore implements HeavyChatStore {
     return rows.map(toMessageRecord);
   }
 
+  async listMessagesByThreadIds(ownerUserId: string, threadIds: string[]) {
+    if (threadIds.length === 0) return [];
+    const rows = await this.database
+      .select()
+      .from(heavyChatMessages)
+      .where(
+        and(
+          eq(heavyChatMessages.ownerUserId, ownerUserId),
+          inArray(heavyChatMessages.threadId, threadIds),
+        ),
+      )
+      .orderBy(
+        asc(heavyChatMessages.threadId),
+        asc(heavyChatMessages.sequence),
+        asc(heavyChatMessages.id),
+      );
+    return rows.map(toMessageRecord);
+  }
+
+  async listGatewayHistoryMessages(ownerUserId: string, threadId: string, beforeSequence: number) {
+    const rows = await this.database
+      .select({
+        role: heavyChatMessages.role,
+        content: heavyChatMessages.content,
+      })
+      .from(heavyChatMessages)
+      .where(
+        and(
+          eq(heavyChatMessages.ownerUserId, ownerUserId),
+          eq(heavyChatMessages.threadId, threadId),
+          lt(heavyChatMessages.sequence, beforeSequence),
+          eq(heavyChatMessages.status, "complete"),
+          inArray(heavyChatMessages.role, ["user", "assistant", "system"]),
+        ),
+      )
+      .orderBy(asc(heavyChatMessages.sequence), asc(heavyChatMessages.id));
+    return rows.map((row) => ({
+      role: row.role as HeavyChatMessageRole,
+      content: row.content,
+    }));
+  }
+
   async maxMessageAttemptNumber(ownerUserId: string, messageId: string) {
     const [row] = await this.database
       .select({ value: sql<number>`coalesce(max(${heavyChatMessageAttempts.attemptNumber}), 0)` })
@@ -603,6 +692,10 @@ class LazyDrizzleHeavyChatStore implements HeavyChatStore {
     return (await this.getDelegate()).insertSlotAgent(row);
   }
 
+  async listSlotAgentsBySlotIds(ownerUserId: string, slotIds: string[]) {
+    return (await this.getDelegate()).listSlotAgentsBySlotIds(ownerUserId, slotIds);
+  }
+
   async findProjectById(ownerUserId: string, id: string) {
     return (await this.getDelegate()).findProjectById(ownerUserId, id);
   }
@@ -625,6 +718,10 @@ class LazyDrizzleHeavyChatStore implements HeavyChatStore {
 
   async listSlotProjects(ownerUserId: string, slotId: string) {
     return (await this.getDelegate()).listSlotProjects(ownerUserId, slotId);
+  }
+
+  async listSlotProjectsBySlotIds(ownerUserId: string, slotIds: string[]) {
+    return (await this.getDelegate()).listSlotProjectsBySlotIds(ownerUserId, slotIds);
   }
 
   async insertSlotProject(row: HeavyChatSlotProjectRecord) {
@@ -695,6 +792,14 @@ class LazyDrizzleHeavyChatStore implements HeavyChatStore {
 
   async listMessages(ownerUserId: string, threadId: string) {
     return (await this.getDelegate()).listMessages(ownerUserId, threadId);
+  }
+
+  async listMessagesByThreadIds(ownerUserId: string, threadIds: string[]) {
+    return (await this.getDelegate()).listMessagesByThreadIds(ownerUserId, threadIds);
+  }
+
+  async listGatewayHistoryMessages(ownerUserId: string, threadId: string, beforeSequence: number) {
+    return (await this.getDelegate()).listGatewayHistoryMessages(ownerUserId, threadId, beforeSequence);
   }
 
   async maxMessageAttemptNumber(ownerUserId: string, messageId: string) {
@@ -957,6 +1062,12 @@ export function createHeavyChatRepository(options: HeavyChatRepositoryOptions = 
       return store.listProjectsForSlot(owner, slot.id);
     },
 
+    async listProjectBindingsForSlots(ownerUserId: string, slotIds: string[]) {
+      const owner = normalizeOwnerUserId(ownerUserId);
+      const normalizedSlotIds = Array.from(new Set(slotIds.map((slotId) => slotId.trim()).filter(Boolean)));
+      return store.listSlotProjectsBySlotIds(owner, normalizedSlotIds);
+    },
+
     async createThread(ownerUserId: string, args: CreateHeavyChatThreadArgs) {
       const owner = normalizeOwnerUserId(ownerUserId);
       return runOwnerTransaction(owner, async (tx) => {
@@ -1095,6 +1206,12 @@ export function createHeavyChatRepository(options: HeavyChatRepositoryOptions = 
     async findAgentBindingForSlot(ownerUserId: string, slotId: string) {
       const owner = normalizeOwnerUserId(ownerUserId);
       return store.findSlotAgentBySlot(owner, requireText(slotId, "Heavy chat slot id"));
+    },
+
+    async listAgentBindingsForSlots(ownerUserId: string, slotIds: string[]) {
+      const owner = normalizeOwnerUserId(ownerUserId);
+      const normalizedSlotIds = Array.from(new Set(slotIds.map((slotId) => slotId.trim()).filter(Boolean)));
+      return store.listSlotAgentsBySlotIds(owner, normalizedSlotIds);
     },
 
     async reserveMessageAttempt(
@@ -1478,6 +1595,23 @@ export function createHeavyChatRepository(options: HeavyChatRepositoryOptions = 
       if (!thread) return [];
       return store.listMessages(owner, thread.id);
     },
+
+    async listMessagesByThreadIds(ownerUserId: string, threadIds: string[]) {
+      const owner = normalizeOwnerUserId(ownerUserId);
+      const normalizedThreadIds = Array.from(
+        new Set(threadIds.map((threadId) => threadId.trim()).filter(Boolean)),
+      );
+      return store.listMessagesByThreadIds(owner, normalizedThreadIds);
+    },
+
+    async listGatewayHistoryMessages(ownerUserId: string, threadId: string, beforeSequence: number) {
+      const owner = normalizeOwnerUserId(ownerUserId);
+      if (!Number.isInteger(beforeSequence) || beforeSequence < 1) {
+        throw new Error("Heavy chat history boundary must be a positive integer");
+      }
+      const messages = await store.listGatewayHistoryMessages(owner, threadId, beforeSequence);
+      return messages.filter((message) => message.content.trim());
+    },
   };
 }
 
@@ -1490,6 +1624,7 @@ export const createProject = defaultRepository.createProject;
 export const listProjects = defaultRepository.listProjects;
 export const bindProjectToSlot = defaultRepository.bindProjectToSlot;
 export const listProjectsForSlot = defaultRepository.listProjectsForSlot;
+export const listProjectBindingsForSlots = defaultRepository.listProjectBindingsForSlots;
 export const createThread = defaultRepository.createThread;
 export const findThreadById = defaultRepository.findThreadById;
 export const listThreads = defaultRepository.listThreads;
@@ -1498,6 +1633,7 @@ export const rebindProject = defaultRepository.rebindProject;
 export const bindProjectToThread = defaultRepository.bindProjectToThread;
 export const bindAgentToSlot = defaultRepository.bindAgentToSlot;
 export const findAgentBindingForSlot = defaultRepository.findAgentBindingForSlot;
+export const listAgentBindingsForSlots = defaultRepository.listAgentBindingsForSlots;
 export const appendMessage = defaultRepository.appendMessage;
 export const reserveMessageAttempt = defaultRepository.reserveMessageAttempt;
 export const reserveMessageAction = defaultRepository.reserveMessageAction;
@@ -1507,3 +1643,5 @@ export const transitionMessage = defaultRepository.transitionMessage;
 export const findMessageById = defaultRepository.findMessageById;
 export const findMessageByIdempotencyKey = defaultRepository.findMessageByIdempotencyKey;
 export const listMessages = defaultRepository.listMessages;
+export const listMessagesByThreadIds = defaultRepository.listMessagesByThreadIds;
+export const listGatewayHistoryMessages = defaultRepository.listGatewayHistoryMessages;

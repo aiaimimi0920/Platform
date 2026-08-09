@@ -132,6 +132,20 @@ class MemoryHeavyChatStore {
     return clone(row);
   }
 
+  async listSlotAgentsBySlotIds(ownerUserId: string, slotIds: string[]) {
+    const slotIdSet = new Set(slotIds);
+    return clone(
+      this.slotAgentBindings
+        .filter((row) => row.ownerUserId === ownerUserId && slotIdSet.has(row.slotId))
+        .sort(
+          (left, right) =>
+            left.slotId.localeCompare(right.slotId) ||
+            left.createdAt.getTime() - right.createdAt.getTime() ||
+            left.id.localeCompare(right.id),
+        ),
+    );
+  }
+
   async findProjectById(ownerUserId: string, id: string) {
     return clone(this.projects.find((row) => row.ownerUserId === ownerUserId && row.id === id) ?? null);
   }
@@ -291,6 +305,49 @@ class MemoryHeavyChatStore {
       this.messages
         .filter((row) => row.ownerUserId === ownerUserId && row.threadId === threadId)
         .sort((left, right) => left.sequence - right.sequence || left.id.localeCompare(right.id)),
+    );
+  }
+
+  async listSlotProjectsBySlotIds(ownerUserId: string, slotIds: string[]) {
+    const slotIdSet = new Set(slotIds);
+    return clone(
+      this.bindings
+        .filter((row) => row.ownerUserId === ownerUserId && slotIdSet.has(row.slotId))
+        .sort(
+          (left, right) =>
+            left.slotId.localeCompare(right.slotId) ||
+            left.createdAt.getTime() - right.createdAt.getTime() ||
+            left.id.localeCompare(right.id),
+        ),
+    );
+  }
+
+  async listMessagesByThreadIds(ownerUserId: string, threadIds: string[]) {
+    const threadIdSet = new Set(threadIds);
+    return clone(
+      this.messages
+        .filter((row) => row.ownerUserId === ownerUserId && threadIdSet.has(row.threadId))
+        .sort(
+          (left, right) =>
+            left.threadId.localeCompare(right.threadId) ||
+            left.sequence - right.sequence ||
+            left.id.localeCompare(right.id),
+        ),
+    );
+  }
+
+  async listGatewayHistoryMessages(ownerUserId: string, threadId: string, beforeSequence: number) {
+    return clone(
+      this.messages
+        .filter(
+          (row) =>
+            row.ownerUserId === ownerUserId &&
+            row.threadId === threadId &&
+            row.sequence < beforeSequence &&
+            row.status === "complete",
+        )
+        .sort((left, right) => left.sequence - right.sequence || left.id.localeCompare(right.id))
+        .map(({ role, content }) => ({ role, content })),
     );
   }
 
@@ -498,6 +555,20 @@ test("projects, bindings, and threads retain owner scope and deterministic order
   assert.equal(store.listProjectsForSlotCount, 1);
   assert.deepEqual(await repository.listProjects("owner-b"), []);
   const otherSlot = await repository.createOrGetDefaultSlot("owner-b");
+  const ownerAgentBinding = await repository.bindAgentToSlot("owner-a", slot.id, "agent-a");
+  await repository.bindAgentToSlot("owner-b", otherSlot.id, "agent-b");
+  assert.deepEqual(
+    (await repository.listAgentBindingsForSlots("owner-a", [otherSlot.id, slot.id, slot.id])).map(
+      (binding) => binding.id,
+    ),
+    [ownerAgentBinding.id],
+  );
+  assert.deepEqual(
+    (await repository.listProjectBindingsForSlots("owner-a", [otherSlot.id, slot.id, slot.id]))
+      .map((binding) => binding.projectId)
+      .sort(),
+    [firstProject.id, secondProject.id].sort(),
+  );
   await assert.rejects(
     () => repository.bindProjectToSlot("owner-b", otherSlot.id, firstProject.id),
     (error: unknown) => error instanceof HeavyChatOwnershipError,
@@ -627,6 +698,82 @@ test("messages are ordered, idempotent per owner, transactional, and stateful", 
     }),
   );
   assert.equal(await repository.findMessageById("owner-a", "message-rollback"), null);
+});
+
+test("bulk message reads stay owner-scoped and Gateway history includes only complete prior content", async () => {
+  const { repository } = buildRepository();
+  const ownerASlot = await repository.createOrGetDefaultSlot("owner-a");
+  const ownerBSlot = await repository.createOrGetDefaultSlot("owner-b");
+  const threadA = await repository.createThread("owner-a", {
+    id: "thread-a",
+    slotId: ownerASlot.id,
+    title: "Thread A",
+  });
+  const threadB = await repository.createThread("owner-a", {
+    id: "thread-b",
+    slotId: ownerASlot.id,
+    title: "Thread B",
+  });
+  const foreignThread = await repository.createThread("owner-b", {
+    id: "thread-foreign",
+    slotId: ownerBSlot.id,
+    title: "Foreign thread",
+  });
+
+  const first = await repository.appendMessage("owner-a", {
+    id: "message-a-user",
+    threadId: threadA.id,
+    role: "user",
+    content: "first question",
+  });
+  await repository.appendMessage("owner-a", {
+    id: "message-a-streaming",
+    threadId: threadA.id,
+    role: "assistant",
+    status: "streaming",
+    content: "partial answer",
+  });
+  await repository.appendMessage("owner-a", {
+    id: "message-a-blank",
+    threadId: threadA.id,
+    role: "assistant",
+    status: "complete",
+    content: "   ",
+  });
+  const system = await repository.appendMessage("owner-a", {
+    id: "message-a-system",
+    threadId: threadA.id,
+    role: "system",
+    status: "complete",
+    content: "system context",
+  });
+  const secondThreadMessage = await repository.appendMessage("owner-a", {
+    id: "message-b-user",
+    threadId: threadB.id,
+    role: "user",
+    content: "second thread",
+  });
+  await repository.appendMessage("owner-b", {
+    id: "message-foreign",
+    threadId: foreignThread.id,
+    role: "user",
+    content: "must stay isolated",
+  });
+
+  assert.deepEqual(
+    (await repository.listMessagesByThreadIds("owner-a", [threadB.id, foreignThread.id, threadA.id, threadA.id])).map(
+      (message) => message.id,
+    ),
+    [first.id, "message-a-streaming", "message-a-blank", system.id, secondThreadMessage.id],
+  );
+  assert.deepEqual(
+    await repository.listGatewayHistoryMessages("owner-a", threadA.id, system.sequence + 1),
+    [
+      { role: "user", content: "first question" },
+      { role: "system", content: "system context" },
+    ],
+  );
+  assert.deepEqual(await repository.listGatewayHistoryMessages("owner-b", threadA.id, system.sequence + 1), []);
 });
 
 test("concurrent message appends preserve idempotency and allocate unique sequences", async () => {

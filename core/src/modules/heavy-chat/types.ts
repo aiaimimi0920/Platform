@@ -77,6 +77,8 @@ export type HeavyChatMessageRecord = {
   updatedAt: Date;
 };
 
+export type HeavyChatGatewayHistoryMessageRecord = Pick<HeavyChatMessageRecord, "role" | "content">;
+
 export type HeavyChatMessageAttemptRecord = {
   id: string;
   ownerUserId: string;

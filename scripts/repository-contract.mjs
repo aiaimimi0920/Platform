@@ -51,6 +51,7 @@ describe("independent Platform repository", () => {
       "docs/40-engineering/platform-release-artifact-standard.md",
       "docs/40-engineering/PostgreSQL迁移并发与事务基线.md",
       "docs/40-engineering/arbitration-metric-query-baseline.md",
+      "docs/40-engineering/heavy-chat-read-query-baseline.md",
     ]) {
       assert(statSync(join(rootDir, requiredPath)).isFile(), `Missing repository path: ${requiredPath}`);
     }
@@ -140,6 +141,31 @@ describe("independent Platform repository", () => {
     assert(repository.includes("count(*)::int"));
     const corePackage = JSON.parse(read("core/package.json"));
     assert(corePackage.scripts.test.includes("src/modules/arbitration/workload-analysis.test.ts"));
+  });
+
+  it("keeps Heavy Chat snapshot and Gateway history on purpose-built read queries", () => {
+    const service = read("core/src/modules/heavy-chat/service.ts");
+    const snapshotBlock = service
+      .split("async getSnapshot(ownerUserId: string)")[1]
+      ?.split("async listSlots(ownerUserId: string)")[0] ?? "";
+    assert(snapshotBlock.includes("repository.listAgentBindingsForSlots"));
+    assert(snapshotBlock.includes("repository.listProjectBindingsForSlots"));
+    assert(snapshotBlock.includes("repository.listMessagesByThreadIds"));
+    assert(!snapshotBlock.includes("mapWithConcurrency"));
+    assert(service.includes("repository.listGatewayHistoryMessages"));
+    assert(!service.includes("function buildGatewayHistory"));
+
+    const repository = read("core/src/modules/heavy-chat/repository.ts");
+    const historyQueryBlock = repository
+      .split("async listGatewayHistoryMessages(ownerUserId: string, threadId: string, beforeSequence: number)")[1]
+      ?.split("async maxMessageAttemptNumber")[0] ?? "";
+    assert(historyQueryBlock.includes("role: heavyChatMessages.role"));
+    assert(historyQueryBlock.includes("content: heavyChatMessages.content"));
+    assert(historyQueryBlock.includes("lt(heavyChatMessages.sequence, beforeSequence)"));
+    assert(historyQueryBlock.includes('eq(heavyChatMessages.status, "complete")'));
+    assert(repository.includes("inArray(heavyChatSlotAgents.slotId, slotIds)"));
+    assert(repository.includes("inArray(heavyChatSlotProjects.slotId, slotIds)"));
+    assert(repository.includes("inArray(heavyChatMessages.threadId, threadIds)"));
   });
 
   it("builds all Platform-owned images without publishing pull requests", () => {

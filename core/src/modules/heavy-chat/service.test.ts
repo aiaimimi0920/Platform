@@ -6,6 +6,7 @@ import { createHeavyChatService } from "./service";
 import {
   type HeavyChatMessageAttemptRecord,
   type HeavyChatMessageRecord,
+  type HeavyChatThreadRecord,
   HeavyChatOwnershipError,
   HeavyChatSlotLimitError,
 } from "./types";
@@ -94,6 +95,13 @@ function buildFakeRepository() {
       const binding = bindings.get(`${ownerUserId}:${slotId}`);
       return binding ? { id: "binding-existing", ownerUserId, ...binding } : null;
     },
+    async listAgentBindingsForSlots(ownerUserId: string, slotIds: string[]) {
+      calls.push({ method: "listAgentBindingsForSlots", args: [ownerUserId, slotIds] });
+      const slotIdSet = new Set(slotIds);
+      return [...bindings.entries()]
+        .filter(([key, binding]) => key.startsWith(`${ownerUserId}:`) && slotIdSet.has(binding.slotId))
+        .map(([, binding]) => ({ id: `binding-${binding.slotId}`, ownerUserId, ...binding }));
+    },
     async listSlots(ownerUserId: string) {
       return [...slots.values()].filter((slot) => slot.ownerUserId === ownerUserId);
     },
@@ -103,10 +111,21 @@ function buildFakeRepository() {
     async listProjectsForSlot() {
       return [];
     },
+    async listProjectBindingsForSlots(ownerUserId: string, slotIds: string[]) {
+      calls.push({ method: "listProjectBindingsForSlots", args: [ownerUserId, slotIds] });
+      return [];
+    },
     async listThreads() {
       return [];
     },
     async listMessages() {
+      return [];
+    },
+    async listMessagesByThreadIds(ownerUserId: string, threadIds: string[]) {
+      calls.push({ method: "listMessagesByThreadIds", args: [ownerUserId, threadIds] });
+      return [];
+    },
+    async listGatewayHistoryMessages() {
       return [];
     },
   };
@@ -152,6 +171,73 @@ test("heavy chat service builds an owner-scoped snapshot after ensuring the defa
   assert.equal(snapshot.slots.length, 1);
   assert.equal(snapshot.slots[0]?.ownerUserId, "owner-a");
   assert.ok(calls.some((call) => call.method === "createOrGetDefaultSlot"));
+  assert.deepEqual(calls.find((call) => call.method === "listMessagesByThreadIds")?.args, ["owner-a", []]);
+  assert.equal(calls.filter((call) => call.method === "listAgentBindingsForSlots").length, 1);
+  assert.equal(calls.filter((call) => call.method === "listProjectBindingsForSlots").length, 1);
+});
+
+test("heavy chat snapshot batches thread messages once and preserves snapshot thread order", async () => {
+  const { repository, calls } = buildFakeRepository();
+  const createdAt = new Date("2026-07-20T00:00:00.000Z");
+  const threads: HeavyChatThreadRecord[] = [
+    {
+      id: "thread-b",
+      ownerUserId: "owner-a",
+      slotId: "slot-b",
+      projectId: null,
+      title: "Thread B",
+      favorite: true,
+      sortOrder: 0,
+      createdAt,
+      updatedAt: createdAt,
+    },
+    {
+      id: "thread-a",
+      ownerUserId: "owner-a",
+      slotId: "slot-a",
+      projectId: null,
+      title: "Thread A",
+      favorite: false,
+      sortOrder: 0,
+      createdAt,
+      updatedAt: createdAt,
+    },
+  ];
+  const toMessage = (id: string, threadId: string): HeavyChatMessageRecord => ({
+    id,
+    ownerUserId: "owner-a",
+    threadId,
+    role: "user",
+    status: "complete",
+    sequence: 1,
+    attemptNumber: 0,
+    content: id,
+    references: [],
+    actions: [],
+    idempotencyKey: null,
+    errorCode: null,
+    errorMessage: null,
+    createdAt,
+    updatedAt: createdAt,
+  });
+  repository.listThreads = async () => threads;
+  repository.listMessagesByThreadIds = async (ownerUserId, threadIds) => {
+    calls.push({ method: "listMessagesByThreadIds", args: [ownerUserId, threadIds] });
+    return [toMessage("message-a", "thread-a"), toMessage("message-b", "thread-b")];
+  };
+  const service = createHeavyChatService({
+    repository,
+    resolveManagedHeavyAgent: async () => validAgent(),
+  });
+
+  const snapshot = await service.getSnapshot("owner-a");
+
+  assert.deepEqual(snapshot.threads.map((thread) => thread.id), ["thread-b", "thread-a"]);
+  assert.deepEqual(snapshot.messages.map((message) => message.id), ["message-b", "message-a"]);
+  assert.deepEqual(
+    calls.filter((call) => call.method === "listMessagesByThreadIds").map((call) => call.args),
+    [["owner-a", ["thread-b", "thread-a"]]],
+  );
 });
 
 test("P2-05: heavy chat service delegates owner-scoped message actions to the bridge", async () => {
@@ -532,6 +618,18 @@ function buildP203ExecutionHarness() {
       return findMessageByIdempotencyKey(candidateOwnerUserId, idempotencyKey);
     },
     async listMessages(candidateOwnerUserId: string, candidateThreadId: string) {
+      return [...messages.values()]
+        .filter(
+          (message) =>
+            message.ownerUserId === candidateOwnerUserId && message.threadId === candidateThreadId,
+        )
+        .sort((left, right) => left.sequence - right.sequence);
+    },
+    async listGatewayHistoryMessages(
+      candidateOwnerUserId: string,
+      candidateThreadId: string,
+      beforeSequence: number,
+    ) {
       if (historyFailure) {
         const error = historyFailure;
         historyFailure = null;
@@ -540,9 +638,14 @@ function buildP203ExecutionHarness() {
       return [...messages.values()]
         .filter(
           (message) =>
-            message.ownerUserId === candidateOwnerUserId && message.threadId === candidateThreadId,
+            message.ownerUserId === candidateOwnerUserId &&
+            message.threadId === candidateThreadId &&
+            message.sequence < beforeSequence &&
+            message.status === "complete" &&
+            message.content.trim(),
         )
-        .sort((left, right) => left.sequence - right.sequence);
+        .sort((left, right) => left.sequence - right.sequence)
+        .map(({ role, content }) => ({ role, content }));
     },
   };
 

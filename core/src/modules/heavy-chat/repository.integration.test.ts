@@ -216,6 +216,18 @@ if (!databaseUrl) {
       assert.equal(ownerABinding.agentId, "agent-a");
       assert.equal((await repositoryA.bindAgentToSlot("owner-a", ownerASlot.id, "agent-a")).id, ownerABinding.id);
       await repositoryB.bindAgentToSlot("owner-b", ownerBSlot.id, "agent-b");
+      assert.deepEqual(
+        (await repositoryA.listAgentBindingsForSlots("owner-a", [ownerBSlot.id, ownerASlot.id])).map(
+          (binding) => binding.agentId,
+        ),
+        ["agent-a"],
+      );
+      assert.deepEqual(
+        (await repositoryA.listProjectBindingsForSlots("owner-a", [ownerBSlot.id, ownerASlot.id])).map(
+          (binding) => binding.projectId,
+        ),
+        [ownerAProject.id],
+      );
       const ownerBSecondSlot = await repositoryB.createCustomSlot("owner-b", {
         title: "Owner B second slot",
         slotKey: "owner-b-second",
@@ -330,6 +342,72 @@ if (!databaseUrl) {
       assert.deepEqual(
         sequenceValues.map((message) => message.sequence).sort((left, right) => left - right),
         [3, 4],
+      );
+
+      const historySystemMessage = await repositoryA.appendMessage("owner-a", {
+        id: "message-history-system",
+        threadId: ownerAThread.id,
+        role: "system",
+        status: "complete",
+        content: "system context",
+      });
+      const historyBlankMessage = await repositoryA.appendMessage("owner-a", {
+        id: "message-history-blank",
+        threadId: ownerAThread.id,
+        role: "assistant",
+        status: "complete",
+        content: "   ",
+      });
+      const ownerASecondThread = await repositoryA.createThread("owner-a", {
+        id: "thread-a-second",
+        slotId: ownerASlot.id,
+        title: "Owner A second thread",
+      });
+      const ownerASecondThreadMessage = await repositoryA.appendMessage("owner-a", {
+        id: "message-a-second-thread",
+        threadId: ownerASecondThread.id,
+        role: "user",
+        status: "complete",
+        content: "second thread message",
+      });
+
+      const batchedMessages = await repositoryA.listMessagesByThreadIds("owner-a", [
+        ownerASecondThread.id,
+        ownerBThread.id,
+        ownerAThread.id,
+        ownerAThread.id,
+      ]);
+      assert.equal(batchedMessages.every((message) => message.ownerUserId === "owner-a"), true);
+      assert.deepEqual(
+        batchedMessages
+          .filter((message) => message.threadId === ownerAThread.id)
+          .map((message) => message.sequence),
+        [1, 2, 3, 4, 5, 6],
+      );
+      assert.deepEqual(
+        batchedMessages
+          .filter((message) => message.threadId === ownerASecondThread.id)
+          .map((message) => message.id),
+        [ownerASecondThreadMessage.id],
+      );
+      assert.deepEqual(
+        await repositoryA.listGatewayHistoryMessages(
+          "owner-a",
+          ownerAThread.id,
+          historyBlankMessage.sequence + 1,
+        ),
+        [
+          { role: "user", content: "hello" },
+          { role: "system", content: historySystemMessage.content },
+        ],
+      );
+      assert.deepEqual(
+        await repositoryB.listGatewayHistoryMessages(
+          "owner-b",
+          ownerAThread.id,
+          historyBlankMessage.sequence + 1,
+        ),
+        [],
       );
 
       const slotResults = await runWithAdvisoryBarrier(
