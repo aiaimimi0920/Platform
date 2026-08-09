@@ -18,13 +18,16 @@ resource "google_compute_firewall" "internal" {
   network = google_compute_network.this.name
 
   source_ranges = [var.subnet_cidr]
+  target_tags   = var.internal_target_tags
 
   allow {
     protocol = "tcp"
+    ports    = var.internal_tcp_ports
   }
 
   allow {
     protocol = "udp"
+    ports    = var.internal_udp_ports
   }
 
   allow {
@@ -39,6 +42,7 @@ resource "google_compute_firewall" "ssh" {
   network = google_compute_network.this.name
 
   source_ranges = var.ssh_source_ranges
+  target_tags   = var.ssh_target_tags
 
   allow {
     protocol = "tcp"

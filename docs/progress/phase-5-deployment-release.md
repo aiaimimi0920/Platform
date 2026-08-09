@@ -1,7 +1,7 @@
 # Phase 5 部署与完整 release
 
 - [x] `P5-01` Kustomize first-deploy/migration/digest/RBAC contract。
-- [ ] `P5-02` staging/production OpenTofu validation。
+- [x] `P5-02` staging/production OpenTofu validation。
 - [ ] `P5-03` Platform-local complete release builder with OCI layout and manifest。
 - [ ] `P5-04` artifact-only release runtime smoke。
 
@@ -35,5 +35,20 @@ Acceptance: `release/Platform/<version>/` starts without source bind/build conte
   - `bash -n deploy/apply-k8s.sh`
   - `bash -n deploy/run-migrations.sh`
 - 当前剩余边界：GHCR 尚未存在 `ghcr.io/aiaimimi0920/neuroloom-platform-{core,web}:latest` manifest；因此 overlay digest 是 release-contract seed，不代表已经发布的真实 OCI artifact。实际 artifact digest 替换与 release bundle 仍属于 `P5-03`。
+
+## P5-02 完成记录
+
+- 新增 `scripts/acceptance/tests/tofu-contract.test.mjs`，先以 `0/5` RED 固化环境隔离、输入/secret、输出、模块安全和 CI 验证契约，实现后 `5/5` 通过。
+- staging / production 现在分别使用 `platform/staging`、`platform/production` GCS state prefix；bucket 仅由忽略的 `backend.hcl` 提供，仓库不保存 bucket、credentials、tfvars 或 state。
+- 两个环境保留不同资源前缀与子网，补齐非 secret 网络、控制面、节点、持久盘、服务账号和 DNS 输出；required provider inputs 无部署默认值，示例保持不可部署。
+- GCP 网络内部规则从全 TCP/UDP 收敛为显式 k3s / PostgreSQL / Valkey / MinIO / VXLAN 端口并限定 target tag；SSH 与 ingress 拒绝 world-open CIDR。
+- 节点启用专用服务账号和日志/监控最小写入角色、OS Login、project SSH key 阻断、Shielded VM，并将数据节点状态盘拆成独立 Persistent Disk。
+- Cloudflare 子模块固定 `cloudflare/cloudflare` provider source，代理记录使用 TTL `1`；模块 provider source 缺失曾在首次真实 init 中触发错误的 `hashicorp/cloudflare` 解析，现已增加回归断言并从 lock 清除。
+- OpenTofu 固定为 `1.12.1`，staging / production 均提交包含 `windows_amd64` 与 `linux_amd64` 校验值的 provider lock；CI 使用 `opentofu/setup-opentofu@v2` 和 `.opentofu-version`。
+- `P5-02` 通过验证：
+  - 官方 Windows 归档与发布清单 SHA-256 匹配，`tofu version` 为 `OpenTofu v1.12.1 on windows_amd64`。
+  - `npm run infra:tofu:validate`：递归 fmt check、两个环境 `init -backend=false -lockfile=readonly`、provider-schema validate 全部通过。
+  - `node --test scripts/acceptance/tests/tofu-contract.test.mjs scripts/repository-contract.mjs`：`15/15` 通过。
+- 当前剩余边界：本任务没有配置真实 backend、没有使用云凭证，也没有执行 `plan` / `apply`；因此不证明 GCP/Cloudflare 权限、配额、资源创建、k3s、Ingress、DNS 传播或应用可用。真实部署与完整 release 仍属于后续任务。
 
 产品状态仍为 `Platform 产品未完成`。

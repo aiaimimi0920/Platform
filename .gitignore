@@ -23,6 +23,19 @@ Thumbs.db
 *.crt
 *.der
 
+# OpenTofu local state, credentials, and generated working directories
+**/.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+*.tfvars.json
+!**/*.tfvars.example
+**/backend.hcl
+.terraformrc
+terraform.rc
+crash.log
+crash.*.log
+
 # Node, Next.js, and TypeScript outputs
 node_modules/
 **/node_modules/

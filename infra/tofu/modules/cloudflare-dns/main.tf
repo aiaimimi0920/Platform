@@ -4,7 +4,7 @@ resource "cloudflare_dns_record" "app" {
   type    = "A"
   content = var.app_origin_ipv4
   proxied = var.proxied
-  ttl     = 1
+  ttl     = var.proxied ? 1 : var.unproxied_ttl
 }
 
 resource "cloudflare_dns_record" "api" {
@@ -13,7 +13,7 @@ resource "cloudflare_dns_record" "api" {
   type    = "A"
   content = var.api_origin_ipv4
   proxied = var.proxied
-  ttl     = 1
+  ttl     = var.proxied ? 1 : var.unproxied_ttl
 }
 
 resource "cloudflare_dns_record" "files" {
@@ -22,5 +22,5 @@ resource "cloudflare_dns_record" "files" {
   type    = "CNAME"
   content = var.files_cname_target
   proxied = var.proxied
-  ttl     = 1
+  ttl     = var.proxied ? 1 : var.unproxied_ttl
 }

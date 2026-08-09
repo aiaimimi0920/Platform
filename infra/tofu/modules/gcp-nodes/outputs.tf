@@ -9,3 +9,13 @@ output "public_ips" {
     for key, address in google_compute_address.public_ipv4 : key => address.address
   }
 }
+
+output "data_disk_ids" {
+  value = {
+    for key, disk in google_compute_disk.data : key => disk.id
+  }
+}
+
+output "node_service_account_email" {
+  value = google_service_account.nodes.email
+}

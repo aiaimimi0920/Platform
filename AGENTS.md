@@ -17,6 +17,8 @@ Scope: this repository root and all subdirectories, excluding the external `AIRe
 - Arbitration summary/workload endpoints must follow `docs/40-engineering/arbitration-metric-query-baseline.md`: use visibility-filtered scalar case projections and grouped evidence/attachment/round metrics, never reintroduce full evidence content, task rows, attachment payloads, or case timelines into statistics paths. Detail/list endpoints may continue using rich hydration.
 - Heavy Chat read paths must follow `docs/40-engineering/heavy-chat-read-query-baseline.md`: snapshot hydration batches slot-agent bindings, slot-project bindings, and bounded recent per-thread message pages with explicit `messagePages` metadata in owner-scoped queries, while Gateway history uses its own pre-sequence complete-message projection. UI pagination must remain separate from Gateway context and must not silently truncate either contract.
 - Production deployments must use immutable GHCR `sha-*` tags or digests, inject independent secrets, and retain prior digests as rollback targets. The local read-write `.neuro` Gateway mount is development-only.
+- Platform OpenTofu work must follow `docs/40-engineering/OpenTofu环境契约基线.md`: pin the CLI in `.opentofu-version`, declare child-module provider sources, commit separate staging/production multi-platform lock files, and keep backend bucket selection and credentials outside Git.
+- The OpenTofu portion of regular CI may run only `fmt`, `init -backend=false -lockfile=readonly`, and provider-schema `validate`; real `plan` / `apply` requires an explicitly authorized environment workflow and must never be inferred from validation success.
 
 ## UI Default
 

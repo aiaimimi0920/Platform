@@ -48,10 +48,12 @@ describe("independent Platform repository", () => {
       "package-lock.json",
       "deploy/docker-compose.local.yml",
       "deploy/acceptance/docker-compose.acceptance.yml",
+      "infra/tofu/README.md",
       "docs/40-engineering/platform-release-artifact-standard.md",
       "docs/40-engineering/PostgreSQL迁移并发与事务基线.md",
       "docs/40-engineering/arbitration-metric-query-baseline.md",
       "docs/40-engineering/heavy-chat-read-query-baseline.md",
+      "docs/40-engineering/OpenTofu环境契约基线.md",
     ]) {
       assert(statSync(join(rootDir, requiredPath)).isFile(), `Missing repository path: ${requiredPath}`);
     }
@@ -82,6 +84,7 @@ describe("independent Platform repository", () => {
   });
 
   it("owns quick CI and Windows release contracts", () => {
+    const packageMetadata = JSON.parse(read("package.json"));
     const workflow = read(".github/workflows/ci.yml");
     assert(workflow.includes("name: Platform CI"));
     assert(workflow.includes("actions/checkout@v5"));
@@ -90,6 +93,10 @@ describe("independent Platform repository", () => {
     assert(workflow.includes("npm run typecheck:workspaces"));
     assert(workflow.includes("npm run audit:prod"));
     assert(workflow.includes("npm run test:vitest"));
+    assert(workflow.includes("opentofu/setup-opentofu@v2"));
+    assert(workflow.includes("tofu_version_file: .opentofu-version"));
+    assert(workflow.includes("npm run infra:tofu:validate"));
+    assert(packageMetadata.scripts.ci.includes("npm run infra:tofu:validate"));
     assert(workflow.includes("docker compose -f deploy/docker-compose.local.yml config --quiet"));
     assert(workflow.includes("test-build-platform-web-release-contract.ps1 -DryRunOnly"));
     assert(workflow.includes("test-verify-platform-web-release-package-contract.ps1"));
@@ -277,6 +284,8 @@ describe("independent Platform repository", () => {
     assert(workflow.includes("checksums.sha256"));
     assert.match(workflow, /permissions:\s+contents: read/);
     assert.match(workflow, /jobs:\s+release:\s+name:[^\n]+\s+permissions:\s+actions: read\s+contents: write/);
+    assert(workflow.includes("opentofu/setup-opentofu@v2"));
+    assert(workflow.includes("tofu_version_file: .opentofu-version"));
   });
 
   it("does not contain Google API-key-shaped literals in documentation", () => {

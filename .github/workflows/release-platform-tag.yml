@@ -77,6 +77,12 @@ jobs:
           node-version: "22"
           cache: npm
 
+      - name: Set up OpenTofu
+        uses: opentofu/setup-opentofu@v2
+        with:
+          tofu_version_file: .opentofu-version
+          tofu_wrapper: false
+
       - name: Install dependencies
         run: npm ci
 

@@ -125,9 +125,7 @@
 
 - `docs/40-engineering/Platform产品完成与验收基线.md`
 
-当前状态：
-
-- `Phase 0 设计审阅中`
+当前状态不在历史索引中复制；以 `../progress/MASTER.md` 为唯一当前执行状态来源。
 
 ---
 
