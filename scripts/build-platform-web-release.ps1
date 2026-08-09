@@ -2,6 +2,8 @@
 param(
     [string]$VersionId = "",
     [string]$SourceDateEpoch = "",
+    [string]$PlatformReleaseRoot = "",
+    [string]$DestinationPath = "",
     [switch]$Force,
     [switch]$NoZip,
     [switch]$DryRun
@@ -13,7 +15,14 @@ $ErrorActionPreference = "Stop"
 $repoRoot = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot ".."))
 $platformRoot = $repoRoot
 $webRoot = [System.IO.Path]::GetFullPath((Join-Path $platformRoot "web"))
-$releaseRoot = [System.IO.Path]::GetFullPath((Join-Path $repoRoot "release"))
+$defaultReleaseRoot = [System.IO.Path]::GetFullPath((Join-Path $repoRoot "release"))
+if ([string]::IsNullOrWhiteSpace($PlatformReleaseRoot)) {
+    $releaseRoot = $defaultReleaseRoot
+    $platformReleaseRoot = [System.IO.Path]::GetFullPath((Join-Path $releaseRoot "Platform"))
+} else {
+    $platformReleaseRoot = [System.IO.Path]::GetFullPath($PlatformReleaseRoot)
+    $releaseRoot = [System.IO.Path]::GetFullPath((Split-Path -Parent $platformReleaseRoot))
+}
 $targetName = "web-next"
 
 function Join-RepoPath {
@@ -204,13 +213,25 @@ function Get-RepoRelativePath {
 function Assert-UnderReleaseRoot {
     param([string]$Path)
 
-    $fullRoot = [System.IO.Path]::GetFullPath($releaseRoot).TrimEnd("\", "/")
+    $fullRoot = [System.IO.Path]::GetFullPath($platformReleaseRoot).TrimEnd("\", "/")
     $fullPath = [System.IO.Path]::GetFullPath($Path)
     $rootWithSlash = $fullRoot + [System.IO.Path]::DirectorySeparatorChar
 
     if (($fullPath -ne $fullRoot) -and (-not $fullPath.StartsWith($rootWithSlash, [System.StringComparison]::OrdinalIgnoreCase))) {
         throw "Refusing to touch path outside release root: $fullPath"
     }
+}
+
+function Resolve-ReleaseDestination {
+    param([string]$VersionIdValue)
+
+    if ([string]::IsNullOrWhiteSpace($DestinationPath)) {
+        $destination = [System.IO.Path]::GetFullPath((Join-Path $platformReleaseRoot $VersionIdValue))
+    } else {
+        $destination = [System.IO.Path]::GetFullPath($DestinationPath)
+    }
+    Assert-UnderReleaseRoot -Path $destination
+    return $destination
 }
 
 function Initialize-Destination {
@@ -524,7 +545,7 @@ function Build-DryRunPlan {
         [System.Collections.Specialized.OrderedDictionary]$BuildTimestamp
     )
 
-    $destination = [System.IO.Path]::GetFullPath((Join-Path $releaseRoot "Platform\$VersionIdValue"))
+    $destination = Resolve-ReleaseDestination -VersionIdValue $VersionIdValue
 
     return [ordered]@{
         schemaVersion = 1
@@ -536,6 +557,7 @@ function Build-DryRunPlan {
         sourceDateEpoch = $BuildTimestamp["epochSeconds"]
         builtAt = $BuildTimestamp["iso8601"]
         releaseRoot = $releaseRoot
+        platformReleaseRoot = $platformReleaseRoot
         target = $targetName
         destination = $destination
         webDestination = [System.IO.Path]::GetFullPath((Join-Path $destination "web"))
@@ -631,7 +653,7 @@ function Invoke-PlatformWebReleaseBuild {
     )
 
     $builtAt = [string]$BuildTimestamp["iso8601"]
-    $destination = [System.IO.Path]::GetFullPath((Join-Path $releaseRoot "Platform\$VersionIdValue"))
+    $destination = Resolve-ReleaseDestination -VersionIdValue $VersionIdValue
     Initialize-Destination -Destination $destination
 
     $commandRecords = @()
@@ -772,7 +794,7 @@ if ([string]::IsNullOrWhiteSpace($gitShortSha)) {
 }
 
 $gitDirty = Get-GitDirty
-New-Item -ItemType Directory -Path $releaseRoot -Force | Out-Null
+New-Item -ItemType Directory -Path $platformReleaseRoot -Force | Out-Null
 
 $summary = Invoke-PlatformWebReleaseBuild `
     -Spec $spec `

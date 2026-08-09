@@ -1,0 +1,122 @@
+name: neuro-platform
+
+# Artifact-only deployment contract. The release builder replaces every image
+# token with an immutable Platform image reference. Database, Valkey, object
+# storage, Gateway, Tea, and identity endpoints are operator-supplied through
+# PLATFORM_RUNTIME_ENV_FILE; no source directory or sibling repository is used.
+services:
+  core-migrate:
+    image: "@@CORE_IMAGE@@"
+    restart: "no"
+    env_file:
+      - "${PLATFORM_RUNTIME_ENV_FILE:?Set PLATFORM_RUNTIME_ENV_FILE to a populated runtime env file}"
+    command: ["npm", "run", "db:migrate", "--workspace", "@neuro/core"]
+
+  gateway-domain-migrate:
+    image: "@@ACCOUNT_API_IMAGE@@"
+    restart: "no"
+    env_file:
+      - "${PLATFORM_RUNTIME_ENV_FILE:?Set PLATFORM_RUNTIME_ENV_FILE to a populated runtime env file}"
+    command: ["npm", "run", "db:migrate", "--workspace", "@neuro/ai-gateway-domain"]
+    depends_on:
+      core-migrate:
+        condition: service_completed_successfully
+
+  account-domain-migrate:
+    image: "@@ACCOUNT_API_IMAGE@@"
+    restart: "no"
+    env_file:
+      - "${PLATFORM_RUNTIME_ENV_FILE:?Set PLATFORM_RUNTIME_ENV_FILE to a populated runtime env file}"
+    command: ["npm", "run", "db:migrate", "--workspace", "@neuro/account-domain"]
+    depends_on:
+      gateway-domain-migrate:
+        condition: service_completed_successfully
+
+  core:
+    image: "@@CORE_IMAGE@@"
+    init: true
+    restart: unless-stopped
+    env_file:
+      - "${PLATFORM_RUNTIME_ENV_FILE:?Set PLATFORM_RUNTIME_ENV_FILE to a populated runtime env file}"
+    environment:
+      PORT: "4000"
+    ports:
+      - "127.0.0.1:${CORE_HOST_PORT:-4028}:4000"
+    depends_on:
+      core-migrate:
+        condition: service_completed_successfully
+
+  account-api:
+    image: "@@ACCOUNT_API_IMAGE@@"
+    init: true
+    restart: unless-stopped
+    env_file:
+      - "${PLATFORM_RUNTIME_ENV_FILE:?Set PLATFORM_RUNTIME_ENV_FILE to a populated runtime env file}"
+    environment:
+      PORT: "4000"
+    ports:
+      - "127.0.0.1:${ACCOUNT_API_HOST_PORT:-4128}:4000"
+    depends_on:
+      account-domain-migrate:
+        condition: service_completed_successfully
+      core:
+        condition: service_started
+
+  account-worker:
+    image: "@@ACCOUNT_WORKER_IMAGE@@"
+    init: true
+    restart: unless-stopped
+    env_file:
+      - "${PLATFORM_RUNTIME_ENV_FILE:?Set PLATFORM_RUNTIME_ENV_FILE to a populated runtime env file}"
+    environment:
+      WORKER_HEALTH_PORT: "7303"
+    depends_on:
+      account-domain-migrate:
+        condition: service_completed_successfully
+      account-api:
+        condition: service_started
+
+  worker:
+    image: "@@WORKER_IMAGE@@"
+    init: true
+    restart: unless-stopped
+    env_file:
+      - "${PLATFORM_RUNTIME_ENV_FILE:?Set PLATFORM_RUNTIME_ENV_FILE to a populated runtime env file}"
+    environment:
+      WORKER_HEALTH_PORT: "7301"
+    depends_on:
+      core-migrate:
+        condition: service_completed_successfully
+      core:
+        condition: service_started
+
+  executor:
+    image: "@@EXECUTOR_IMAGE@@"
+    init: true
+    restart: unless-stopped
+    env_file:
+      - "${PLATFORM_RUNTIME_ENV_FILE:?Set PLATFORM_RUNTIME_ENV_FILE to a populated runtime env file}"
+    environment:
+      EXECUTOR_HEALTH_PORT: "7302"
+    depends_on:
+      core-migrate:
+        condition: service_completed_successfully
+      core:
+        condition: service_started
+
+  web:
+    image: "@@WEB_IMAGE@@"
+    init: true
+    restart: unless-stopped
+    env_file:
+      - "${PLATFORM_RUNTIME_ENV_FILE:?Set PLATFORM_RUNTIME_ENV_FILE to a populated runtime env file}"
+    environment:
+      NODE_ENV: production
+      PORT: "3000"
+    ports:
+      - "127.0.0.1:${WEB_HOST_PORT:-3028}:3000"
+    depends_on:
+      core:
+        condition: service_started
+      account-api:
+        condition: service_started

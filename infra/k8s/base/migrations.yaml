@@ -17,7 +17,7 @@ spec:
       restartPolicy: Never
       containers:
         - name: migrate
-          image: ghcr.io/aiaimimi0920/neuroloom-platform-core
+          image: ghcr.io/aiaimimi0920/neuro-platform-core
           imagePullPolicy: IfNotPresent
           command: ["/bin/sh", "-c"]
           args:
@@ -47,7 +47,7 @@ spec:
       restartPolicy: Never
       containers:
         - name: migrate
-          image: ghcr.io/aiaimimi0920/neuroloom-platform-account-api
+          image: ghcr.io/aiaimimi0920/neuro-platform-account-api
           imagePullPolicy: IfNotPresent
           command: ["/bin/sh", "-c"]
           args:
@@ -77,7 +77,7 @@ spec:
       restartPolicy: Never
       containers:
         - name: migrate
-          image: ghcr.io/aiaimimi0920/neuroloom-platform-account-api
+          image: ghcr.io/aiaimimi0920/neuro-platform-account-api
           imagePullPolicy: IfNotPresent
           command: ["/bin/sh", "-c"]
           args:

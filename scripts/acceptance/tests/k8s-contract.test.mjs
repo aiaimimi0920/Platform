@@ -5,6 +5,8 @@ import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 
+import { PLATFORM_CONTAINER_IMAGES } from "../../container-image-lock.mjs";
+
 const testFilePath = fileURLToPath(import.meta.url);
 const platformRoot = path.resolve(path.dirname(testFilePath), "../../..");
 const overlays = [
@@ -144,4 +146,22 @@ test("deploy helper renders, blocks placeholders, waits migrations and rollout, 
   assert.match(script, /curlimages\/curl/);
   assert.match(script, /\$\{NAME_PREFIX\}neuroloom-core/);
   assert.match(script, /neuroloom-gateway-secret/);
+});
+
+test("Kustomize Platform-owned image repositories match the Container Images workflow contract", () => {
+  for (const overlay of overlays) {
+    const images = collectImageReferences(renderOverlay(overlay.name));
+    for (const image of PLATFORM_CONTAINER_IMAGES) {
+      const expectedPrefix = `ghcr.io/aiaimimi0920/neuro-platform-${image}@sha256:`;
+      assert.ok(
+        images.some((reference) => reference.startsWith(expectedPrefix)),
+        `${overlay.name} is missing the published Platform image ${expectedPrefix}`,
+      );
+      assert.equal(
+        images.some((reference) => reference.startsWith(`ghcr.io/aiaimimi0920/neuroloom-platform-${image}@`)),
+        false,
+        `${overlay.name} still uses the obsolete repository name for ${image}`,
+      );
+    }
+  }
 });

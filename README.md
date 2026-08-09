@@ -207,7 +207,24 @@ and explicit external-surface evidence depending on the selected mode.
 
 ## Release and images
 
-Build and verify a versioned Platform Web release on Windows:
+Build a complete release only after a clean acceptance run for the same commit:
+
+```powershell
+npm run acceptance:ci -- --run-id release-<versionId>
+npm run release:build -- --version-id <versionId> --acceptance-manifest .runtime/acceptance/release-<versionId>/acceptance-manifest.json --oci-layout-root .runtime/release-images/<versionId>
+```
+
+Use `--image-lock <validated-image-lock.json>` instead of `--oci-layout-root`
+when all six images are already published by the matching Container Images run.
+The builder accepts exactly one image source, never pushes a registry, rejects a
+dirty or cross-commit acceptance manifest, and writes only to the canonical
+`../release/Platform/<versionId>/` root. It atomically assembles the Web package,
+six immutable images or offline OCI layouts, migrations, Compose/K8s/OpenTofu,
+sanitized environment contracts, redacted evidence, dependency inventory, and
+complete SHA-256 records. See
+`docs/40-engineering/platform-release-artifact-standard.md`.
+
+Build and verify only the versioned Platform Web component package on Windows:
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\build-platform-web-release.ps1 -VersionId <versionId>

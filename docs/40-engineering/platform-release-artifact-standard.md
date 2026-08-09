@@ -1,36 +1,116 @@
 # Platform Release Artifact Standard
 
-## Scope
+## Scope and output boundary
 
-This document defines the standalone Platform repository's Web release package.
-Cross-application release aggregation remains owned by the parent Neuro
-workspace, but it must consume the Platform-owned package and verifier contract.
+This document defines the complete standalone Platform release. The only
+permitted product output root is the sibling workspace directory
+`../release/Platform/`; the complete release builder rejects the historical
+repository-local `Platform/release/Platform/` path and every other override.
 
-## Layout
+The Web-only PowerShell builder remains a component packaging primitive and a
+tag-workflow compatibility contract. A complete release is produced only by
+`npm run release:build` after a clean, current Platform acceptance run.
 
-Each build writes an immutable version directory:
+## Complete layout
+
+Each successful build atomically publishes one immutable version directory:
 
 ```text
-release/Platform/<versionId>/
+../release/Platform/<versionId>/
+  release-manifest.json
+  manifest.json                         # Web component manifest
   BUILD_INFO.txt
   checksums.sha256
-  manifest.json
-  logs/
-  packages/Platform-<versionId>-container-images.json       # tagged workflow only
-  packages/Platform-<versionId>-container-images.json.sha256 # tagged workflow only
   packages/Platform-<versionId>-web-next.zip
   packages/Platform-<versionId>-web-next.zip.sha256
   web/
-  packages/contracts/
+  images/inventory.json
+  oci/<image>/                          # offline OCI mode only, six layouts
+  migrations/
+    migration-order.json
+    core/*.sql
+    ai-gateway-domain/*.sql
+    account-domain/*.sql
+  deployment/
+    docker-compose.yml
+    k8s/
+    tofu/
+  environment/*.env.example
+  sbom/dependency-inventory.json
+  evidence/acceptance-manifest.json
+  evidence/<referenced-redacted-artifacts>
 ```
 
-`versionId` may be an explicit release tag or a generated
-`yyyyMMdd-HHmmss-<shortSha>` identifier. It must contain only letters, numbers,
-dot, underscore, and dash.
+`versionId` is one safe path segment containing letters, numbers, dots,
+underscores, or dashes. Existing destinations are never replaced. The builder
+assembles a unique staging directory under the canonical root, validates and
+scans it, writes the final checksum inventory, and only then renames it to the
+version directory. Failure removes only that staging directory.
 
-## Commands
+## Required inputs and commands
 
-Build, verify, and runtime-smoke the package on Windows:
+Run acceptance from the exact clean commit to be released:
+
+```powershell
+npm run acceptance:ci -- --run-id release-<versionId>
+```
+
+Then provide exactly one immutable six-image source.
+
+Offline OCI layouts (no registry push):
+
+```powershell
+npm run release:build -- `
+  --version-id <versionId> `
+  --acceptance-manifest .runtime/acceptance/release-<versionId>/acceptance-manifest.json `
+  --oci-layout-root .runtime/release-images/<versionId>
+```
+
+Already-published and validated image lock:
+
+```powershell
+npm run release:build -- `
+  --version-id <versionId> `
+  --acceptance-manifest .runtime/acceptance/release-<versionId>/acceptance-manifest.json `
+  --image-lock .runtime/release-image-lock/image-lock.json
+```
+
+`--output-root` is optional and exists for explicit automation; when supplied it
+must resolve to the same canonical `../release/Platform` directory. The builder
+does not push images or modify a registry.
+
+## Gates
+
+The builder blocks publication unless all of the following are true:
+
+- current Git is clean and its commit matches clean acceptance metadata;
+- acceptance status is `passed`, all required suites passed, and every external
+  boundary suite either passed or has an evidence-backed `not-applicable`
+  classification;
+- acceptance counters match individual result records and every copied evidence
+  path stays under the declared evidence directory;
+- all six Platform-owned images exist in canonical order for `linux/amd64` and
+  have either a verified fixed digest or a digest-verified OCI manifest blob;
+- Web package provenance matches the same clean commit;
+- Core, AI Gateway domain, and Account domain migrations are copied in runtime
+  execution order, with files listed in ordinal lexical filename order;
+- Compose has immutable images and contains neither `build:` nor a source bind
+  mount; Kustomize uses the actual `neuro-platform-*` published repositories and
+  release image digests;
+- OpenTofu state, `.terraform`, backend credentials, and real environment files
+  are excluded;
+- only manifest-referenced UTF-8 text evidence is copied and redacted; credential
+  canaries, GitHub tokens, bearer values, and private-key material fail the scan;
+- dependency inventory and a SHA-256 record for every release file are present.
+
+Gateway and Traefik images, PostgreSQL, Valkey, object storage, Tea, OAuth, and
+public DNS/TLS remain explicit external deployment dependencies. Their source
+code and credentials are not copied into the Platform release and Platform does
+not claim ownership of their artifacts.
+
+## Component Web package and GitHub tags
+
+The component builder, verifier, and runtime smoke remain available on Windows:
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\build-platform-web-release.ps1 -VersionId <versionId>
@@ -38,36 +118,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\verify-platform-we
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\smoke-platform-web-release-package.ps1 -PackageDir .\release\Platform\<versionId>
 ```
 
-The builder compiles `@neuro/contracts` before `web`, records both command logs,
-copies the production Next.js server/static output plus the required workspace
-metadata, and generates SHA-256 records. The verifier rejects missing payload,
-hash drift, and excluded generated/runtime directories. The smoke script extracts
-the zip, installs production dependencies from the lockfile, starts the packaged
-Web workspace on an isolated loopback port, probes `/ready`, records evidence,
-and stops only the process tree it created.
-
-The builder derives a reproducible timestamp from `-SourceDateEpoch`,
-`SOURCE_DATE_EPOCH`, or the current Git commit time, in that order. It uses that
-timestamp for release metadata and every ZIP entry, and uses `versionId` as the
-Next.js build ID. Rebuilding the same source with the same version and source
-timestamp must produce identical ZIP, manifest, and checksum-list hashes.
-
-## GitHub Release
-
-Tags matching `V*.*.*` are built from a checkout pinned to the tag's resolved
-commit. A release is published only after quick repository validation, required
-integration suites, package verification, runtime smoke, and an unchanged-tag
-check pass.
-
-The tagged release must also resolve exactly one successful `Container Images`
-push run whose `head_sha` and tag ref match that pinned commit. It downloads the
-aggregate artifact named with that run ID and run attempt, then revalidates the lock schema,
-canonical six-image order, immutable GHCR references, repository, revision, tag,
-run ID, run attempt, and `linux/amd64` platform. Missing, failed, ambiguous,
-cross-revision, cross-tag, or cross-run results block publication.
-
-Published assets are the Web zip and SHA-256 sidecar, the validated immutable
-container lock and SHA-256 sidecar, `manifest.json`, and `checksums.sha256`. The
-container lock is added by the tagged GitHub workflow after the standalone Web
-package has passed its verifier and runtime smoke; generated non-tag builds do
-not synthesize container provenance.
+The tag workflow pins the tag commit, validates the six-image lock from the exact
+Container Images run, and publishes the Web component assets. That hosted asset
+publication does not by itself prove the complete release or artifact-only full
+stack smoke; those are the P5-03 and P5-04 contracts respectively.

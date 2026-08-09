@@ -6,19 +6,19 @@ resources:
   - namespace.yaml
   - ../../base
 images:
-  - name: ghcr.io/aiaimimi0920/neuroloom-platform-account-api
+  - name: ghcr.io/aiaimimi0920/neuro-platform-account-api
     digest: sha256:2fd0afb874020b6bc471256aca5b649930d36504b018b7557607e085dfee28a7
   - name: ghcr.io/aiaimimi0920/neuroloom-platform-gateway
     digest: sha256:3d8c95510f04ad413224c3b36a8bd4f58d8b172603a57eb2782a0373637e51ca
-  - name: ghcr.io/aiaimimi0920/neuroloom-platform-web
+  - name: ghcr.io/aiaimimi0920/neuro-platform-web
     digest: sha256:b0d0a8f43c85364f61fb2815e223e35e94a406e765f61066bb29e05ed9102aa4
-  - name: ghcr.io/aiaimimi0920/neuroloom-platform-core
+  - name: ghcr.io/aiaimimi0920/neuro-platform-core
     digest: sha256:81b58adcb128a4f749359bf866ce4141be5457231afccf5827be00e765a5cbf9
-  - name: ghcr.io/aiaimimi0920/neuroloom-platform-account-worker
+  - name: ghcr.io/aiaimimi0920/neuro-platform-account-worker
     digest: sha256:7aba17e8498e625ced70776fabbdcd1b0fb2419f49d32b675699ba41e00ef6d5
-  - name: ghcr.io/aiaimimi0920/neuroloom-platform-worker
+  - name: ghcr.io/aiaimimi0920/neuro-platform-worker
     digest: sha256:c0182b4b4e57e308872264334be01944e0305f744c807c60e52cae34d4a9a7a8
-  - name: ghcr.io/aiaimimi0920/neuroloom-platform-executor
+  - name: ghcr.io/aiaimimi0920/neuro-platform-executor
     digest: sha256:338abc3fa3ec05bb99b3156da93b2fda7e35c5acd4d466ac0e0aa22011c39663
   - name: docker.io/library/traefik
     digest: sha256:dacdc0ab2a71ee79d326a81764aaaf95f2431dd96b193c1027eccac88c1527dd

@@ -14,7 +14,7 @@ spec:
     spec:
       containers:
         - name: account-api
-          image: ghcr.io/aiaimimi0920/neuroloom-platform-account-api
+          image: ghcr.io/aiaimimi0920/neuro-platform-account-api
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 4000
@@ -139,7 +139,7 @@ spec:
     spec:
       containers:
         - name: web
-          image: ghcr.io/aiaimimi0920/neuroloom-platform-web
+          image: ghcr.io/aiaimimi0920/neuro-platform-web
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 3000
@@ -186,7 +186,7 @@ spec:
     spec:
       containers:
         - name: core
-          image: ghcr.io/aiaimimi0920/neuroloom-platform-core
+          image: ghcr.io/aiaimimi0920/neuro-platform-core
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 4000
@@ -233,7 +233,7 @@ spec:
     spec:
       containers:
         - name: account-worker
-          image: ghcr.io/aiaimimi0920/neuroloom-platform-account-worker
+          image: ghcr.io/aiaimimi0920/neuro-platform-account-worker
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 7303
@@ -268,7 +268,7 @@ spec:
     spec:
       containers:
         - name: worker
-          image: ghcr.io/aiaimimi0920/neuroloom-platform-worker
+          image: ghcr.io/aiaimimi0920/neuro-platform-worker
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 7301
@@ -303,7 +303,7 @@ spec:
     spec:
       containers:
         - name: executor
-          image: ghcr.io/aiaimimi0920/neuroloom-platform-executor
+          image: ghcr.io/aiaimimi0920/neuro-platform-executor
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 7302
