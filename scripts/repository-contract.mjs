@@ -50,6 +50,7 @@ describe("independent Platform repository", () => {
       "deploy/acceptance/docker-compose.acceptance.yml",
       "docs/40-engineering/platform-release-artifact-standard.md",
       "docs/40-engineering/PostgreSQL迁移并发与事务基线.md",
+      "docs/40-engineering/arbitration-metric-query-baseline.md",
     ]) {
       assert(statSync(join(rootDir, requiredPath)).isFile(), `Missing repository path: ${requiredPath}`);
     }
@@ -112,6 +113,33 @@ describe("independent Platform repository", () => {
       assert(migrationRunner.includes(lockName));
       assert(migrationRunner.includes(tableName));
     }
+  });
+
+  it("keeps Arbitration summary and workload on compact metric projections", () => {
+    const service = read("core/src/modules/arbitration/service.ts");
+    const summaryBlock = service
+      .split("export async function getVisibleArbitrationCaseSummary")[1]
+      ?.split("export async function getArbitrationCaseWorkload")[0] ?? "";
+    const workloadBlock = service
+      .split("export async function getArbitrationCaseWorkload")[1]
+      ?.split("export async function createArbitrationCase")[0] ?? "";
+    assert(summaryBlock.includes("listArbitrationCaseMetricRowsVisibleToUser"));
+    assert(summaryBlock.includes("listTaskParticipantRowsByIds"));
+    assert(summaryBlock.includes("listArbitrationEvidenceMetricsByCaseIds"));
+    assert(summaryBlock.includes("getArbitrationAttachmentMetricsByCaseIds"));
+    assert(!summaryBlock.includes("listVisibleArbitrationCases"));
+    assert(workloadBlock.includes("listArbitrationCaseMetricRowsVisibleToUser"));
+    assert(workloadBlock.includes("listArbitrationEvidenceMetricsByCaseIds"));
+    assert(workloadBlock.includes("listArbitrationReviewRoundMetricRowsByCaseIds"));
+    assert(workloadBlock.includes("buildArbitrationCaseWorkload"));
+    assert(!workloadBlock.includes("listVisibleArbitrationCases"));
+
+    const repository = read("core/src/modules/arbitration/repository.ts");
+    assert(repository.includes("arbitrationCaseMetricSelection"));
+    assert(repository.includes("count(*) filter"));
+    assert(repository.includes("count(*)::int"));
+    const corePackage = JSON.parse(read("core/package.json"));
+    assert(corePackage.scripts.test.includes("src/modules/arbitration/workload-analysis.test.ts"));
   });
 
   it("builds all Platform-owned images without publishing pull requests", () => {

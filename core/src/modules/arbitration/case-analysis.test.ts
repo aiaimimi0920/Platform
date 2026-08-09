@@ -1,7 +1,11 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { buildArbitrationCaseSummary, buildArbitrationTimeline } from "./case-analysis";
+import {
+  buildArbitrationCaseSummary,
+  buildArbitrationCaseSummaryFromMetrics,
+  buildArbitrationTimeline,
+} from "./case-analysis";
 
 describe("arbitration case analysis", () => {
   it("builds a timeline from case lifecycle fields", () => {
@@ -79,6 +83,51 @@ describe("arbitration case analysis", () => {
     assert.equal(summary.byStatus[0]?.key, "open");
     assert.equal(summary.byEntityType[0]?.key, "task");
     assert.equal(summary.byEvidenceKind[0]?.key, "text_note");
+  });
+
+  it("builds the same attachment and evidence buckets from compact metrics", () => {
+    const summary = buildArbitrationCaseSummaryFromMetrics({
+      cases: [
+        {
+          entityType: "task",
+          status: "resolved",
+          taskResolutionAction: "accept",
+          reputationImpactForViewer: "favorable",
+          effectsAppliedAt: "2026-03-21T11:00:00.000Z",
+          evidenceCount: 2,
+          assignedOperatorUserId: "operator-1",
+        },
+        {
+          entityType: "task",
+          status: "open",
+          taskResolutionAction: null,
+          reputationImpactForViewer: "neutral",
+          effectsAppliedAt: null,
+          evidenceCount: 1,
+          assignedOperatorUserId: null,
+        },
+      ],
+      evidenceKindCounts: [
+        { kind: "text_note", count: 1 },
+        { kind: "external_link", count: 1 },
+        { kind: "text_note", count: 1 },
+      ],
+      attachmentMetrics: {
+        remoteAttachmentCount: 3,
+        cleanupRequestedRemoteAttachmentCount: 1,
+        archivedRemoteAttachmentCount: 2,
+      },
+    });
+
+    assert.equal(summary.evidenceCount, 3);
+    assert.equal(summary.casesWithEvidenceCount, 2);
+    assert.equal(summary.remoteAttachmentCount, 3);
+    assert.equal(summary.cleanupRequestedRemoteAttachmentCount, 1);
+    assert.equal(summary.archivedRemoteAttachmentCount, 2);
+    assert.deepEqual(summary.byEvidenceKind, [
+      { key: "text_note", count: 2 },
+      { key: "external_link", count: 1 },
+    ]);
   });
 
   it("prefers structured evidences in the timeline when present", () => {

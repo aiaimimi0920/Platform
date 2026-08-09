@@ -98,6 +98,8 @@ if (!databaseUrl) {
         claimArbitrationCase,
         claimNextArbitrationCase,
         createArbitrationCase,
+        getArbitrationCaseWorkload,
+        getVisibleArbitrationCaseSummary,
         releaseArbitrationCase,
         updateArbitrationCaseStatus,
       } = arbitrationService as typeof import("../service");
@@ -233,7 +235,121 @@ if (!databaseUrl) {
           'Stale candidate evidence',
           now() - interval '1 hour'
         );
+
+        insert into arbitration_cases (
+          id,
+          entity_type,
+          entity_id,
+          requester_user_id,
+          respondent_user_id,
+          assigned_operator_user_id,
+          status,
+          reason,
+          task_resolution_action,
+          created_at,
+          updated_at,
+          resolved_at,
+          effects_applied_at
+        ) values (
+          'arb-resolved-metric',
+          'task',
+          'arb-task-1',
+          'arb-creator',
+          'arb-worker',
+          null,
+          'resolved',
+          'A resolved case verifies viewer-relative reputation metrics.',
+          'default',
+          now() - interval '2 hours',
+          now() - interval '1 hour',
+          now() - interval '1 hour',
+          now() - interval '1 hour'
+        );
+
+        insert into arbitration_evidence_attachments (
+          id,
+          evidence_id,
+          case_id,
+          uploader_user_id,
+          file_name,
+          content_type,
+          size_bytes,
+          storage_mode,
+          storage_path,
+          cleanup_requested_at,
+          archived_at,
+          created_at
+        ) values
+          (
+            'arb-stale-attachment-cleanup',
+            'arb-stale-evidence',
+            'arb-stale-candidate',
+            'arb-creator',
+            'cleanup.txt',
+            'text/plain',
+            10,
+            'remote',
+            'remote/cleanup.txt',
+            now() - interval '30 minutes',
+            null,
+            now() - interval '1 hour'
+          ),
+          (
+            'arb-stale-attachment-archived',
+            'arb-stale-evidence',
+            'arb-stale-candidate',
+            'arb-creator',
+            'archived.txt',
+            'text/plain',
+            10,
+            'remote',
+            'remote/archived.txt',
+            now() - interval '40 minutes',
+            now() - interval '20 minutes',
+            now() - interval '1 hour'
+          ),
+          (
+            'arb-stale-attachment-local',
+            'arb-stale-evidence',
+            'arb-stale-candidate',
+            'arb-creator',
+            'local.txt',
+            'text/plain',
+            10,
+            'local',
+            'local/local.txt',
+            null,
+            now() - interval '20 minutes',
+            now() - interval '1 hour'
+          );
       `);
+
+      const creatorSummary = await getVisibleArbitrationCaseSummary("arb-creator");
+      assert.equal(creatorSummary.totalCount, 3);
+      assert.equal(creatorSummary.evidenceCount, 3);
+      assert.equal(creatorSummary.casesWithEvidenceCount, 2);
+      assert.deepEqual(creatorSummary.byEvidenceKind, [{ key: "text_note", count: 3 }]);
+      assert.equal(creatorSummary.remoteAttachmentCount, 2);
+      assert.equal(creatorSummary.cleanupRequestedRemoteAttachmentCount, 1);
+      assert.equal(creatorSummary.archivedRemoteAttachmentCount, 1);
+      assert.deepEqual(creatorSummary.byReputationImpact, [
+        { key: "neutral", count: 2 },
+        { key: "favorable", count: 1 },
+      ]);
+      const workerSummary = await getVisibleArbitrationCaseSummary("arb-worker");
+      assert.deepEqual(workerSummary.byReputationImpact, [
+        { key: "neutral", count: 2 },
+        { key: "unfavorable", count: 1 },
+      ]);
+
+      const workload = await getArbitrationCaseWorkload("operator-1");
+      assert.equal(workload.claimedCount, 0);
+      assert.equal(workload.unclaimedCount, 3);
+      assert.equal(workload.staleRoundCount, 1);
+      assert.equal(workload.unassignedOpenRoundCount, 2);
+      assert.equal(workload.nextClaimCandidate?.caseId, arbitrationCase.id);
+      assert.equal(workload.nextClaimCandidate?.currentReviewRoundNumber, 2);
+      assert.equal(workload.nextClaimCandidate?.evidenceCount, 2);
 
       const nextClaimed = await claimNextArbitrationCase("operator-1");
       assert.equal(nextClaimed?.id, "arb-stale-candidate");

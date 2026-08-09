@@ -89,20 +89,29 @@ export function buildArbitrationTimeline(args: {
   return timeline.sort((left, right) => left.occurredAt.localeCompare(right.occurredAt));
 }
 
-export function buildArbitrationCaseSummary(
+export function buildArbitrationCaseSummaryFromMetrics(args: {
   cases: Array<{
     entityType: string;
     status: ArbitrationStatus;
     taskResolutionAction: ArbitrationTaskResolutionAction | null;
     reputationImpactForViewer: ArbitrationViewerImpact;
     effectsAppliedAt: string | null;
-    evidences: ArbitrationEvidenceView[];
+    evidenceCount: number;
     assignedOperatorUserId: string | null;
-  }>,
-): ArbitrationCaseSummaryView {
+  }>;
+  evidenceKindCounts: Array<{ kind: string; count: number }>;
+  attachmentMetrics: {
+    remoteAttachmentCount: number;
+    cleanupRequestedRemoteAttachmentCount: number;
+    archivedRemoteAttachmentCount: number;
+  };
+}): ArbitrationCaseSummaryView {
   const byStatus = new Map<string, number>();
   const byEntityType = new Map<string, number>();
   const byEvidenceKind = new Map<string, number>();
+  for (const { kind, count } of args.evidenceKindCounts) {
+    byEvidenceKind.set(kind, (byEvidenceKind.get(kind) ?? 0) + count);
+  }
   const byTaskResolutionAction = new Map<string, number>();
   const byReputationImpact = new Map<string, number>();
   let awaitingOperatorCount = 0;
@@ -110,11 +119,8 @@ export function buildArbitrationCaseSummary(
   let evidenceCount = 0;
   let casesWithEvidenceCount = 0;
   let claimedCount = 0;
-  let remoteAttachmentCount = 0;
-  let cleanupRequestedRemoteAttachmentCount = 0;
-  let archivedRemoteAttachmentCount = 0;
 
-  for (const arbitrationCase of cases) {
+  for (const arbitrationCase of args.cases) {
     byStatus.set(arbitrationCase.status, (byStatus.get(arbitrationCase.status) ?? 0) + 1);
     byEntityType.set(arbitrationCase.entityType, (byEntityType.get(arbitrationCase.entityType) ?? 0) + 1);
     byTaskResolutionAction.set(
@@ -131,45 +137,73 @@ export function buildArbitrationCaseSummary(
     if (arbitrationCase.status === "resolved" && arbitrationCase.effectsAppliedAt) {
       resolvedWithEffectsCount += 1;
     }
-    evidenceCount += arbitrationCase.evidences.length;
-    if (arbitrationCase.evidences.length > 0) {
+    evidenceCount += arbitrationCase.evidenceCount;
+    if (arbitrationCase.evidenceCount > 0) {
       casesWithEvidenceCount += 1;
     }
     if (arbitrationCase.assignedOperatorUserId) {
       claimedCount += 1;
     }
-    for (const evidence of arbitrationCase.evidences) {
-      byEvidenceKind.set(evidence.kind, (byEvidenceKind.get(evidence.kind) ?? 0) + 1);
-      for (const attachment of evidence.attachments) {
-        if (attachment.storageMode === "remote") {
-          remoteAttachmentCount += 1;
-          if (attachment.cleanupRequestedAt && !attachment.archivedAt) {
-            cleanupRequestedRemoteAttachmentCount += 1;
-          }
-          if (attachment.archivedAt) {
-            archivedRemoteAttachmentCount += 1;
-          }
-        }
-      }
-    }
   }
 
   return {
-    totalCount: cases.length,
+    totalCount: args.cases.length,
     awaitingOperatorCount,
     resolvedWithEffectsCount,
     evidenceCount,
     casesWithEvidenceCount,
-    casesWithoutEvidenceCount: Math.max(0, cases.length - casesWithEvidenceCount),
+    casesWithoutEvidenceCount: Math.max(0, args.cases.length - casesWithEvidenceCount),
     claimedCount,
-    unclaimedCount: Math.max(0, cases.length - claimedCount),
-    remoteAttachmentCount,
-    cleanupRequestedRemoteAttachmentCount,
-    archivedRemoteAttachmentCount,
+    unclaimedCount: Math.max(0, args.cases.length - claimedCount),
+    remoteAttachmentCount: args.attachmentMetrics.remoteAttachmentCount,
+    cleanupRequestedRemoteAttachmentCount: args.attachmentMetrics.cleanupRequestedRemoteAttachmentCount,
+    archivedRemoteAttachmentCount: args.attachmentMetrics.archivedRemoteAttachmentCount,
     byStatus: sortSummaryBuckets(byStatus),
     byEntityType: sortSummaryBuckets(byEntityType),
     byEvidenceKind: sortSummaryBuckets(byEvidenceKind),
     byTaskResolutionAction: sortSummaryBuckets(byTaskResolutionAction),
     byReputationImpact: sortSummaryBuckets(byReputationImpact),
   };
+}
+
+export function buildArbitrationCaseSummary(
+  cases: Array<{
+    entityType: string;
+    status: ArbitrationStatus;
+    taskResolutionAction: ArbitrationTaskResolutionAction | null;
+    reputationImpactForViewer: ArbitrationViewerImpact;
+    effectsAppliedAt: string | null;
+    evidences: ArbitrationEvidenceView[];
+    assignedOperatorUserId: string | null;
+  }>,
+): ArbitrationCaseSummaryView {
+  const evidenceKindCountMap = new Map<string, number>();
+  let remoteAttachmentCount = 0;
+  let cleanupRequestedRemoteAttachmentCount = 0;
+  let archivedRemoteAttachmentCount = 0;
+
+  for (const arbitrationCase of cases) {
+    for (const evidence of arbitrationCase.evidences) {
+      evidenceKindCountMap.set(evidence.kind, (evidenceKindCountMap.get(evidence.kind) ?? 0) + 1);
+      for (const attachment of evidence.attachments) {
+        if (attachment.storageMode !== "remote") continue;
+        remoteAttachmentCount += 1;
+        if (attachment.cleanupRequestedAt && !attachment.archivedAt) cleanupRequestedRemoteAttachmentCount += 1;
+        if (attachment.archivedAt) archivedRemoteAttachmentCount += 1;
+      }
+    }
+  }
+
+  return buildArbitrationCaseSummaryFromMetrics({
+    cases: cases.map((arbitrationCase) => ({
+      ...arbitrationCase,
+      evidenceCount: arbitrationCase.evidences.length,
+    })),
+    evidenceKindCounts: [...evidenceKindCountMap].map(([kind, count]) => ({ kind, count })),
+    attachmentMetrics: {
+      remoteAttachmentCount,
+      cleanupRequestedRemoteAttachmentCount,
+      archivedRemoteAttachmentCount,
+    },
+  });
 }

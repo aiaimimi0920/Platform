@@ -33,7 +33,7 @@ import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 
 import { db } from "@/db/client";
 import * as schema from "@/db/schema";
-import { buildArbitrationCaseSummary, buildArbitrationTimeline } from "@/modules/arbitration/case-analysis";
+import { buildArbitrationCaseSummaryFromMetrics, buildArbitrationTimeline } from "@/modules/arbitration/case-analysis";
 import {
   arbitrationCaseEvidences,
   arbitrationCases,
@@ -42,11 +42,15 @@ import {
 } from "@/modules/arbitration/schema";
 import {
   getArbitrationCaseById,
+  getArbitrationAttachmentMetricsByCaseIds,
   getArbitrationEvidenceAttachmentById,
   getArbitrationEvidenceById,
+  listArbitrationCaseMetricRowsVisibleToUser,
   listArbitrationCaseEvidencesByCaseIds,
+  listArbitrationEvidenceMetricsByCaseIds,
   listArbitrationEvidenceAttachmentsByEvidenceIds,
   listArbitrationCasesVisibleToUser,
+  listArbitrationReviewRoundMetricRowsByCaseIds,
   listArbitrationReviewRoundsByCaseIds,
   listUnassignedActiveArbitrationCaseCandidates,
 } from "@/modules/arbitration/repository";
@@ -62,8 +66,13 @@ import {
   setObjectTags,
 } from "@/platform/object-storage/service";
 import { enqueueOutboxEvent } from "@/platform/outbox/service";
-import { getTaskById, listTasksByIds } from "@/modules/task-hub/repository";
+import { getTaskById, listTaskParticipantRowsByIds, listTasksByIds } from "@/modules/task-hub/repository";
 import { settleTaskLifecycleByOperatorInTx } from "@/modules/task-hub/service";
+import {
+  buildArbitrationCaseWorkload,
+  getArbitrationClaimAgeHours as getClaimAgeHours,
+  getArbitrationReviewRoundAgeHours as getReviewRoundAgeHours,
+} from "@/modules/arbitration/workload-analysis";
 
 function now() {
   return new Date();
@@ -109,23 +118,6 @@ function getArbitrationReviewRoundOperatorPool(
 function isOperatorAllowedForArbitrationRound(roundNumber: number | null | undefined, operatorUserId: string | null | undefined) {
   if (!operatorUserId) return false;
   return getArbitrationReviewRoundOperatorPool(roundNumber).includes(operatorUserId);
-}
-
-function getClaimAgeHours(claimedAt: Date | null, referenceTime: Date) {
-  if (!claimedAt) return null;
-  return Math.max(0, Math.floor((referenceTime.getTime() - claimedAt.getTime()) / (60 * 60 * 1000)));
-}
-
-function getReviewRoundAgeHours(startedAt: Date, endedAt: Date | null, referenceTime: Date) {
-  const effectiveEnd = endedAt ?? referenceTime;
-  return Math.max(0, Math.floor((effectiveEnd.getTime() - startedAt.getTime()) / (60 * 60 * 1000)));
-}
-
-function getArbitrationRoundAgeBucket(roundAgeHours: number, staleHours: number) {
-  const threshold = Math.max(1, staleHours);
-  if (roundAgeHours >= threshold) return "stale";
-  if (roundAgeHours >= Math.max(1, Math.floor(threshold / 2))) return "approaching_stale";
-  return "fresh";
 }
 
 async function getRecommendedArbitrationRoundAssigneeInTx(
@@ -1220,18 +1212,42 @@ export async function listVisibleArbitrationCases(userId: string): Promise<Arbit
 }
 
 export async function getVisibleArbitrationCaseSummary(userId: string): Promise<ArbitrationCaseSummaryView> {
-  const cases = await listVisibleArbitrationCases(userId);
-  return buildArbitrationCaseSummary(
-    cases.map((arbitrationCase) => ({
-      entityType: arbitrationCase.entityType,
-      status: arbitrationCase.status,
-      taskResolutionAction: arbitrationCase.taskResolutionAction,
-      reputationImpactForViewer: arbitrationCase.reputationImpactForViewer,
-      effectsAppliedAt: arbitrationCase.effectsAppliedAt,
-      evidences: arbitrationCase.evidences,
-      assignedOperatorUserId: arbitrationCase.assignedOperatorUserId,
+  const rows = await listArbitrationCaseMetricRowsVisibleToUser(userId, isPlatformOperator(userId));
+  const caseIds = rows.map((row) => row.id);
+  const taskIds = Array.from(new Set(rows.filter((row) => row.entityType === "task").map((row) => row.entityId)));
+  const [taskRows, evidenceMetrics, attachmentMetrics] = await Promise.all([
+    listTaskParticipantRowsByIds(taskIds),
+    listArbitrationEvidenceMetricsByCaseIds(caseIds),
+    getArbitrationAttachmentMetricsByCaseIds(caseIds),
+  ]);
+  const taskMap = new Map(taskRows.map((task) => [task.id, task]));
+  const evidenceCountByCaseId = new Map<string, number>();
+  for (const metric of evidenceMetrics) {
+    evidenceCountByCaseId.set(metric.caseId, (evidenceCountByCaseId.get(metric.caseId) ?? 0) + Number(metric.evidenceCount));
+  }
+
+  return buildArbitrationCaseSummaryFromMetrics({
+    cases: rows.map((row) => ({
+      entityType: row.entityType,
+      status: row.status as ArbitrationStatus,
+      taskResolutionAction: (row.taskResolutionAction as ArbitrationTaskResolutionAction | null) ?? null,
+      reputationImpactForViewer: getViewerReputationImpact({
+        actorUserId: userId,
+        task: taskMap.get(row.entityId) ?? null,
+        taskResolutionAction: (row.taskResolutionAction as ArbitrationTaskResolutionAction | null) ?? null,
+        status: row.status as ArbitrationStatus,
+        effectsAppliedAt: row.effectsAppliedAt,
+      }),
+      effectsAppliedAt: row.effectsAppliedAt ? row.effectsAppliedAt.toISOString() : null,
+      evidenceCount: evidenceCountByCaseId.get(row.id) ?? 0,
+      assignedOperatorUserId: row.assignedOperatorUserId,
     })),
-  );
+    evidenceKindCounts: evidenceMetrics.map((metric) => ({
+      kind: metric.kind,
+      count: Number(metric.evidenceCount),
+    })),
+    attachmentMetrics,
+  });
 }
 
 export async function getArbitrationCaseWorkload(userId: string): Promise<ArbitrationWorkloadView> {
@@ -1239,203 +1255,39 @@ export async function getArbitrationCaseWorkload(userId: string): Promise<Arbitr
     throw new UnauthorizedError("Only platform operators can view arbitration workload");
   }
 
-  const cases = await listVisibleArbitrationCases(userId);
-  const referenceTime = now();
-  const byAssignee = new Map<
-    string,
-    {
-      claimedCount: number;
-      openRoundCount: number;
-      totalClaimAgeHours: number;
-      claimAgeSamples: number;
-      staleClaimCount: number;
-    }
-  >();
-  const byRoundAssignee = new Map<
-    string,
-    {
-      openRoundCount: number;
-      staleRoundCount: number;
-      totalRoundAgeHours: number;
-      roundAgeSamples: number;
-    }
-  >();
-  const byStatus = new Map<string, number>();
-  const byReviewRoundStatus = new Map<string, number>();
-  const byRoundAgeBucket = new Map<string, number>();
+  const rows = await listArbitrationCaseMetricRowsVisibleToUser(userId, true);
+  const caseIds = rows.map((row) => row.id);
+  const [evidenceMetrics, reviewRoundRows] = await Promise.all([
+    listArbitrationEvidenceMetricsByCaseIds(caseIds),
+    listArbitrationReviewRoundMetricRowsByCaseIds(caseIds),
+  ]);
 
-  let claimedCount = 0;
-  let unclaimedCount = 0;
-  let unassignedOpenRoundCount = 0;
-  let staleClaimedCount = 0;
-  let staleRoundCount = 0;
-  let oldestStaleRoundAgeHours: number | null = null;
-  let mineCount = 0;
-  let nextClaimCandidate: ArbitrationWorkloadView["nextClaimCandidate"] = null;
-
-  for (const arbitrationCase of cases) {
-    byStatus.set(arbitrationCase.status, (byStatus.get(arbitrationCase.status) ?? 0) + 1);
-    for (const round of arbitrationCase.reviewRounds) {
-      byReviewRoundStatus.set(round.status, (byReviewRoundStatus.get(round.status) ?? 0) + 1);
-      if (round.status === "open" && typeof round.roundAgeHours === "number") {
-        const roundAssigneeKey = round.assignedOperatorUserId ?? "unassigned";
-        const bucket = byRoundAssignee.get(roundAssigneeKey) ?? {
-          openRoundCount: 0,
-          staleRoundCount: 0,
-          totalRoundAgeHours: 0,
-          roundAgeSamples: 0,
-        };
-        bucket.openRoundCount += 1;
-        bucket.totalRoundAgeHours += round.roundAgeHours;
-        bucket.roundAgeSamples += 1;
-        if (round.isRoundStale) {
-          bucket.staleRoundCount += 1;
-        }
-        byRoundAssignee.set(roundAssigneeKey, bucket);
-        if (!round.assignedOperatorUserId) {
-          unassignedOpenRoundCount += 1;
-        }
-        const roundPolicy = getArbitrationReviewRoundPolicy(round.roundNumber);
-        const roundAgeBucket = getArbitrationRoundAgeBucket(round.roundAgeHours, roundPolicy.staleHours);
-        byRoundAgeBucket.set(roundAgeBucket, (byRoundAgeBucket.get(roundAgeBucket) ?? 0) + 1);
-      }
-      if (round.isRoundStale) {
-        staleRoundCount += 1;
-        if (typeof round.roundAgeHours === "number") {
-          oldestStaleRoundAgeHours =
-            oldestStaleRoundAgeHours === null ? round.roundAgeHours : Math.max(oldestStaleRoundAgeHours, round.roundAgeHours);
-        }
-      }
-    }
-
-    if (arbitrationCase.assignedOperatorUserId) {
-      claimedCount += 1;
-      if (arbitrationCase.assignedOperatorUserId === userId) {
-        mineCount += 1;
-      }
-      const claimAgeHours = arbitrationCase.claimAgeHours ?? 0;
-      const stale = arbitrationCase.isStaleClaim;
-      if (stale) staleClaimedCount += 1;
-      const bucket = byAssignee.get(arbitrationCase.assignedOperatorUserId) ?? {
-        claimedCount: 0,
-        openRoundCount: 0,
-        totalClaimAgeHours: 0,
-        claimAgeSamples: 0,
-        staleClaimCount: 0,
-      };
-      bucket.claimedCount += 1;
-      bucket.openRoundCount += arbitrationCase.reviewRounds.filter((round) => round.status === "open").length;
-      bucket.totalClaimAgeHours += claimAgeHours;
-      bucket.claimAgeSamples += 1;
-      if (stale) bucket.staleClaimCount += 1;
-      byAssignee.set(arbitrationCase.assignedOperatorUserId, bucket);
-      continue;
-    }
-
-    unclaimedCount += 1;
-    const candidate = {
-      caseId: arbitrationCase.id,
-      status: arbitrationCase.status,
-      currentReviewRoundNumber: arbitrationCase.currentReviewRoundNumber,
-      evidenceCount: arbitrationCase.evidences.length,
-      createdAt: arbitrationCase.createdAt,
-    };
-    if (!nextClaimCandidate) {
-      nextClaimCandidate = candidate;
-      continue;
-    }
-    const statusRank = (value: ArbitrationStatus) => (value === "under_review" ? 2 : value === "open" ? 1 : 0);
-    const left = nextClaimCandidate;
-    const right = candidate;
-    if (statusRank(right.status) > statusRank(left.status)) {
-      nextClaimCandidate = right;
-      continue;
-    }
-    if (statusRank(right.status) === statusRank(left.status)) {
-      if (right.currentReviewRoundNumber > left.currentReviewRoundNumber) {
-        nextClaimCandidate = right;
-        continue;
-      }
-      if (right.currentReviewRoundNumber === left.currentReviewRoundNumber) {
-        if (right.evidenceCount > left.evidenceCount) {
-          nextClaimCandidate = right;
-          continue;
-        }
-        if (right.evidenceCount === left.evidenceCount && new Date(right.createdAt).getTime() < new Date(left.createdAt).getTime()) {
-          nextClaimCandidate = right;
-        }
-      }
-    }
-  }
-
-  for (const operatorId of env.platformOperatorUserIds) {
-    if (!byAssignee.has(operatorId)) {
-      byAssignee.set(operatorId, {
-        claimedCount: 0,
-        openRoundCount: 0,
-        totalClaimAgeHours: 0,
-        claimAgeSamples: 0,
-        staleClaimCount: 0,
-      });
-    }
-    if (!byRoundAssignee.has(operatorId)) {
-      byRoundAssignee.set(operatorId, {
-        openRoundCount: 0,
-        staleRoundCount: 0,
-        totalRoundAgeHours: 0,
-        roundAgeSamples: 0,
-      });
-    }
-  }
-
-  const byAssigneeBuckets = Array.from(byAssignee.entries())
-    .map(([key, value]) => ({
-      key,
-      claimedCount: value.claimedCount,
-      openRoundCount: value.openRoundCount,
-      avgClaimAgeHours: value.claimAgeSamples > 0 ? Number((value.totalClaimAgeHours / value.claimAgeSamples).toFixed(1)) : null,
-      staleClaimCount: value.staleClaimCount,
-    }))
-    .sort((left, right) => right.claimedCount - left.claimedCount || left.key.localeCompare(right.key));
-  const byRoundAssigneeBuckets = Array.from(byRoundAssignee.entries())
-    .map(([key, value]) => ({
-      key,
-      openRoundCount: value.openRoundCount,
-      staleRoundCount: value.staleRoundCount,
-      avgRoundAgeHours: value.roundAgeSamples > 0 ? Number((value.totalRoundAgeHours / value.roundAgeSamples).toFixed(1)) : null,
-    }))
-    .sort((left, right) => right.openRoundCount - left.openRoundCount || left.key.localeCompare(right.key));
-
-  const recommendedAssigneeUserId =
-    [...byAssigneeBuckets]
-      .sort((left, right) => {
-        const staleDiff = left.staleClaimCount - right.staleClaimCount;
-        if (staleDiff !== 0) return staleDiff;
-        const claimedDiff = left.claimedCount - right.claimedCount;
-        if (claimedDiff !== 0) return claimedDiff;
-        const roundDiff = left.openRoundCount - right.openRoundCount;
-        if (roundDiff !== 0) return roundDiff;
-        return left.key.localeCompare(right.key);
-      })[0]?.key ?? null;
-
-  return {
-    claimedCount,
-    unclaimedCount,
-    unassignedOpenRoundCount,
-    staleClaimedCount,
-    staleRoundCount,
-    oldestStaleRoundAgeHours,
-    mineCount,
-    byAssignee: byAssigneeBuckets,
-    byRoundAssignee: byRoundAssigneeBuckets,
-    byRoundAgeBucket: Array.from(byRoundAgeBucket.entries()).map(([key, count]) => ({ key, count })),
-    byStatus: Array.from(byStatus.entries()).map(([key, count]) => ({ key, count })),
-    byReviewRoundStatus: Array.from(byReviewRoundStatus.entries()).map(([key, count]) => ({ key, count })),
-    nextClaimCandidate,
-    recommendedAssigneeUserId,
-    autoReleaseEnabled: env.arbitrationStaleClaimHours > 0,
-    autoReleaseIntervalMinutes: null,
-  };
+  return buildArbitrationCaseWorkload({
+    cases: rows.map((row) => ({
+      id: row.id,
+      status: row.status as ArbitrationStatus,
+      assignedOperatorUserId: row.assignedOperatorUserId,
+      claimedAt: row.claimedAt,
+      createdAt: row.createdAt,
+    })),
+    evidenceMetrics: evidenceMetrics.map((metric) => ({
+      caseId: metric.caseId,
+      evidenceCount: Number(metric.evidenceCount),
+    })),
+    reviewRounds: reviewRoundRows.map((row) => ({
+      caseId: row.caseId,
+      roundNumber: row.roundNumber,
+      status: row.status as ArbitrationReviewRoundStatus,
+      assignedOperatorUserId: row.assignedOperatorUserId,
+      startedAt: row.startedAt,
+      endedAt: row.endedAt,
+    })),
+    userId,
+    operatorUserIds: env.platformOperatorUserIds,
+    staleClaimHours: env.arbitrationStaleClaimHours,
+    referenceTime: now(),
+    getRoundStaleHours: (roundNumber) => getArbitrationReviewRoundPolicy(roundNumber).staleHours,
+  });
 }
 
 export async function createArbitrationCase(

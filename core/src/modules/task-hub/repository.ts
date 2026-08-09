@@ -95,6 +95,18 @@ export async function listTasksByIds(taskIds: string[]) {
   return db.select().from(tasks).where(inArray(tasks.id, taskIds));
 }
 
+export async function listTaskParticipantRowsByIds(taskIds: string[]) {
+  if (taskIds.length === 0) return [];
+  return db
+    .select({
+      id: tasks.id,
+      creatorUserId: tasks.creatorUserId,
+      assignedUserId: tasks.assignedUserId,
+    })
+    .from(tasks)
+    .where(inArray(tasks.id, taskIds));
+}
+
 export async function getTaskByOwnerAndId(ownerUserId: string, taskId: string) {
   const [task] = await db
     .select()
