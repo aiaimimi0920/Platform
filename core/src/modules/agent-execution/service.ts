@@ -185,6 +185,7 @@ import {
 } from "@/modules/agent-registry/service";
 import { agentCapabilities, agents } from "@/modules/agent-registry/schema";
 import { ConflictError, NotFoundError, UnauthorizedError } from "@/platform/errors";
+import { requestInternalJson } from "@/platform/internal-json-request";
 import { outboxEvents } from "@/platform/outbox/schema";
 import { enqueueOutboxEvent } from "@/platform/outbox/service";
 
@@ -599,33 +600,6 @@ function applySchemaMarkerReplacements(
   return rendered;
 }
 
-async function fetchWithTimeout(input: string, init: RequestInit, timeoutMs: number) {
-  const controller = new AbortController();
-  const timeoutHandle = setTimeout(() => controller.abort(), timeoutMs);
-  try {
-    return await fetch(input, {
-      ...init,
-      signal: controller.signal,
-    });
-  } finally {
-    clearTimeout(timeoutHandle);
-  }
-}
-
-async function parseJsonSafely(response: Response) {
-  const rawText = await response.text();
-  if (!rawText.trim()) {
-    return null;
-  }
-  try {
-    return JSON.parse(rawText) as Record<string, unknown>;
-  } catch {
-    return {
-      rawText,
-    };
-  }
-}
-
 function toRecordPayload(value: unknown) {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     return null;
@@ -667,7 +641,7 @@ async function resolveManagedLightServiceAccess(args: {
   if (!accountInternalUrl) {
     throw new ConflictError("ACCOUNT_INTERNAL_URL is not configured for managed light service access");
   }
-  const response = await fetchWithTimeout(
+  const { response, payload } = await requestInternalJson(
     `${accountInternalUrl}/v1/benefits/services/${encodeURIComponent(args.serviceId)}/api-access`,
     {
       method: "POST",
@@ -678,18 +652,21 @@ async function resolveManagedLightServiceAccess(args: {
       },
       body: JSON.stringify({}),
     },
-    managedApiDispatchTimeoutMs,
+    {
+      timeoutMs: managedApiDispatchTimeoutMs,
+      timeoutMessage: "Managed light service access request timed out",
+    },
   );
-  const payload = (await parseJsonSafely(response)) as
+  const accessPayload = payload as
     | { access?: BenefitServiceApiAccessView; error?: { message?: string } | string }
     | null;
-  if (!response.ok || !payload?.access) {
+  if (!response.ok || !accessPayload?.access) {
     const message =
-      (typeof payload?.error === "string" ? payload.error : payload?.error?.message) ||
+      (typeof accessPayload?.error === "string" ? accessPayload.error : accessPayload?.error?.message) ||
       "Failed to resolve managed light AI service access";
     throw new ConflictError(message);
   }
-  return payload.access;
+  return accessPayload.access;
 }
 
 function extractManagedApiText(payload: Record<string, unknown> | null): string | null {
@@ -804,7 +781,7 @@ async function invokeManagedLightModel(args: {
         ],
       };
 
-  const response = await fetchWithTimeout(
+  const { response, payload } = await requestInternalJson(
     args.endpoint,
     {
       method: "POST",
@@ -814,10 +791,11 @@ async function invokeManagedLightModel(args: {
       },
       body: JSON.stringify(requestBody),
     },
-    managedApiDispatchTimeoutMs,
+    {
+      timeoutMs: managedApiDispatchTimeoutMs,
+      timeoutMessage: "Managed light model request timed out",
+    },
   );
-
-  const payload = await parseJsonSafely(response);
   const text = extractManagedApiText(payload);
   const usageTotals = extractManagedApiUsageTotals(payload);
 
@@ -4874,20 +4852,6 @@ async function* iterateCallbackAuditViewPagesForOperator(args: Omit<CallbackAudi
   }
 }
 
-async function buildCallbackAuditViewsForOperator(args: Omit<CallbackAuditOperatorQuery, "limit">) {
-  const callbacks: AgentExecutionCallbackAuditView[] = [];
-  const runtimeContextMap = new Map<string, AgentExecutionCallbackRuntimeContextView>();
-
-  for await (const page of iterateCallbackAuditViewPagesForOperator(args)) {
-    callbacks.push(...page.callbacks);
-    for (const [executionId, runtimeContext] of page.runtimeContextMap) {
-      runtimeContextMap.set(executionId, runtimeContext);
-    }
-  }
-
-  return { callbacks, runtimeContextMap };
-}
-
 async function listLimitedCallbackAuditViewsForOperator(
   args: Omit<CallbackAuditOperatorQuery, "limit">,
   limit: number,
@@ -4995,119 +4959,171 @@ function buildCallbackAuditSummaryFromViews(
   return buildCallbackAuditSummaryFromAccumulator(accumulator);
 }
 
-function buildCallbackRemediationSummaryFromViews(
-  callbacks: AgentExecutionCallbackAuditView[],
-  runtimeContextMap?: Map<string, AgentExecutionCallbackRuntimeContextView>,
+function createCallbackRemediationSummaryAccumulator() {
+  return {
+    candidateCount: 0,
+    replayPayloadStoredCount: 0,
+    replayPayloadReplayableCount: 0,
+    replayPayloadLegacyCompatibleCount: 0,
+    replayPayloadInvalidCount: 0,
+    latestFailureAt: null as string | null,
+    nextDueAt: null as string | null,
+    runtimeDecisionPresentCount: 0,
+    runtimePressureContextCount: 0,
+    reasonPolicyRows: new Map<
+      string,
+      { policyKey: AgentCallbackRemediationPolicyKey; reason: string; count: number }
+    >(),
+    decisionClass: new Map<string, number>(),
+    plannedAction: new Map<string, number>(),
+    fallbackAction: new Map<string, number>(),
+    replayFailureClass: new Map<string, number>(),
+    runtimeDecisionClass: new Map<string, number>(),
+    runtimeDecisionSeverity: new Map<string, number>(),
+    runtimePressureLevel: new Map<string, number>(),
+    runtimeSchedulingDecisionClass: new Map<string, number>(),
+    callbackType: new Map<string, number>(),
+    rejectionCategory: new Map<string, number>(),
+    retryability: new Map<string, number>(),
+    policyKey: new Map<string, number>(),
+    autoRemediationState: new Map<string, number>(),
+    skipReason: new Map<string, number>(),
+    failureReason: new Map<string, number>(),
+  };
+}
+
+type CallbackRemediationSummaryAccumulator = ReturnType<typeof createCallbackRemediationSummaryAccumulator>;
+
+function appendCallbackRemediationSummaryView(
+  accumulator: CallbackRemediationSummaryAccumulator,
+  callback: AgentExecutionCallbackAuditView,
+  runtimeContext?: AgentExecutionCallbackRuntimeContextView | null,
+) {
+  accumulator.candidateCount += 1;
+  accumulator.replayPayloadStoredCount += Number(callback.replayPayloadStored);
+  accumulator.replayPayloadReplayableCount += Number(callback.replayPayloadReplayable);
+  accumulator.replayPayloadLegacyCompatibleCount += Number(
+    callback.replayPayloadCompatibility === "legacy_normalized",
+  );
+  accumulator.replayPayloadInvalidCount += Number(callback.replayPayloadCompatibility === "invalid");
+
+  if (
+    callback.lastAutoRemediationAt &&
+    (!accumulator.latestFailureAt ||
+      new Date(callback.lastAutoRemediationAt).getTime() > new Date(accumulator.latestFailureAt).getTime())
+  ) {
+    accumulator.latestFailureAt = callback.lastAutoRemediationAt;
+  }
+  if (
+    callback.nextAutoRemediationAt &&
+    (!accumulator.nextDueAt ||
+      new Date(callback.nextAutoRemediationAt).getTime() < new Date(accumulator.nextDueAt).getTime())
+  ) {
+    accumulator.nextDueAt = callback.nextAutoRemediationAt;
+  }
+
+  incrementCallbackAuditSummaryBucket(accumulator.decisionClass, callback.remediationPlan.decisionClass);
+  incrementCallbackAuditSummaryBucket(accumulator.plannedAction, callback.remediationPlan.primaryAction);
+  incrementCallbackAuditSummaryBucket(accumulator.fallbackAction, callback.remediationPlan.fallbackAction);
+  incrementCallbackAuditSummaryBucket(accumulator.callbackType, callback.callbackType);
+  incrementCallbackAuditSummaryBucket(accumulator.rejectionCategory, callback.rejectionCategory ?? "none");
+  incrementCallbackAuditSummaryBucket(accumulator.retryability, callback.retryability ?? "inspect");
+  incrementCallbackAuditSummaryBucket(accumulator.policyKey, callback.remediationPolicyKey);
+  incrementCallbackAuditSummaryBucket(accumulator.autoRemediationState, callback.autoRemediationState);
+
+  for (const attempt of callback.remediationAttempts) {
+    incrementCallbackAuditSummaryBucket(
+      accumulator.replayFailureClass,
+      attempt.fallbackFailureClass ?? inferReplayFailureClassFromFallbackReason(attempt.fallbackReason),
+    );
+  }
+
+  if (callback.autoRemediationReasonCategory) {
+    const key = `${callback.remediationPolicyKey}:${callback.autoRemediationReasonCategory}`;
+    const reasonPolicyRow = accumulator.reasonPolicyRows.get(key) ?? {
+      policyKey: callback.remediationPolicyKey,
+      reason: callback.autoRemediationReasonCategory,
+      count: 0,
+    };
+    reasonPolicyRow.count += 1;
+    accumulator.reasonPolicyRows.set(key, reasonPolicyRow);
+    if (callback.autoRemediationReasonDisposition === "skipped") {
+      incrementCallbackAuditSummaryBucket(accumulator.skipReason, callback.autoRemediationReasonCategory);
+    } else if (callback.autoRemediationReasonDisposition === "failed") {
+      incrementCallbackAuditSummaryBucket(accumulator.failureReason, callback.autoRemediationReasonCategory);
+    }
+  }
+
+  const resolvedRuntimeContext = runtimeContext ?? callback.runtimeContext;
+  if (resolvedRuntimeContext?.runtimeDecisionClass) {
+    accumulator.runtimeDecisionPresentCount += 1;
+    incrementCallbackAuditSummaryBucket(
+      accumulator.runtimeDecisionClass,
+      resolvedRuntimeContext.runtimeDecisionClass,
+    );
+  }
+  incrementCallbackAuditSummaryBucket(
+    accumulator.runtimeDecisionSeverity,
+    resolvedRuntimeContext?.runtimeDecisionSeverity,
+  );
+  if (resolvedRuntimeContext?.runtimePressureLevel) {
+    accumulator.runtimePressureContextCount += 1;
+    incrementCallbackAuditSummaryBucket(
+      accumulator.runtimePressureLevel,
+      resolvedRuntimeContext.runtimePressureLevel,
+    );
+  }
+  incrementCallbackAuditSummaryBucket(
+    accumulator.runtimeSchedulingDecisionClass,
+    resolvedRuntimeContext?.runtimeSchedulingDecisionClass,
+  );
+}
+
+function buildCallbackRemediationSummaryFromAccumulator(
+  accumulator: CallbackRemediationSummaryAccumulator,
 ): AgentExecutionCallbackRemediationSummaryView {
-  const reasonPolicyRows = Array.from(
-    callbacks.reduce((map, callback) => {
-      if (!callback.autoRemediationReasonCategory) {
-        return map;
-      }
-      const key = `${callback.remediationPolicyKey}:${callback.autoRemediationReasonCategory}`;
-      const current = map.get(key) ?? {
-        policyKey: callback.remediationPolicyKey,
-        reason: callback.autoRemediationReasonCategory,
-        count: 0,
-      };
-      current.count += 1;
-      map.set(key, current);
-      return map;
-    }, new Map<string, { policyKey: AgentCallbackRemediationPolicyKey; reason: string; count: number }>()),
-  ).map(([, row]) => row);
-  const byDecisionClass = buildSummaryBucketsFromValues(
-    callbacks.map((callback) => callback.remediationPlan.decisionClass),
-  );
-  const byPlannedAction = buildSummaryBucketsFromValues(
-    callbacks.map((callback) => callback.remediationPlan.primaryAction),
-  );
-  const byFallbackAction = buildSummaryBucketsFromValues(
-    callbacks.map((callback) => callback.remediationPlan.fallbackAction),
-  );
-  const byReplayFailureClass = buildSummaryBucketsFromValues(
-    callbacks.flatMap((callback) =>
-      callback.remediationAttempts.map(
-        (attempt) =>
-          attempt.fallbackFailureClass ?? inferReplayFailureClassFromFallbackReason(attempt.fallbackReason),
-      ),
-    ),
-  );
-  const bySkipReason = buildSummaryBucketsFromValues(
-    callbacks.flatMap((callback) =>
-      callback.autoRemediationReasonDisposition === "skipped" && callback.autoRemediationReasonCategory
-        ? [callback.autoRemediationReasonCategory]
-        : [],
-    ),
-  );
-  const byFailureReason = buildSummaryBucketsFromValues(
-    callbacks.flatMap((callback) =>
-      callback.autoRemediationReasonDisposition === "failed" && callback.autoRemediationReasonCategory
-        ? [callback.autoRemediationReasonCategory]
-        : [],
-    ),
-  );
-  const candidateCount = callbacks.length;
-  const byPolicyKey = buildSummaryBucketsFromValues(callbacks.map((callback) => callback.remediationPolicyKey));
+  const reasonPolicyRows = [...accumulator.reasonPolicyRows.values()];
+  const bySkipReason = callbackAuditSummaryBuckets(accumulator.skipReason);
+  const byFailureReason = callbackAuditSummaryBuckets(accumulator.failureReason);
+  const byPolicyKey = callbackAuditSummaryBuckets(accumulator.policyKey);
   const alerts = buildCallbackRemediationAlerts({
-    candidateCount,
+    candidateCount: accumulator.candidateCount,
     bySkipReason,
     byFailureReason,
     byPolicyKey,
     reasonPolicyRows,
   });
-  const runtimeCorrelationSummary = buildCallbackRemediationRuntimeCorrelationSummary(
-    callbacks.map((callback) => runtimeContextMap?.get(callback.executionId) ?? callback.runtimeContext),
-  );
 
   return {
-    candidateCount,
-    replayPayloadStoredCount: callbacks.filter((callback) => callback.replayPayloadStored).length,
-    replayPayloadReplayableCount: callbacks.filter((callback) => callback.replayPayloadReplayable).length,
-    replayPayloadLegacyCompatibleCount: callbacks.filter(
-      (callback) => callback.replayPayloadCompatibility === "legacy_normalized",
-    ).length,
-    replayPayloadInvalidCount: callbacks.filter((callback) => callback.replayPayloadCompatibility === "invalid").length,
-    latestFailureAt:
-      callbacks
-        .map((callback) => callback.lastAutoRemediationAt)
-        .filter((value): value is string => Boolean(value))
-        .sort((left, right) => new Date(right).getTime() - new Date(left).getTime())[0] ?? null,
-    nextDueAt:
-      callbacks
-        .map((callback) => callback.nextAutoRemediationAt)
-        .filter((value): value is string => Boolean(value))
-        .sort((left, right) => new Date(left).getTime() - new Date(right).getTime())[0] ?? null,
-    runtimeDecisionPresentCount: runtimeCorrelationSummary.runtimeDecisionPresentCount,
-    runtimePressureContextCount: runtimeCorrelationSummary.runtimePressureContextCount,
-    byDecisionClass,
-    byPlannedAction,
-    byFallbackAction,
-    byReplayFailureClass,
-    byRuntimeDecisionClass: runtimeCorrelationSummary.byRuntimeDecisionClass,
-    byRuntimeDecisionSeverity: runtimeCorrelationSummary.byRuntimeDecisionSeverity,
-    byRuntimePressureLevel: runtimeCorrelationSummary.byRuntimePressureLevel,
-    byRuntimeSchedulingDecisionClass: runtimeCorrelationSummary.byRuntimeSchedulingDecisionClass,
-    byCallbackType: buildSummaryBucketsFromValues(callbacks.map((callback) => callback.callbackType)),
-    byRejectionCategory: buildSummaryBucketsFromValues(
-      callbacks.map((callback) => callback.rejectionCategory ?? "none"),
-    ),
-    byRetryability: buildSummaryBucketsFromValues(
-      callbacks.map((callback) => callback.retryability ?? "inspect"),
-    ),
+    candidateCount: accumulator.candidateCount,
+    replayPayloadStoredCount: accumulator.replayPayloadStoredCount,
+    replayPayloadReplayableCount: accumulator.replayPayloadReplayableCount,
+    replayPayloadLegacyCompatibleCount: accumulator.replayPayloadLegacyCompatibleCount,
+    replayPayloadInvalidCount: accumulator.replayPayloadInvalidCount,
+    latestFailureAt: accumulator.latestFailureAt,
+    nextDueAt: accumulator.nextDueAt,
+    runtimeDecisionPresentCount: accumulator.runtimeDecisionPresentCount,
+    runtimePressureContextCount: accumulator.runtimePressureContextCount,
+    byDecisionClass: callbackAuditSummaryBuckets(accumulator.decisionClass),
+    byPlannedAction: callbackAuditSummaryBuckets(accumulator.plannedAction),
+    byFallbackAction: callbackAuditSummaryBuckets(accumulator.fallbackAction),
+    byReplayFailureClass: callbackAuditSummaryBuckets(accumulator.replayFailureClass),
+    byRuntimeDecisionClass: callbackAuditSummaryBuckets(accumulator.runtimeDecisionClass),
+    byRuntimeDecisionSeverity: callbackAuditSummaryBuckets(accumulator.runtimeDecisionSeverity),
+    byRuntimePressureLevel: callbackAuditSummaryBuckets(accumulator.runtimePressureLevel),
+    byRuntimeSchedulingDecisionClass: callbackAuditSummaryBuckets(accumulator.runtimeSchedulingDecisionClass),
+    byCallbackType: callbackAuditSummaryBuckets(accumulator.callbackType),
+    byRejectionCategory: callbackAuditSummaryBuckets(accumulator.rejectionCategory),
+    byRetryability: callbackAuditSummaryBuckets(accumulator.retryability),
     byPolicyKey,
-    byAutoRemediationState: buildSummaryBucketsFromValues(
-      callbacks.map((callback) => callback.autoRemediationState),
-    ),
-    byAlertLevel: buildCallbackRemediationAlertBuckets({
-      bySkipReason,
-      byFailureReason,
-    }),
+    byAutoRemediationState: callbackAuditSummaryBuckets(accumulator.autoRemediationState),
+    byAlertLevel: buildCallbackRemediationAlertBuckets({ bySkipReason, byFailureReason }),
     maxAlertLevel: alerts.reduce((maxLevel, alert) => Math.max(maxLevel, alert.alertLevel), 0),
     bySkipReason,
     byFailureReason,
     alerts,
     recommendations: buildCallbackRemediationRecommendations({
-      candidateCount,
+      candidateCount: accumulator.candidateCount,
       bySkipReason,
       byFailureReason,
       byPolicyKey,
@@ -5737,28 +5753,33 @@ export async function getCallbackRemediationSummaryForOperator(
   args?: CallbackRemediationSummaryQuery,
 ): Promise<AgentExecutionCallbackRemediationSummaryView> {
   if (hasCallbackAuditDerivedFilters(args)) {
-    const { callbacks, runtimeContextMap } = await buildCallbackAuditViewsForOperator(
-      {
-        agentId: args?.agentId,
-        callbackType: args?.callbackType,
-        status: "rejected",
-        remediationPolicyKey: args?.remediationPolicyKey,
-        autoRemediationReasonCategory: args?.autoRemediationReasonCategory,
-        autoRemediationReasonDisposition: args?.autoRemediationReasonDisposition,
-        replayPayloadCompatibility: args?.replayPayloadCompatibility,
-        replayPayloadReplayable: args?.replayPayloadReplayable,
-        decisionClass: args?.decisionClass,
-        replayFailureClass: args?.replayFailureClass,
-        runtimeDecisionClass: args?.runtimeDecisionClass,
-        runtimeDecisionSeverity: args?.runtimeDecisionSeverity,
-        runtimePressureLevel: args?.runtimePressureLevel,
-        runtimeSchedulingDecisionClass: args?.runtimeSchedulingDecisionClass,
-      },
-    );
-    return buildCallbackRemediationSummaryFromViews(
-      callbacks.filter((callback) => callback.status === "rejected"),
-      runtimeContextMap,
-    );
+    const scanArgs = {
+      agentId: args?.agentId,
+      callbackType: args?.callbackType,
+      status: "rejected" as const,
+      remediationPolicyKey: args?.remediationPolicyKey,
+      autoRemediationReasonCategory: args?.autoRemediationReasonCategory,
+      autoRemediationReasonDisposition: args?.autoRemediationReasonDisposition,
+      replayPayloadCompatibility: args?.replayPayloadCompatibility,
+      replayPayloadReplayable: args?.replayPayloadReplayable,
+      decisionClass: args?.decisionClass,
+      replayFailureClass: args?.replayFailureClass,
+      runtimeDecisionClass: args?.runtimeDecisionClass,
+      runtimeDecisionSeverity: args?.runtimeDecisionSeverity,
+      runtimePressureLevel: args?.runtimePressureLevel,
+      runtimeSchedulingDecisionClass: args?.runtimeSchedulingDecisionClass,
+    } satisfies Omit<CallbackAuditOperatorQuery, "limit">;
+    const accumulator = createCallbackRemediationSummaryAccumulator();
+    for await (const page of iterateCallbackAuditViewPagesForOperator(scanArgs)) {
+      for (const callback of page.callbacks) {
+        appendCallbackRemediationSummaryView(
+          accumulator,
+          callback,
+          page.runtimeContextMap.get(callback.executionId),
+        );
+      }
+    }
+    return buildCallbackRemediationSummaryFromAccumulator(accumulator);
   }
   const whereClause = toWhereClause([
     ...buildCallbackAuditConditions({
@@ -8319,7 +8340,7 @@ async function dispatchExternalRuntimeExecution(
       : null;
 
   try {
-    const response = await fetchWithTimeout(
+    const { response, payload } = await requestInternalJson(
       runtimeEndpoint,
       {
         method: "POST",
@@ -8335,10 +8356,11 @@ async function dispatchExternalRuntimeExecution(
           }),
         ),
       },
-      externalRuntimeDispatchTimeoutMs,
+      {
+        timeoutMs: externalRuntimeDispatchTimeoutMs,
+        timeoutMessage: "External runtime dispatch timed out",
+      },
     );
-
-    const payload = await parseJsonSafely(response);
     if (!response.ok) {
       const failureMessage = truncateDispatchText(
         `External runtime dispatch failed with status ${response.status}.${typeof payload?.rawText === "string" ? ` ${payload.rawText}` : ""}`,

@@ -45,6 +45,7 @@ if (!databaseUrl) {
       const {
         createOwnedAgentExecution,
         getCallbackAuditSummaryForOperator,
+        getCallbackRemediationSummaryForOperator,
         listCallbackAuditsForOperator,
         requeueOwnedAgentExecution,
         updateOwnedAgentExecutionStatus,
@@ -91,7 +92,7 @@ if (!databaseUrl) {
            $2,
            'callback-' || sequence::text,
            'heartbeat',
-           'accepted',
+           case when sequence = 201 then 'rejected' else 'accepted' end,
            case when sequence = 201 then '{"type":"heartbeat"}'::jsonb else null end,
            timestamptz '2026-08-09T00:00:00.000Z' - sequence * interval '1 second'
          from generate_series(1, 201) as sequence`,
@@ -109,6 +110,13 @@ if (!databaseUrl) {
         limit: 1,
       });
       assert.equal(replayableSummary.totalCount, 1);
+
+      const replayableRemediationSummary = await getCallbackRemediationSummaryForOperator({
+        replayPayloadReplayable: true,
+      });
+      assert.equal(replayableRemediationSummary.candidateCount, 1);
+      assert.equal(replayableRemediationSummary.replayPayloadStoredCount, 1);
+      assert.equal(replayableRemediationSummary.replayPayloadReplayableCount, 1);
 
       await assert.rejects(
         () =>

@@ -44,6 +44,7 @@ class MemoryHeavyChatStore {
   messages: HeavyChatMessageRecord[] = [];
   messageAttempts: HeavyChatMessageAttemptRecord[] = [];
   transactionCount = 0;
+  listProjectsForSlotCount = 0;
   failNextMessageInsert = false;
 
   async transaction<T>(fn: (tx: MemoryHeavyChatStore) => Promise<T>): Promise<T> {
@@ -145,6 +146,22 @@ class MemoryHeavyChatStore {
             left.createdAt.getTime() - right.createdAt.getTime() ||
             left.id.localeCompare(right.id),
         ),
+    );
+  }
+
+  async listProjectsForSlot(ownerUserId: string, slotId: string) {
+    this.listProjectsForSlotCount += 1;
+    const projectMap = new Map(
+      this.projects
+        .filter((row) => row.ownerUserId === ownerUserId)
+        .map((row) => [row.id, row] as const),
+    );
+    return clone(
+      this.bindings
+        .filter((row) => row.ownerUserId === ownerUserId && row.slotId === slotId)
+        .sort((left, right) => left.createdAt.getTime() - right.createdAt.getTime() || left.id.localeCompare(right.id))
+        .map((binding) => projectMap.get(binding.projectId))
+        .filter((project): project is HeavyChatProjectRecord => Boolean(project)),
     );
   }
 
@@ -453,7 +470,7 @@ test("list operations use ids as deterministic tie breakers", async () => {
 });
 
 test("projects, bindings, and threads retain owner scope and deterministic ordering", async () => {
-  const { repository } = buildRepository();
+  const { repository, store } = buildRepository();
   const slot = await repository.createOrGetDefaultSlot("owner-a");
   const firstProject = await repository.createProject("owner-a", {
     id: "project-a-2",
@@ -478,6 +495,7 @@ test("projects, bindings, and threads retain owner scope and deterministic order
     (await repository.listProjectsForSlot("owner-a", slot.id)).map((project) => project.id),
     [firstProject.id, secondProject.id],
   );
+  assert.equal(store.listProjectsForSlotCount, 1);
   assert.deepEqual(await repository.listProjects("owner-b"), []);
   const otherSlot = await repository.createOrGetDefaultSlot("owner-b");
   await assert.rejects(

@@ -69,6 +69,7 @@ import {
 import { ledgerEntries } from "@/modules/wallet-ledger/schema";
 import { BadRequestError, ConflictError, NotFoundError } from "@/platform/errors";
 import { getSingleFeatureModule } from "@/platform/feature-modules/service";
+import { requestInternalJson } from "@/platform/internal-json-request";
 import { enqueueOutboxEvent } from "@/platform/outbox/service";
 
 const TASK_REWARD_ESCROW_USER_ID = "platform:task_reward_escrow";
@@ -119,33 +120,6 @@ function safeJsonStringify(value: unknown) {
     return JSON.stringify(value, null, 2);
   } catch {
     return "{}";
-  }
-}
-
-async function fetchWithTimeout(input: string, init: RequestInit, timeoutMs: number) {
-  const controller = new AbortController();
-  const timeoutHandle = setTimeout(() => controller.abort(), timeoutMs);
-  try {
-    return await fetch(input, {
-      ...init,
-      signal: controller.signal,
-    });
-  } finally {
-    clearTimeout(timeoutHandle);
-  }
-}
-
-async function parseJsonSafely(response: Response) {
-  const rawText = await response.text();
-  if (!rawText.trim()) {
-    return null;
-  }
-  try {
-    return JSON.parse(rawText) as Record<string, unknown>;
-  } catch {
-    return {
-      rawText,
-    };
   }
 }
 
@@ -435,7 +409,7 @@ async function selectListingsBySemanticRouter(
       };
 
   try {
-    const response = await fetchWithTimeout(
+    const { response, payload } = await requestInternalJson(
       endpoint,
       {
         method: "POST",
@@ -445,9 +419,11 @@ async function selectListingsBySemanticRouter(
         },
         body: JSON.stringify(requestBody),
       },
-      semanticRouterTimeoutMs,
+      {
+        timeoutMs: semanticRouterTimeoutMs,
+        timeoutMessage: "Task semantic router request timed out",
+      },
     );
-    const payload = await parseJsonSafely(response);
     const text = extractManagedApiText(payload);
     const parsed =
       extractJsonObjectFromText(text) ??

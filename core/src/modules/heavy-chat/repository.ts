@@ -97,6 +97,7 @@ export interface HeavyChatStore {
 
   findProjectById(ownerUserId: string, id: string): Promise<HeavyChatProjectRecord | null>;
   listProjects(ownerUserId: string): Promise<HeavyChatProjectRecord[]>;
+  listProjectsForSlot(ownerUserId: string, slotId: string): Promise<HeavyChatProjectRecord[]>;
   insertProject(row: HeavyChatProjectRecord): Promise<HeavyChatProjectRecord>;
   findSlotProject(ownerUserId: string, slotId: string, projectId: string): Promise<HeavyChatSlotProjectRecord | null>;
   listSlotProjects(ownerUserId: string, slotId: string): Promise<HeavyChatSlotProjectRecord[]>;
@@ -303,6 +304,27 @@ class DrizzleHeavyChatStore implements HeavyChatStore {
       .where(eq(heavyChatProjects.ownerUserId, ownerUserId))
       .orderBy(asc(heavyChatProjects.sortOrder), asc(heavyChatProjects.createdAt), asc(heavyChatProjects.id));
     return rows.map(toProjectRecord);
+  }
+
+  async listProjectsForSlot(ownerUserId: string, slotId: string) {
+    const rows = await this.database
+      .select({ project: heavyChatProjects })
+      .from(heavyChatSlotProjects)
+      .innerJoin(
+        heavyChatProjects,
+        and(
+          eq(heavyChatProjects.ownerUserId, heavyChatSlotProjects.ownerUserId),
+          eq(heavyChatProjects.id, heavyChatSlotProjects.projectId),
+        ),
+      )
+      .where(
+        and(
+          eq(heavyChatSlotProjects.ownerUserId, ownerUserId),
+          eq(heavyChatSlotProjects.slotId, slotId),
+        ),
+      )
+      .orderBy(asc(heavyChatSlotProjects.createdAt), asc(heavyChatSlotProjects.id));
+    return rows.map((row) => toProjectRecord(row.project));
   }
 
   async insertProject(row: HeavyChatProjectRecord) {
@@ -587,6 +609,10 @@ class LazyDrizzleHeavyChatStore implements HeavyChatStore {
 
   async listProjects(ownerUserId: string) {
     return (await this.getDelegate()).listProjects(ownerUserId);
+  }
+
+  async listProjectsForSlot(ownerUserId: string, slotId: string) {
+    return (await this.getDelegate()).listProjectsForSlot(ownerUserId, slotId);
   }
 
   async insertProject(row: HeavyChatProjectRecord) {
@@ -928,9 +954,7 @@ export function createHeavyChatRepository(options: HeavyChatRepositoryOptions = 
       const owner = normalizeOwnerUserId(ownerUserId);
       const slot = await store.findSlotById(owner, slotId);
       if (!slot) return [];
-      const bindings = await store.listSlotProjects(owner, slot.id);
-      const projects = await Promise.all(bindings.map((binding) => store.findProjectById(owner, binding.projectId)));
-      return projects.filter((project): project is HeavyChatProjectRecord => project !== null);
+      return store.listProjectsForSlot(owner, slot.id);
     },
 
     async createThread(ownerUserId: string, args: CreateHeavyChatThreadArgs) {
