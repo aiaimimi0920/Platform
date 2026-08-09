@@ -216,8 +216,11 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\smoke-platform-web
 ```
 
 Version tags matching `V*.*.*` run the release workflow and publish the verified
-Web zip, SHA-256 sidecar, manifest, and checksum inventory to GitHub Releases.
-The tag workflow also runs all required integration suites before packaging.
+Web zip, SHA-256 sidecar, manifest, checksum inventory, six-image immutable
+container lock, and the lock's SHA-256 sidecar to GitHub Releases. The tag
+workflow pins the tag commit, runs all required integration suites, waits for the
+successful `Container Images` push run for that exact tag and revision, and
+rejects a missing, failed, ambiguous, cross-revision, or cross-run image lock.
 The container workflow builds six Platform-owned images:
 
 - `ghcr.io/aiaimimi0920/neuro-platform-core`

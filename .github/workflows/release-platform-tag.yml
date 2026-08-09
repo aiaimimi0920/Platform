@@ -22,9 +22,10 @@ jobs:
   release:
     name: Build and publish Platform Web
     permissions:
+      actions: read
       contents: write
     runs-on: windows-latest
-    timeout-minutes: 60
+    timeout-minutes: 90
     env:
       PLATFORM_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
 
@@ -41,8 +42,23 @@ jobs:
           if ($env:PLATFORM_TAG -notmatch '^V\d+\.\d+\.\d+$') {
             throw "Release tag must match Vx.y.z: $env:PLATFORM_TAG"
           }
-          git fetch origin main --tags
-          git merge-base --is-ancestor "refs/tags/$env:PLATFORM_TAG" origin/main
+          git fetch --force origin "refs/heads/main:refs/remotes/origin/main" "refs/tags/$env:PLATFORM_TAG`:refs/tags/$env:PLATFORM_TAG"
+          if ($LASTEXITCODE -ne 0) {
+            throw "Unable to fetch release tag: $env:PLATFORM_TAG"
+          }
+          $tagRevision = (git rev-parse "refs/tags/$env:PLATFORM_TAG`^{commit}").Trim().ToLowerInvariant()
+          $checkoutRevision = (git rev-parse HEAD).Trim().ToLowerInvariant()
+          if ($checkoutRevision -ne $tagRevision) {
+            throw "Checkout/tag revision mismatch. Checkout=$checkoutRevision Tag=$tagRevision"
+          }
+          if ($env:GITHUB_EVENT_NAME -eq 'push' -and $tagRevision -ne $env:GITHUB_SHA.ToLowerInvariant()) {
+            throw "Push/tag revision mismatch. Event=$env:GITHUB_SHA Tag=$tagRevision"
+          }
+          git checkout --detach $tagRevision
+          if ($LASTEXITCODE -ne 0) {
+            throw "Unable to pin checkout to release revision: $tagRevision"
+          }
+          git merge-base --is-ancestor $tagRevision origin/main
           if ($LASTEXITCODE -ne 0) {
             throw "Release tag must be reachable from origin/main: $env:PLATFORM_TAG"
           }
@@ -51,7 +67,8 @@ jobs:
           if ($env:PLATFORM_TAG -ne $expectedTag) {
             throw "Tag/package version mismatch. Tag=$env:PLATFORM_TAG Expected=$expectedTag"
           }
-          $sourceDateEpoch = git show -s --format=%ct HEAD
+          $sourceDateEpoch = git show -s --format=%ct $tagRevision
+          "SOURCE_REVISION=$tagRevision" >> $env:GITHUB_ENV
           "SOURCE_DATE_EPOCH=$sourceDateEpoch" >> $env:GITHUB_ENV
 
       - name: Set up Node.js
@@ -81,6 +98,43 @@ jobs:
         shell: powershell
         run: .\scripts\smoke-platform-web-release-package.ps1 -PackageDir ".\release\Platform\$env:PLATFORM_TAG"
 
+      - name: Resolve matching Container Images run
+        id: image-lock-run
+        shell: powershell
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: >-
+          node scripts/container-image-lock.mjs resolve-run
+          --repository "$env:GITHUB_REPOSITORY"
+          --revision "$env:SOURCE_REVISION"
+          --refName "$env:PLATFORM_TAG"
+          --timeoutSeconds "1800"
+          --pollSeconds "15"
+          --output "$env:GITHUB_OUTPUT"
+
+      - name: Download matching immutable image lock
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ steps.image-lock-run.outputs.artifactName }}
+          path: .runtime/release-image-lock
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          repository: ${{ github.repository }}
+          run-id: ${{ steps.image-lock-run.outputs.runId }}
+
+      - name: Validate and package immutable image lock
+        shell: powershell
+        run: >-
+          node scripts/container-image-lock.mjs validate
+          --input ".runtime/release-image-lock/image-lock.json"
+          --repository "$env:GITHUB_REPOSITORY"
+          --revision "$env:SOURCE_REVISION"
+          --refName "$env:PLATFORM_TAG"
+          --runId "${{ steps.image-lock-run.outputs.runId }}"
+          --runAttempt "${{ steps.image-lock-run.outputs.runAttempt }}"
+          --platform "linux/amd64"
+          --output ".\release\Platform\$env:PLATFORM_TAG\packages\Platform-$env:PLATFORM_TAG-container-images.json"
+          --checksumOutput ".\release\Platform\$env:PLATFORM_TAG\packages\Platform-$env:PLATFORM_TAG-container-images.json.sha256"
+
       - name: Upload verified release package
         uses: actions/upload-artifact@v4
         with:
@@ -89,14 +143,30 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
+      - name: Verify release tag is unchanged
+        shell: powershell
+        run: |
+          git fetch --force origin "refs/tags/$env:PLATFORM_TAG`:refs/tags/$env:PLATFORM_TAG"
+          if ($LASTEXITCODE -ne 0) {
+            throw "Unable to refresh release tag: $env:PLATFORM_TAG"
+          }
+          $currentRevision = (git rev-parse "refs/tags/$env:PLATFORM_TAG`^{commit}").Trim().ToLowerInvariant()
+          if ($currentRevision -ne $env:SOURCE_REVISION) {
+            throw "Release tag moved during the workflow. Expected=$env:SOURCE_REVISION Actual=$currentRevision"
+          }
+
       - name: Publish GitHub release
         uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ env.PLATFORM_TAG }}
+          target_commitish: ${{ env.SOURCE_REVISION }}
           name: ${{ env.PLATFORM_TAG }}
           generate_release_notes: true
+          fail_on_unmatched_files: true
           files: |
             release/Platform/${{ env.PLATFORM_TAG }}/packages/Platform-${{ env.PLATFORM_TAG }}-web-next.zip
             release/Platform/${{ env.PLATFORM_TAG }}/packages/Platform-${{ env.PLATFORM_TAG }}-web-next.zip.sha256
+            release/Platform/${{ env.PLATFORM_TAG }}/packages/Platform-${{ env.PLATFORM_TAG }}-container-images.json
+            release/Platform/${{ env.PLATFORM_TAG }}/packages/Platform-${{ env.PLATFORM_TAG }}-container-images.json.sha256
             release/Platform/${{ env.PLATFORM_TAG }}/manifest.json
             release/Platform/${{ env.PLATFORM_TAG }}/checksums.sha256

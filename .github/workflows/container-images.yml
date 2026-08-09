@@ -190,7 +190,7 @@ jobs:
       - name: Upload immutable image digest
         uses: actions/upload-artifact@v4
         with:
-          name: platform-image-lock-entry-${{ matrix.image }}-${{ github.run_id }}
+          name: platform-image-lock-entry-${{ matrix.image }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: .runtime/container-image-lock/image-lock-${{ matrix.image }}.json
           if-no-files-found: error
           retention-days: 14
@@ -212,7 +212,7 @@ jobs:
       - name: Download image digest entries
         uses: actions/download-artifact@v4
         with:
-          pattern: platform-image-lock-entry-*-${{ github.run_id }}
+          pattern: platform-image-lock-entry-*-${{ github.run_id }}-${{ github.run_attempt }}
           path: .runtime/container-image-lock
           merge-multiple: true
 
@@ -225,7 +225,7 @@ jobs:
       - name: Upload aggregate image lock
         uses: actions/upload-artifact@v4
         with:
-          name: platform-container-image-lock-${{ github.run_id }}
+          name: platform-container-image-lock-${{ github.run_id }}-${{ github.run_attempt }}
           path: .runtime/container-image-lock/image-lock.json
           if-no-files-found: error
-          retention-days: 30
+          retention-days: 90

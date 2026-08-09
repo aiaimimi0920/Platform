@@ -113,13 +113,19 @@ describe("independent Platform repository", () => {
     assert(workflow.includes("id: build"));
     assert(workflow.includes("steps.build.outputs.digest"));
     assert(workflow.includes("container-image-lock.mjs entry"));
-    assert(workflow.includes("platform-image-lock-entry-${{ matrix.image }}-${{ github.run_id }}"));
+    assert(workflow.includes("platform-image-lock-entry-${{ matrix.image }}-${{ github.run_id }}-${{ github.run_attempt }}"));
     assert(workflow.includes("needs: publish"));
     assert(workflow.includes("container-image-lock.mjs aggregate"));
-    assert(workflow.includes("platform-container-image-lock-${{ github.run_id }}"));
+    assert(workflow.includes("platform-container-image-lock-${{ github.run_id }}-${{ github.run_attempt }}"));
+    assert(workflow.includes("retention-days: 90"));
     const imageLockScript = read("scripts/container-image-lock.mjs");
     assert(imageLockScript.includes("sha256:[0-9a-f]{64}"));
     assert(imageLockScript.includes("Expected ${PLATFORM_CONTAINER_IMAGES.length} image lock entries"));
+    assert(imageLockScript.includes("Image lock entry files must be exactly"));
+    assert(imageLockScript.includes('run?.event === "push"'));
+    assert(imageLockScript.includes("run.head_sha"));
+    assert(imageLockScript.includes(".github/workflows/container-images.yml@${refName}"));
+    assert(imageLockScript.includes("Multiple Container Images workflow runs match"));
     for (const dockerfile of [
       "core.Dockerfile",
       "account-api.Dockerfile",
@@ -157,15 +163,26 @@ describe("independent Platform repository", () => {
     const workflow = read(".github/workflows/release-platform-tag.yml");
     assert(workflow.includes('"V*.*.*"'));
     assert(workflow.includes("Tag/package version mismatch"));
+    assert(workflow.includes("SOURCE_REVISION=$tagRevision"));
+    assert(workflow.includes("git checkout --detach $tagRevision"));
+    assert(workflow.includes("Release tag moved during the workflow"));
     assert(workflow.includes("build-platform-web-release.ps1"));
     assert(workflow.includes("verify-platform-web-release-package.ps1"));
     assert(workflow.includes("smoke-platform-web-release-package.ps1"));
     assert(workflow.includes("npm run test:integration:required"));
     assert(workflow.includes("softprops/action-gh-release@v3"));
+    assert(workflow.includes("container-image-lock.mjs resolve-run"));
+    assert(workflow.includes("container-image-lock.mjs validate"));
+    assert(workflow.includes("steps.image-lock-run.outputs.runId"));
+    assert(workflow.includes("steps.image-lock-run.outputs.runAttempt"));
+    assert(workflow.includes("github-token: ${{ secrets.GITHUB_TOKEN }}"));
+    assert(workflow.includes("target_commitish: ${{ env.SOURCE_REVISION }}"));
+    assert(workflow.includes("container-images.json"));
+    assert(workflow.includes("container-images.json.sha256"));
     assert(workflow.includes(".zip.sha256"));
     assert(workflow.includes("checksums.sha256"));
     assert.match(workflow, /permissions:\s+contents: read/);
-    assert.match(workflow, /jobs:\s+release:\s+name:[^\n]+\s+permissions:\s+contents: write/);
+    assert.match(workflow, /jobs:\s+release:\s+name:[^\n]+\s+permissions:\s+actions: read\s+contents: write/);
   });
 
   it("does not contain Google API-key-shaped literals in documentation", () => {

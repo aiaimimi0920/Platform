@@ -16,6 +16,8 @@ release/Platform/<versionId>/
   checksums.sha256
   manifest.json
   logs/
+  packages/Platform-<versionId>-container-images.json       # tagged workflow only
+  packages/Platform-<versionId>-container-images.json.sha256 # tagged workflow only
   packages/Platform-<versionId>-web-next.zip
   packages/Platform-<versionId>-web-next.zip.sha256
   web/
@@ -52,7 +54,20 @@ timestamp must produce identical ZIP, manifest, and checksum-list hashes.
 
 ## GitHub Release
 
-Tags matching `V*.*.*` are built from the tagged commit. A release is published
-only after quick repository validation, package verification, and runtime smoke
-pass. Published assets are the Web zip, its SHA-256 sidecar, `manifest.json`, and
-`checksums.sha256`.
+Tags matching `V*.*.*` are built from a checkout pinned to the tag's resolved
+commit. A release is published only after quick repository validation, required
+integration suites, package verification, runtime smoke, and an unchanged-tag
+check pass.
+
+The tagged release must also resolve exactly one successful `Container Images`
+push run whose `head_sha` and tag ref match that pinned commit. It downloads the
+aggregate artifact named with that run ID and run attempt, then revalidates the lock schema,
+canonical six-image order, immutable GHCR references, repository, revision, tag,
+run ID, run attempt, and `linux/amd64` platform. Missing, failed, ambiguous,
+cross-revision, cross-tag, or cross-run results block publication.
+
+Published assets are the Web zip and SHA-256 sidecar, the validated immutable
+container lock and SHA-256 sidecar, `manifest.json`, and `checksums.sha256`. The
+container lock is added by the tagged GitHub workflow after the standalone Web
+package has passed its verifier and runtime smoke; generated non-tag builds do
+not synthesize container provenance.
