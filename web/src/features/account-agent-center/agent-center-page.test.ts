@@ -6,6 +6,7 @@ const pageSource = readFileSync(
   new URL("./agent-center-page.tsx", import.meta.url),
   "utf8",
 );
+const stylesSource = readFileSync(new URL("./styles.css", import.meta.url), "utf8");
 
 test("P3-02: agent center preserves usable sections when a dependency is partial", () => {
   assert.match(pageSource, /const agentDependency = combineDependencyResults/);
@@ -42,4 +43,11 @@ test("agent capability discovery uses bounded ordered concurrency", () => {
     /mapWithConcurrency\(\s*agents,\s*AGENT_CAPABILITY_FETCH_CONCURRENCY,/,
   );
   assert.doesNotMatch(pageSource, /Promise\.all\(\s*agents\.map/);
+});
+
+test("narrow agent center keeps the beginning of overflowing content reachable", () => {
+  assert.match(
+    stylesSource,
+    /@media \(max-width: 1180px\)\s*\{[\s\S]*?\.app-agent-center-overlay\s*\{[^}]*align-items:\s*flex-start;/,
+  );
 });
