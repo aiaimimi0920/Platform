@@ -110,6 +110,16 @@ describe("independent Platform repository", () => {
       "Fork pull requests must not attempt to export a writable GitHub Actions cache",
     );
     assert(workflow.includes("ghcr.io/${{ github.repository_owner }}/neuro-platform-${{ matrix.image }}"));
+    assert(workflow.includes("id: build"));
+    assert(workflow.includes("steps.build.outputs.digest"));
+    assert(workflow.includes("container-image-lock.mjs entry"));
+    assert(workflow.includes("platform-image-lock-entry-${{ matrix.image }}-${{ github.run_id }}"));
+    assert(workflow.includes("needs: publish"));
+    assert(workflow.includes("container-image-lock.mjs aggregate"));
+    assert(workflow.includes("platform-container-image-lock-${{ github.run_id }}"));
+    const imageLockScript = read("scripts/container-image-lock.mjs");
+    assert(imageLockScript.includes("sha256:[0-9a-f]{64}"));
+    assert(imageLockScript.includes("Expected ${PLATFORM_CONTAINER_IMAGES.length} image lock entries"));
     for (const dockerfile of [
       "core.Dockerfile",
       "account-api.Dockerfile",

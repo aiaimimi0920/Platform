@@ -1,4 +1,4 @@
-import { and, asc, eq, inArray, or } from "drizzle-orm";
+import { and, asc, eq, inArray, isNull, or, sql } from "drizzle-orm";
 
 import { db } from "@/db/client";
 import {
@@ -36,6 +36,26 @@ export async function listActiveArbitrationCasesForEntity(entityType: string, en
         inArray(arbitrationCases.status, ["open", "under_review"]),
       ),
     );
+}
+
+export async function listUnassignedActiveArbitrationCaseCandidates() {
+  return db
+    .select({
+      id: arbitrationCases.id,
+      status: arbitrationCases.status,
+      createdAt: arbitrationCases.createdAt,
+      evidenceCount: sql<number>`count(${arbitrationCaseEvidences.id})::int`,
+    })
+    .from(arbitrationCases)
+    .leftJoin(arbitrationCaseEvidences, eq(arbitrationCaseEvidences.caseId, arbitrationCases.id))
+    .where(
+      and(
+        inArray(arbitrationCases.status, ["open", "under_review"]),
+        isNull(arbitrationCases.assignedOperatorUserId),
+      ),
+    )
+    .groupBy(arbitrationCases.id, arbitrationCases.status, arbitrationCases.createdAt)
+    .orderBy(asc(arbitrationCases.createdAt), asc(arbitrationCases.id));
 }
 
 export async function listArbitrationCaseEvidencesByCaseIds(caseIds: string[]) {

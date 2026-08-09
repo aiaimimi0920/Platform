@@ -44,6 +44,7 @@ import {
   listTasks,
 } from "@/lib/platform-client";
 import { isPublicSurfaceVisibleForViewer } from "@/lib/public-surface-visibility";
+import { mapWithConcurrency } from "@/lib/map-with-concurrency";
 import {
   invokeAgentMarketplaceListingBatchAction,
   invokeAgentMarketplaceListingAction,
@@ -96,6 +97,7 @@ const lightAgentTaskCategoryOptions = [
 const LOCAL_DEBUG_MANAGED_LIGHT_SERVICE_ID = "__local_debug_managed_light_service__";
 const LOCAL_DEBUG_MANAGED_LIGHT_MODEL_ID = "ui-test-model";
 const MANAGED_LIGHT_SUMMARY_EXECUTION_LIMIT = 200;
+const AGENT_CAPABILITY_FETCH_CONCURRENCY = 6;
 
 function buildLocalDebugManagedLightServiceOption() {
   return {
@@ -680,8 +682,10 @@ export default async function AgentCenterPage({ searchParams }: AgentCenterPageP
     );
   }
 
-  const capabilityPairs = await Promise.all(
-    agents.map(async (agent) => [
+  const capabilityPairs = await mapWithConcurrency(
+    agents,
+    AGENT_CAPABILITY_FETCH_CONCURRENCY,
+    async (agent) => [
       agent.id,
       await loadDependency(listAgentCapabilities(userContext, agent.id), {
         fallback: [],
@@ -689,7 +693,7 @@ export default async function AgentCenterPage({ searchParams }: AgentCenterPageP
         unauthorizedMessage: "当前账户无权读取智能体能力目录。",
         source: `agent-capabilities:${agent.id}`,
       }),
-    ] as const),
+    ] as const,
   );
 
   const agentCapabilityDependencyFailure = [...dependencyResultsBySource.entries()].find(

@@ -48,6 +48,7 @@ import {
   listArbitrationEvidenceAttachmentsByEvidenceIds,
   listArbitrationCasesVisibleToUser,
   listArbitrationReviewRoundsByCaseIds,
+  listUnassignedActiveArbitrationCaseCandidates,
 } from "@/modules/arbitration/repository";
 import { env } from "@/env";
 import { ConflictError, NotFoundError, UnauthorizedError } from "@/platform/errors";
@@ -2713,14 +2714,32 @@ export async function claimNextArbitrationCase(userId: string): Promise<Arbitrat
     throw new UnauthorizedError("Only platform operators can claim arbitration cases");
   }
 
-  const cases = await listVisibleArbitrationCases(userId);
-  const candidates = cases
-    .filter((arbitrationCase) => ["open", "under_review"].includes(arbitrationCase.status) && !arbitrationCase.assignedOperatorUserId)
+  const candidateRows = await listUnassignedActiveArbitrationCaseCandidates();
+  const reviewRoundRows = await listArbitrationReviewRoundsByCaseIds(candidateRows.map((row) => row.id));
+  const reviewRoundMap = new Map<string, ArbitrationReviewRoundView[]>();
+  for (const row of reviewRoundRows) {
+    const rounds = reviewRoundMap.get(row.caseId) ?? [];
+    rounds.push(toArbitrationReviewRoundView(row));
+    reviewRoundMap.set(row.caseId, rounds);
+  }
+  const candidates = candidateRows
+    .map((row) => {
+      const reviewRounds = reviewRoundMap.get(row.id) ?? [];
+      return {
+        id: row.id,
+        status: row.status as ArbitrationStatus,
+        currentReviewRoundNumber:
+          reviewRounds.filter((round) => round.status === "open").at(-1)?.roundNumber ??
+          reviewRounds.at(-1)?.roundNumber ??
+          1,
+        evidenceCount: Number(row.evidenceCount ?? 0),
+        createdAt: row.createdAt,
+        hasStaleOpenRound: reviewRounds.some((round) => round.status === "open" && round.isRoundStale),
+      };
+    })
     .sort((left, right) => {
-      const leftHasStaleOpenRound = left.reviewRounds.some((round) => round.status === "open" && round.isRoundStale);
-      const rightHasStaleOpenRound = right.reviewRounds.some((round) => round.status === "open" && round.isRoundStale);
-      if (leftHasStaleOpenRound !== rightHasStaleOpenRound) {
-        return Number(rightHasStaleOpenRound) - Number(leftHasStaleOpenRound);
+      if (left.hasStaleOpenRound !== right.hasStaleOpenRound) {
+        return Number(right.hasStaleOpenRound) - Number(left.hasStaleOpenRound);
       }
       const statusRank = (value: ArbitrationStatus) => (value === "under_review" ? 2 : value === "open" ? 1 : 0);
       const statusDiff = statusRank(right.status) - statusRank(left.status);
@@ -2728,10 +2747,10 @@ export async function claimNextArbitrationCase(userId: string): Promise<Arbitrat
       if (right.currentReviewRoundNumber !== left.currentReviewRoundNumber) {
         return right.currentReviewRoundNumber - left.currentReviewRoundNumber;
       }
-      if (right.evidences.length !== left.evidences.length) {
-        return right.evidences.length - left.evidences.length;
+      if (right.evidenceCount !== left.evidenceCount) {
+        return right.evidenceCount - left.evidenceCount;
       }
-      return new Date(left.createdAt).getTime() - new Date(right.createdAt).getTime();
+      return left.createdAt.getTime() - right.createdAt.getTime() || left.id.localeCompare(right.id);
     });
 
   for (const candidate of candidates) {

@@ -96,6 +96,7 @@ if (!databaseUrl) {
         addArbitrationEvidence,
         advanceArbitrationReviewRound,
         claimArbitrationCase,
+        claimNextArbitrationCase,
         createArbitrationCase,
         releaseArbitrationCase,
         updateArbitrationCaseStatus,
@@ -177,6 +178,66 @@ if (!databaseUrl) {
       const released = await releaseArbitrationCase("operator-2", arbitrationCase.id);
       assert.equal(released.assignedOperatorUserId, null);
       assert.equal(released.reviewRounds[1]?.assignedOperatorUserId, null);
+
+      await pool.query(`
+        insert into arbitration_cases (
+          id,
+          entity_type,
+          entity_id,
+          requester_user_id,
+          respondent_user_id,
+          assigned_operator_user_id,
+          status,
+          reason,
+          created_at,
+          updated_at
+        ) values (
+          'arb-stale-candidate',
+          'task',
+          'arb-stale-task',
+          'arb-creator',
+          'arb-worker',
+          null,
+          'open',
+          'A stale review round should be claimed first.',
+          now() - interval '1 hour',
+          now() - interval '1 hour'
+        );
+
+        insert into arbitration_case_review_rounds (
+          id,
+          case_id,
+          round_number,
+          status,
+          started_at
+        ) values (
+          'arb-stale-round',
+          'arb-stale-candidate',
+          1,
+          'open',
+          now() - interval '10000 hours'
+        );
+
+        insert into arbitration_case_evidences (
+          id,
+          case_id,
+          creator_user_id,
+          kind,
+          title,
+          created_at
+        ) values (
+          'arb-stale-evidence',
+          'arb-stale-candidate',
+          'arb-creator',
+          'text_note',
+          'Stale candidate evidence',
+          now() - interval '1 hour'
+        );
+      `);
+
+      const nextClaimed = await claimNextArbitrationCase("operator-1");
+      assert.equal(nextClaimed?.id, "arb-stale-candidate");
+      assert.equal(nextClaimed?.evidences.length, 1);
     } finally {
       coreRedis?.disconnect();
       accountRedis?.disconnect();

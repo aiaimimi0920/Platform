@@ -34,3 +34,12 @@ test("P3-02: agent center does not turn formal source failures into normal empty
   assert.match(pageSource, /benefitDependencyUnavailable/);
   assert.match(pageSource, /benefitModelDependencyUnavailable/);
 });
+
+test("agent capability discovery uses bounded ordered concurrency", () => {
+  assert.match(pageSource, /const AGENT_CAPABILITY_FETCH_CONCURRENCY = 6/);
+  assert.match(
+    pageSource,
+    /mapWithConcurrency\(\s*agents,\s*AGENT_CAPABILITY_FETCH_CONCURRENCY,/,
+  );
+  assert.doesNotMatch(pageSource, /Promise\.all\(\s*agents\.map/);
+});
