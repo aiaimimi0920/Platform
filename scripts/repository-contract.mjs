@@ -110,6 +110,12 @@ describe("independent Platform repository", () => {
     assert(sharedMigrationRunner.includes("current_database()"));
     assert(sharedMigrationRunner.includes("rollbackPreservingPrimaryError"));
     assert(sharedMigrationRunner.includes("await pool.end()"));
+    assert(
+      read("packages/backend-foundation/db/postgres-migrations.js").includes("dist/db/postgres-migrations"),
+    );
+    assert(
+      read("packages/backend-foundation/db/postgres-migrations.d.ts").includes("dist/db/postgres-migrations"),
+    );
 
     for (const [relativePath, lockName, tableName] of [
       ["core/src/scripts/migrate.ts", "neuro-core-schema-migrations", "schema_migrations"],
@@ -118,6 +124,8 @@ describe("independent Platform repository", () => {
     ]) {
       const migrationRunner = read(relativePath);
       assert(migrationRunner.includes("runPostgresMigrations"));
+      assert(migrationRunner.includes('from "@neuro/backend-foundation/db/postgres-migrations"'));
+      assert(!migrationRunner.includes('from "@neuro/backend-foundation"'));
       assert(migrationRunner.includes(lockName));
       assert(migrationRunner.includes(tableName));
     }

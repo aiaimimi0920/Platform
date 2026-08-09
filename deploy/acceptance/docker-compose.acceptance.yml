@@ -91,6 +91,8 @@ services:
       context: ../..
       dockerfile: deploy/docker/core.Dockerfile
     labels: *acceptance-labels
+    healthcheck:
+      disable: true
     depends_on:
       postgres:
         condition: service_healthy
@@ -111,6 +113,8 @@ services:
       context: ../..
       dockerfile: deploy/docker/account-api.Dockerfile
     labels: *acceptance-labels
+    healthcheck:
+      disable: true
     depends_on:
       postgres:
         condition: service_healthy

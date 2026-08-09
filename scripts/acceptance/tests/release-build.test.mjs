@@ -276,6 +276,12 @@ test("complete release assembly is atomic, relocatable, redacted, and artifact-o
     assert.doesNotMatch(compose, /^\s*build\s*:/m);
     assert.doesNotMatch(compose, /@@/);
     assert.match(compose, /neuro-platform-core@sha256:[0-9a-f]{64}/);
+    for (const serviceName of ["core-migrate", "gateway-domain-migrate", "account-domain-migrate"]) {
+      assert.match(
+        compose,
+        new RegExp(`  ${serviceName}:[\\s\\S]*?healthcheck:\\n      disable: true`),
+      );
+    }
     const kustomization = await readFile(
       path.join(destination, "deployment", "k8s", "overlays", "production", "kustomization.yaml"),
       "utf8",

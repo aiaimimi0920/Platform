@@ -8,6 +8,8 @@ services:
   core-migrate:
     image: "@@CORE_IMAGE@@"
     restart: "no"
+    healthcheck:
+      disable: true
     env_file:
       - "${PLATFORM_RUNTIME_ENV_FILE:?Set PLATFORM_RUNTIME_ENV_FILE to a populated runtime env file}"
     command: ["npm", "run", "db:migrate", "--workspace", "@neuro/core"]
@@ -15,6 +17,8 @@ services:
   gateway-domain-migrate:
     image: "@@ACCOUNT_API_IMAGE@@"
     restart: "no"
+    healthcheck:
+      disable: true
     env_file:
       - "${PLATFORM_RUNTIME_ENV_FILE:?Set PLATFORM_RUNTIME_ENV_FILE to a populated runtime env file}"
     command: ["npm", "run", "db:migrate", "--workspace", "@neuro/ai-gateway-domain"]
@@ -25,6 +29,8 @@ services:
   account-domain-migrate:
     image: "@@ACCOUNT_API_IMAGE@@"
     restart: "no"
+    healthcheck:
+      disable: true
     env_file:
       - "${PLATFORM_RUNTIME_ENV_FILE:?Set PLATFORM_RUNTIME_ENV_FILE to a populated runtime env file}"
     command: ["npm", "run", "db:migrate", "--workspace", "@neuro/account-domain"]

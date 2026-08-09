@@ -37,6 +37,14 @@ function composeServiceBlock(contents, serviceName) {
   return lines.slice(start, end).join("\n");
 }
 
+test("one-shot acceptance migrations disable inherited runtime health checks", async () => {
+  const compose = await readFile(acceptanceComposeFile, "utf8");
+  for (const serviceName of ["migrate", "account-migrate"]) {
+    const service = composeServiceBlock(compose, serviceName);
+    assert.match(service, /healthcheck:\s*\n\s+disable:\s*true/);
+  }
+});
+
 function parseEnvFile(contents) {
   return Object.fromEntries(
     contents

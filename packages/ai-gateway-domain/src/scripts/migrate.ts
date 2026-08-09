@@ -1,6 +1,6 @@
 import path from "node:path";
 
-import { runPostgresMigrations } from "@neuro/backend-foundation";
+import { runPostgresMigrations } from "@neuro/backend-foundation/db/postgres-migrations";
 
 import { pgPool } from "../db/client";
 
