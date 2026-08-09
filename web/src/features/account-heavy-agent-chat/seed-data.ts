@@ -173,12 +173,14 @@ export function createSeedProjects(): HeavyProjectContext[] {
 }
 
 function seedAssistantMessage(
+  sequence: number,
   createdAtLabel: string,
   meta: string,
   blocks: HeavyMessageBlock[],
 ): HeavyChatMessage {
   return {
     id: slug("message-assistant"),
+    sequence,
     role: "assistant",
     status: "complete",
     createdAtLabel,
@@ -200,9 +202,12 @@ export function createSeedThreads(displayName: string): HeavyChatThread[] {
       updatedAtLabel: "今天 08:40",
       updatedAtGroup: "今天",
       updatedAtSort: Date.now() - 1000 * 60 * 30,
+      hasMoreMessages: false,
+      nextBeforeSequence: null,
       messages: [
         {
           id: slug("message-user"),
+          sequence: 1,
           role: "user",
           status: "complete",
           createdAtLabel: "08:38",
@@ -212,7 +217,7 @@ export function createSeedThreads(displayName: string): HeavyChatThread[] {
             referenceBlock([createReference("mail", 1, "交付工作台"), createReference("task", 2, "交付工作台")]),
           ],
         },
-        seedAssistantMessage("08:40", "交付工作台项目", [
+        seedAssistantMessage(2, "08:40", "交付工作台项目", [
           textBlock(`已收到，${displayName}。我会先按来信主题归档，再抽取任务元数据。`),
           statusBlock("邮件入口", "建议先按邮件类别整理为新任务、补充材料和待回执三组。", "cyan"),
           summaryBlock("下一步动作", [
@@ -233,8 +238,10 @@ export function createSeedThreads(displayName: string): HeavyChatThread[] {
       updatedAtLabel: "昨天 21:15",
       updatedAtGroup: "昨天",
       updatedAtSort: Date.now() - 1000 * 60 * 60 * 20,
+      hasMoreMessages: false,
+      nextBeforeSequence: null,
       messages: [
-        seedAssistantMessage("昨天 21:15", "自创建重度槽位", [
+        seedAssistantMessage(1, "昨天 21:15", "自创建重度槽位", [
           textBlock("当前产品规则已经收口为：每个用户 1 个默认免费对话槽位 + 1 个自创建重度槽位，更多槽位需要购买扩展服务。"),
           statusBlock("重度槽位规则", "默认免费槽位和自创建槽位独立计数。", "warning"),
         ]),
@@ -313,6 +320,8 @@ export function createEmptyThread(slotId: string, projectId: string | null, slot
     updatedAtLabel: nowLabel(),
     updatedAtGroup: nowGroup(),
     updatedAtSort: Date.now(),
+    hasMoreMessages: false,
+    nextBeforeSequence: null,
     messages: [],
   };
 }

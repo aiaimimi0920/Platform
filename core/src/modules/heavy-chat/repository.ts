@@ -34,6 +34,7 @@ import {
   HeavyChatSlotLimitError,
   type HeavyChatGatewayHistoryMessageRecord,
   type HeavyChatMessageAttemptRecord,
+  type HeavyChatMessagePageRecord,
   type HeavyChatMessageRecord,
   type HeavyChatProjectRecord,
   type HeavyChatSlotAgentBindingRecord,
@@ -139,6 +140,17 @@ export interface HeavyChatStore {
   ): Promise<HeavyChatMessageRecord | null>;
   listMessages(ownerUserId: string, threadId: string): Promise<HeavyChatMessageRecord[]>;
   listMessagesByThreadIds(ownerUserId: string, threadIds: string[]): Promise<HeavyChatMessageRecord[]>;
+  listRecentMessagePages(
+    ownerUserId: string,
+    threadIds: string[],
+    pageSize: number,
+  ): Promise<HeavyChatMessagePageRecord[]>;
+  listMessagePage(
+    ownerUserId: string,
+    threadId: string,
+    beforeSequence: number | null,
+    pageSize: number,
+  ): Promise<HeavyChatMessagePageRecord>;
   listGatewayHistoryMessages(
     ownerUserId: string,
     threadId: string,
@@ -182,6 +194,40 @@ function toMessageRecord(row: typeof heavyChatMessages.$inferSelect): HeavyChatM
     status: row.status as HeavyChatMessageStatus,
     references: (row.references ?? []) as HeavyChatReference[],
     actions: (row.actions ?? []) as HeavyChatAction[],
+  };
+}
+
+const heavyChatMessageSelection = {
+  id: heavyChatMessages.id,
+  ownerUserId: heavyChatMessages.ownerUserId,
+  threadId: heavyChatMessages.threadId,
+  role: heavyChatMessages.role,
+  status: heavyChatMessages.status,
+  sequence: heavyChatMessages.sequence,
+  attemptNumber: heavyChatMessages.attemptNumber,
+  content: heavyChatMessages.content,
+  references: heavyChatMessages.references,
+  actions: heavyChatMessages.actions,
+  idempotencyKey: heavyChatMessages.idempotencyKey,
+  errorCode: heavyChatMessages.errorCode,
+  errorMessage: heavyChatMessages.errorMessage,
+  createdAt: heavyChatMessages.createdAt,
+  updatedAt: heavyChatMessages.updatedAt,
+};
+
+function toMessagePage(
+  threadId: string,
+  messagesDescending: HeavyChatMessageRecord[],
+  pageSize: number,
+): HeavyChatMessagePageRecord {
+  const hasMore = messagesDescending.length > pageSize;
+  const retained = messagesDescending.slice(0, pageSize);
+  const nextBeforeSequence = hasMore ? retained.at(-1)?.sequence ?? null : null;
+  return {
+    threadId,
+    messages: [...retained].reverse(),
+    hasMore,
+    nextBeforeSequence,
   };
 }
 
@@ -576,6 +622,93 @@ class DrizzleHeavyChatStore implements HeavyChatStore {
     return rows.map(toMessageRecord);
   }
 
+  async listRecentMessagePages(ownerUserId: string, threadIds: string[], pageSize: number) {
+    if (threadIds.length === 0) return [];
+    const requestedThreads = this.database
+      .select({ threadId: heavyChatThreads.id })
+      .from(heavyChatThreads)
+      .where(
+        and(
+          eq(heavyChatThreads.ownerUserId, ownerUserId),
+          inArray(heavyChatThreads.id, threadIds),
+        ),
+      )
+      .as("requested_heavy_chat_threads");
+    const recentMessages = this.database
+      .select({
+        ...heavyChatMessageSelection,
+      })
+      .from(heavyChatMessages)
+      .where(
+        and(
+          eq(heavyChatMessages.ownerUserId, ownerUserId),
+          eq(heavyChatMessages.threadId, requestedThreads.threadId),
+        ),
+      )
+      .orderBy(desc(heavyChatMessages.sequence), desc(heavyChatMessages.id))
+      .limit(pageSize + 1)
+      .as("recent_heavy_chat_messages");
+    const rows = await this.database
+      .select({
+        requestedThreadId: requestedThreads.threadId,
+        id: recentMessages.id,
+        ownerUserId: recentMessages.ownerUserId,
+        threadId: recentMessages.threadId,
+        role: recentMessages.role,
+        status: recentMessages.status,
+        sequence: recentMessages.sequence,
+        attemptNumber: recentMessages.attemptNumber,
+        content: recentMessages.content,
+        references: recentMessages.references,
+        actions: recentMessages.actions,
+        idempotencyKey: recentMessages.idempotencyKey,
+        errorCode: recentMessages.errorCode,
+        errorMessage: recentMessages.errorMessage,
+        createdAt: recentMessages.createdAt,
+        updatedAt: recentMessages.updatedAt,
+      })
+      .from(requestedThreads)
+      .innerJoinLateral(recentMessages, sql`true`)
+      .orderBy(
+        asc(requestedThreads.threadId),
+        desc(recentMessages.sequence),
+        desc(recentMessages.id),
+      );
+    const messagesByThreadId = new Map<string, HeavyChatMessageRecord[]>();
+    for (const row of rows) {
+      const { requestedThreadId, ...messageRow } = row;
+      const messages = messagesByThreadId.get(row.requestedThreadId) ?? [];
+      messages.push(toMessageRecord(messageRow));
+      messagesByThreadId.set(requestedThreadId, messages);
+    }
+    return threadIds.map((threadId) =>
+      toMessagePage(threadId, messagesByThreadId.get(threadId) ?? [], pageSize),
+    );
+  }
+
+  async listMessagePage(
+    ownerUserId: string,
+    threadId: string,
+    beforeSequence: number | null,
+    pageSize: number,
+  ) {
+    const ownerThreadPredicate = and(
+      eq(heavyChatMessages.ownerUserId, ownerUserId),
+      eq(heavyChatMessages.threadId, threadId),
+    );
+    const rows = await this.database
+      .select()
+      .from(heavyChatMessages)
+      .where(
+        beforeSequence === null
+          ? ownerThreadPredicate
+          : and(ownerThreadPredicate, lt(heavyChatMessages.sequence, beforeSequence)),
+      )
+      .orderBy(desc(heavyChatMessages.sequence), desc(heavyChatMessages.id))
+      .limit(pageSize + 1);
+    return toMessagePage(threadId, rows.map(toMessageRecord), pageSize);
+  }
+
   async listGatewayHistoryMessages(ownerUserId: string, threadId: string, beforeSequence: number) {
     const rows = await this.database
       .select({
@@ -796,6 +929,19 @@ class LazyDrizzleHeavyChatStore implements HeavyChatStore {
 
   async listMessagesByThreadIds(ownerUserId: string, threadIds: string[]) {
     return (await this.getDelegate()).listMessagesByThreadIds(ownerUserId, threadIds);
+  }
+
+  async listRecentMessagePages(ownerUserId: string, threadIds: string[], pageSize: number) {
+    return (await this.getDelegate()).listRecentMessagePages(ownerUserId, threadIds, pageSize);
+  }
+
+  async listMessagePage(
+    ownerUserId: string,
+    threadId: string,
+    beforeSequence: number | null,
+    pageSize: number,
+  ) {
+    return (await this.getDelegate()).listMessagePage(ownerUserId, threadId, beforeSequence, pageSize);
   }
 
   async listGatewayHistoryMessages(ownerUserId: string, threadId: string, beforeSequence: number) {
@@ -1604,6 +1750,34 @@ export function createHeavyChatRepository(options: HeavyChatRepositoryOptions = 
       return store.listMessagesByThreadIds(owner, normalizedThreadIds);
     },
 
+    async listRecentMessagePages(ownerUserId: string, threadIds: string[], pageSize: number) {
+      const owner = normalizeOwnerUserId(ownerUserId);
+      const normalizedThreadIds = Array.from(
+        new Set(threadIds.map((threadId) => threadId.trim()).filter(Boolean)),
+      );
+      if (!Number.isInteger(pageSize) || pageSize < 1) {
+        throw new Error("Heavy chat message page size must be a positive integer");
+      }
+      return store.listRecentMessagePages(owner, normalizedThreadIds, pageSize);
+    },
+
+    async listMessagePage(
+      ownerUserId: string,
+      threadId: string,
+      beforeSequence: number | null,
+      pageSize: number,
+    ) {
+      const owner = normalizeOwnerUserId(ownerUserId);
+      const normalizedThreadId = requireText(threadId, "Heavy chat thread id");
+      if (beforeSequence !== null && (!Number.isInteger(beforeSequence) || beforeSequence < 1)) {
+        throw new Error("Heavy chat message cursor must be a positive integer");
+      }
+      if (!Number.isInteger(pageSize) || pageSize < 1) {
+        throw new Error("Heavy chat message page size must be a positive integer");
+      }
+      return store.listMessagePage(owner, normalizedThreadId, beforeSequence, pageSize);
+    },
+
     async listGatewayHistoryMessages(ownerUserId: string, threadId: string, beforeSequence: number) {
       const owner = normalizeOwnerUserId(ownerUserId);
       if (!Number.isInteger(beforeSequence) || beforeSequence < 1) {
@@ -1644,4 +1818,6 @@ export const findMessageById = defaultRepository.findMessageById;
 export const findMessageByIdempotencyKey = defaultRepository.findMessageByIdempotencyKey;
 export const listMessages = defaultRepository.listMessages;
 export const listMessagesByThreadIds = defaultRepository.listMessagesByThreadIds;
+export const listRecentMessagePages = defaultRepository.listRecentMessagePages;
+export const listMessagePage = defaultRepository.listMessagePage;
 export const listGatewayHistoryMessages = defaultRepository.listGatewayHistoryMessages;

@@ -118,12 +118,46 @@ function buildFakeRepository() {
     async listThreads() {
       return [];
     },
+    async findThreadById(ownerUserId: string, threadId: string) {
+      calls.push({ method: "findThreadById", args: [ownerUserId, threadId] });
+      if (ownerUserId !== "owner-a" || threadId !== "thread-owned") return null;
+      const timestamp = new Date("2026-07-20T00:00:00.000Z");
+      return {
+        id: threadId,
+        ownerUserId,
+        slotId: "slot-owned",
+        projectId: null,
+        title: "Owned thread",
+        favorite: false,
+        sortOrder: 0,
+        createdAt: timestamp,
+        updatedAt: timestamp,
+      };
+    },
     async listMessages() {
       return [];
     },
     async listMessagesByThreadIds(ownerUserId: string, threadIds: string[]) {
       calls.push({ method: "listMessagesByThreadIds", args: [ownerUserId, threadIds] });
       return [];
+    },
+    async listRecentMessagePages(ownerUserId: string, threadIds: string[], pageSize: number) {
+      calls.push({ method: "listRecentMessagePages", args: [ownerUserId, threadIds, pageSize] });
+      return threadIds.map((threadId) => ({
+        threadId,
+        messages: [],
+        hasMore: false,
+        nextBeforeSequence: null,
+      }));
+    },
+    async listMessagePage(
+      ownerUserId: string,
+      threadId: string,
+      beforeSequence: number | null,
+      pageSize: number,
+    ) {
+      calls.push({ method: "listMessagePage", args: [ownerUserId, threadId, beforeSequence, pageSize] });
+      return { threadId, messages: [], hasMore: false, nextBeforeSequence: null };
     },
     async listGatewayHistoryMessages() {
       return [];
@@ -168,10 +202,11 @@ test("heavy chat service builds an owner-scoped snapshot after ensuring the defa
   assert.deepEqual(snapshot.bindings, []);
   assert.deepEqual(snapshot.threads, []);
   assert.deepEqual(snapshot.messages, []);
+  assert.deepEqual(snapshot.messagePages, []);
   assert.equal(snapshot.slots.length, 1);
   assert.equal(snapshot.slots[0]?.ownerUserId, "owner-a");
   assert.ok(calls.some((call) => call.method === "createOrGetDefaultSlot"));
-  assert.deepEqual(calls.find((call) => call.method === "listMessagesByThreadIds")?.args, ["owner-a", []]);
+  assert.deepEqual(calls.find((call) => call.method === "listRecentMessagePages")?.args, ["owner-a", [], 50]);
   assert.equal(calls.filter((call) => call.method === "listAgentBindingsForSlots").length, 1);
   assert.equal(calls.filter((call) => call.method === "listProjectBindingsForSlots").length, 1);
 });
@@ -221,9 +256,22 @@ test("heavy chat snapshot batches thread messages once and preserves snapshot th
     updatedAt: createdAt,
   });
   repository.listThreads = async () => threads;
-  repository.listMessagesByThreadIds = async (ownerUserId, threadIds) => {
-    calls.push({ method: "listMessagesByThreadIds", args: [ownerUserId, threadIds] });
-    return [toMessage("message-a", "thread-a"), toMessage("message-b", "thread-b")];
+  repository.listRecentMessagePages = async (ownerUserId, threadIds, pageSize) => {
+    calls.push({ method: "listRecentMessagePages", args: [ownerUserId, threadIds, pageSize] });
+    return [
+      {
+        threadId: "thread-b",
+        messages: [toMessage("message-b", "thread-b")],
+        hasMore: true,
+        nextBeforeSequence: 1,
+      },
+      {
+        threadId: "thread-a",
+        messages: [toMessage("message-a", "thread-a")],
+        hasMore: false,
+        nextBeforeSequence: null,
+      },
+    ];
   };
   const service = createHeavyChatService({
     repository,
@@ -234,10 +282,61 @@ test("heavy chat snapshot batches thread messages once and preserves snapshot th
 
   assert.deepEqual(snapshot.threads.map((thread) => thread.id), ["thread-b", "thread-a"]);
   assert.deepEqual(snapshot.messages.map((message) => message.id), ["message-b", "message-a"]);
+  assert.deepEqual(snapshot.messagePages, [
+    { threadId: "thread-b", hasMore: true, nextBeforeSequence: 1 },
+    { threadId: "thread-a", hasMore: false, nextBeforeSequence: null },
+  ]);
   assert.deepEqual(
-    calls.filter((call) => call.method === "listMessagesByThreadIds").map((call) => call.args),
-    [["owner-a", ["thread-b", "thread-a"]]],
+    calls.filter((call) => call.method === "listRecentMessagePages").map((call) => call.args),
+    [["owner-a", ["thread-b", "thread-a"], 50]],
   );
+});
+
+test("heavy chat service validates thread ownership and message page size", async () => {
+  const { repository, calls } = buildFakeRepository();
+  const service = createHeavyChatService({
+    repository,
+    resolveManagedHeavyAgent: async () => validAgent(),
+  });
+
+  const page = await service.getMessagePage("owner-a", "thread-owned", {
+    beforeSequence: 41,
+    pageSize: 100,
+  });
+  assert.equal(page.threadId, "thread-owned");
+  assert.deepEqual(calls.find((call) => call.method === "listMessagePage")?.args, [
+    "owner-a",
+    "thread-owned",
+    41,
+    100,
+  ]);
+
+  await service.getMessagePage("owner-a", "thread-owned");
+  assert.deepEqual(calls.filter((call) => call.method === "listMessagePage").at(-1)?.args, [
+    "owner-a",
+    "thread-owned",
+    null,
+    50,
+  ]);
+
+  const pageCallsBeforeInvalidInput = calls.filter((call) => call.method === "listMessagePage").length;
+  for (const pageSize of [0, 101, 1.5, Number.NaN]) {
+    await assert.rejects(
+      () => service.getMessagePage("owner-a", "thread-owned", { pageSize }),
+      /page size.*between 1 and 100/i,
+    );
+  }
+  assert.equal(
+    calls.filter((call) => call.method === "listMessagePage").length,
+    pageCallsBeforeInvalidInput,
+  );
+
+  const pageCallsBeforeDenial = calls.filter((call) => call.method === "listMessagePage").length;
+  await assert.rejects(
+    () => service.getMessagePage("owner-b", "thread-owned"),
+    (error: unknown) => error instanceof HeavyChatOwnershipError,
+  );
+  assert.equal(calls.filter((call) => call.method === "listMessagePage").length, pageCallsBeforeDenial);
 });
 
 test("P2-05: heavy chat service delegates owner-scoped message actions to the bridge", async () => {

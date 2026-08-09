@@ -1,6 +1,7 @@
 import type {
   CreateHeavyChatThreadRequest,
   HeavyChatMessageActionRequest,
+  HeavyChatMessagePage,
   HeavyChatSnapshot,
   InternalUserContext,
   RetryHeavyChatMessageRequest,
@@ -10,6 +11,7 @@ import { z } from "zod";
 
 import {
   createHeavyChatThread,
+  getHeavyChatMessagePage,
   getHeavyChatSnapshot,
   HeavyChatWebClientError,
   retryHeavyChatMessage,
@@ -41,10 +43,19 @@ const retryRequestSchema = z.object({
 const actionRequestSchema = z.object({
   type: z.enum(["task", "mailbox"]),
 });
+const messagePageQuerySchema = z.object({
+  beforeSequence: z.coerce.number().int().positive().optional(),
+  limit: z.coerce.number().int().min(1).max(100).optional(),
+});
 
 type HeavyChatServerDependencies = {
   requireUserContext?: () => Promise<InternalUserContext>;
   getSnapshot?: (context: InternalUserContext) => Promise<HeavyChatSnapshot>;
+  getMessagePage?: (
+    context: InternalUserContext,
+    threadId: string,
+    options?: { beforeSequence?: number; limit?: number },
+  ) => Promise<HeavyChatMessagePage>;
   createThread?: (context: InternalUserContext, input: CreateHeavyChatThreadRequest) => Promise<unknown>;
   sendMessage?: (
     context: InternalUserContext,
@@ -75,6 +86,7 @@ function defaultDependencies(): Required<HeavyChatServerDependencies> {
   return {
     requireUserContext: requirePlatformUserContext,
     getSnapshot: getHeavyChatSnapshot,
+    getMessagePage: getHeavyChatMessagePage,
     createThread: createHeavyChatThread,
     sendMessage: sendHeavyChatMessage,
     retryMessage: retryHeavyChatMessage,
@@ -146,6 +158,33 @@ export async function handleHeavyChatSnapshotRequest(
     const snapshot = await resolved.getSnapshot(context);
     return Response.json({ snapshot }, { headers: noStoreHeaders });
   } catch (error) {
+    return errorResponse(error);
+  }
+}
+
+export async function handleHeavyChatMessagePageRequest(
+  threadId: string,
+  request: Request,
+  dependencies?: HeavyChatServerDependencies,
+) {
+  const resolved = mergeDependencies(dependencies);
+  try {
+    const context = await resolved.requireUserContext();
+    const url = new URL(request.url);
+    const parsed = messagePageQuerySchema.safeParse({
+      beforeSequence: url.searchParams.get("beforeSequence") ?? undefined,
+      limit: url.searchParams.get("limit") ?? undefined,
+    });
+    if (!parsed.success) {
+      const issue = parsed.error.issues[0];
+      throw new HeavyChatBrowserRequestError(issue?.message || "Invalid message page query");
+    }
+    const page = await resolved.getMessagePage(context, threadId, parsed.data);
+    return Response.json({ page }, { headers: noStoreHeaders });
+  } catch (error) {
+    if (error instanceof HeavyChatBrowserRequestError) {
+      return Response.json({ error: error.message }, { status: 400, headers: noStoreHeaders });
+    }
     return errorResponse(error);
   }
 }

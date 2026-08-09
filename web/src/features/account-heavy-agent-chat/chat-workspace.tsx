@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useRef, useState } from "react";
 
 import { NtBadge } from "@/components/nt-primitives";
 import { HeavyChatComposer } from "@/features/account-heavy-agent-chat/heavy-chat-composer";
@@ -124,6 +124,9 @@ export function HeavyAgentChatWorkspace({
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [webSearchEnabled, setWebSearchEnabled] = useState(false);
+  const messagesViewportRef = useRef<HTMLDivElement>(null);
+  const activeThreadIdRef = useRef<string | null>(directory.activeThreadId);
+  activeThreadIdRef.current = directory.activeThreadId;
 
   const activeSlot = slots.find((slot) => slot.id === directory.activeSlotId) ?? null;
   const activeThread = threadState.threads.find((thread) => thread.id === directory.activeThreadId) ?? null;
@@ -167,6 +170,22 @@ export function HeavyAgentChatWorkspace({
     directory.syncThreadContext(nextThread.threadId, nextThread.slotId, nextThread.projectId);
   }
 
+  async function handleLoadEarlierMessages() {
+    if (!activeThread) return;
+    const threadId = activeThread.id;
+    const viewport = messagesViewportRef.current;
+    const previousScrollHeight = viewport?.scrollHeight ?? 0;
+    const loadedCount = await threadState.loadEarlierMessages(threadId);
+    if (loadedCount < 1) return;
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        const currentViewport = messagesViewportRef.current;
+        if (!currentViewport || activeThreadIdRef.current !== threadId) return;
+        currentViewport.scrollTop += currentViewport.scrollHeight - previousScrollHeight;
+      });
+    });
+  }
+
   const composer = (
     <HeavyChatComposer
       actionNotice={threadState.actionNotice}
@@ -201,7 +220,12 @@ export function HeavyAgentChatWorkspace({
         </div>
 
         <div className="nt-chat-app__topbar-actions">
-          <button className="nt-chat-app__mobile-menu" onClick={() => setMobileSidebarOpen(true)} type="button">
+          <button
+            aria-label="打开会话目录"
+            className="nt-chat-app__mobile-menu"
+            onClick={() => setMobileSidebarOpen(true)}
+            type="button"
+          >
             <MenuIcon />
           </button>
           <Link className="nt-chat-app__action-link" href="/dashboard">
@@ -251,8 +275,18 @@ export function HeavyAgentChatWorkspace({
                 </div>
               </div>
 
-              <div className="nt-chat-app__messages">
+              <div className="nt-chat-app__messages" ref={messagesViewportRef}>
                 <div className="nt-chat-app__messages-inner">
+                  {activeThread.hasMoreMessages ? (
+                    <button
+                      className="nt-chat-app__load-earlier"
+                      disabled={threadState.loadingEarlierThreadId === activeThread.id}
+                      onClick={() => void handleLoadEarlierMessages()}
+                      type="button"
+                    >
+                      {threadState.loadingEarlierThreadId === activeThread.id ? "正在加载更早消息…" : "加载更早消息"}
+                    </button>
+                  ) : null}
                   {activeThread.messages.map((message) => (
                     <HeavyChatMessageCard
                       key={message.id}

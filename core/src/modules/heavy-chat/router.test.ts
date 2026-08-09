@@ -85,6 +85,17 @@ type RouterService = {
     bindings: never[];
     threads: ReturnType<typeof threadRecord>[];
     messages: ReturnType<typeof messageRecord>[];
+    messagePages: Array<{ threadId: string; hasMore: boolean; nextBeforeSequence: number | null }>;
+  }>;
+  getMessagePage(
+    ownerUserId: string,
+    threadId: string,
+    options?: { beforeSequence?: number; pageSize?: number },
+  ): Promise<{
+    threadId: string;
+    messages: ReturnType<typeof messageRecord>[];
+    hasMore: boolean;
+    nextBeforeSequence: number | null;
   }>;
   createThread(
     ownerUserId: string,
@@ -136,6 +147,15 @@ function createRouterService(overrides: Partial<RouterService> = {}): RouterServ
         bindings: [],
         threads: [threadRecord(ownerUserId)],
         messages: [messageRecord()],
+        messagePages: [{ threadId: "thread-1", hasMore: false, nextBeforeSequence: null }],
+      };
+    },
+    async getMessagePage(_ownerUserId, threadId) {
+      return {
+        threadId,
+        messages: [messageRecord()],
+        hasMore: false,
+        nextBeforeSequence: null,
       };
     },
     async createThread(ownerUserId, input) {
@@ -228,6 +248,7 @@ describe("heavy chat router", () => {
           bindings: [],
           threads: [threadRecord(ownerUserId)],
           messages: [messageRecord()],
+          messagePages: [{ threadId: "thread-1", hasMore: false, nextBeforeSequence: null }],
         };
       },
     });
@@ -244,6 +265,74 @@ describe("heavy chat router", () => {
       assert.equal(response.json().snapshot.slots[0].ownerUserId, "user-a");
       assert.equal(response.json().snapshot.slots[0].createdAt, NOW.toISOString());
       assert.equal(response.json().snapshot.messages[0].updatedAt, NOW.toISOString());
+      assert.equal(response.json().snapshot.messagePages[0].threadId, "thread-1");
+    } finally {
+      await app.close();
+    }
+  });
+
+  it("loads an owner-scoped message page with validated keyset options", async () => {
+    let captured: { ownerUserId: string; threadId: string; options?: { beforeSequence?: number; pageSize?: number } } | null = null;
+    const service = createRouterService({
+      async getMessagePage(ownerUserId, threadId, options) {
+        captured = { ownerUserId, threadId, options };
+        return {
+          threadId,
+          messages: [messageRecord("user")],
+          hasMore: true,
+          nextBeforeSequence: 7,
+        };
+      },
+    });
+    const app = await buildRouterTestServer(service);
+    try {
+      const response = await app.inject({
+        method: "GET",
+        url: "/v1/me/heavy-chat/threads/thread-1/messages?beforeSequence=42&limit=20",
+        headers: authHeaders("user-a"),
+      });
+
+      assert.equal(response.statusCode, 200);
+      assert.deepEqual(captured, {
+        ownerUserId: "user-a",
+        threadId: "thread-1",
+        options: { beforeSequence: 42, pageSize: 20 },
+      });
+      assert.equal(response.json().page.messages[0].createdAt, NOW.toISOString());
+      assert.equal(response.json().page.hasMore, true);
+      assert.equal(response.json().page.nextBeforeSequence, 7);
+    } finally {
+      await app.close();
+    }
+  });
+
+  it("rejects invalid message page queries before calling the service", async () => {
+    let called = false;
+    const service = createRouterService({
+      async getMessagePage() {
+        called = true;
+        return { threadId: "thread-1", messages: [], hasMore: false, nextBeforeSequence: null };
+      },
+    });
+    const app = await buildRouterTestServer(service);
+    try {
+      for (const query of [
+        "limit=0",
+        "limit=101",
+        "limit=1.5",
+        "beforeSequence=0",
+        "beforeSequence=-1",
+        "beforeSequence=1.5",
+        "beforeSequence=invalid",
+      ]) {
+        const response = await app.inject({
+          method: "GET",
+          url: `/v1/me/heavy-chat/threads/thread-1/messages?${query}`,
+          headers: authHeaders(),
+        });
+        assert.equal(response.statusCode, 400, query);
+      }
+      assert.equal(called, false);
     } finally {
       await app.close();
     }

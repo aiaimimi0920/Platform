@@ -4,6 +4,7 @@ import type {
   HeavyChatMessageActionRequest,
   HeavyChatMessageActionResult,
   HeavyChatMessageAttemptResult,
+  HeavyChatMessagePage,
   HeavyChatSendMessageResult,
   HeavyChatSnapshot,
   HeavyChatThreadView,
@@ -145,6 +146,22 @@ export async function getHeavyChatSnapshot(userContext: InternalUserContext): Pr
     userContext,
   });
   return response.snapshot;
+}
+
+export async function getHeavyChatMessagePage(
+  userContext: InternalUserContext,
+  threadId: string,
+  options: { beforeSequence?: number; limit?: number } = {},
+): Promise<HeavyChatMessagePage> {
+  const query = new URLSearchParams();
+  if (options.beforeSequence !== undefined) query.set("beforeSequence", String(options.beforeSequence));
+  if (options.limit !== undefined) query.set("limit", String(options.limit));
+  const suffix = query.size > 0 ? `?${query.toString()}` : "";
+  const response = await heavyChatCoreRequest<{ page: HeavyChatMessagePage }>(
+    `/v1/me/heavy-chat/threads/${encodeURIComponent(threadId)}/messages${suffix}`,
+    { userContext },
+  );
+  return response.page;
 }
 
 export async function createHeavyChatThread(

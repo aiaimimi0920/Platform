@@ -60,6 +60,7 @@ export type HeavyChatReference = {
 
 export type HeavyChatMessage = {
   id: string;
+  sequence: number;
   role: HeavyMessageRole;
   status: HeavyMessageStatus;
   createdAtLabel: string;
@@ -79,6 +80,8 @@ export type HeavyChatThread = {
   updatedAtGroup: string;
   updatedAtSort: number;
   messages: HeavyChatMessage[];
+  hasMoreMessages: boolean;
+  nextBeforeSequence: number | null;
 };
 
 export type HeavyProjectKnowledgeItem = {

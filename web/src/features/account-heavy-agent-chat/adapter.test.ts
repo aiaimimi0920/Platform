@@ -1,9 +1,14 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import type { HeavyChatSnapshot } from "@neuro/contracts";
+import type { HeavyChatMessagePage, HeavyChatSnapshot } from "@neuro/contracts";
 
-import { adaptHeavyChatSnapshot } from "./adapter";
+import {
+  adaptHeavyChatMessagePage,
+  adaptHeavyChatSnapshot,
+  mergeHeavyChatMessagePage,
+  mergeHeavyChatWorkspaceSnapshot,
+} from "./adapter";
 
 const timestamp = "2026-07-19T08:00:00.000Z";
 
@@ -86,6 +91,7 @@ test("heavy chat adapter maps persisted snapshot relationships without seed data
       },
     ],
     messages: [message("message-user", "user", "complete", 1, "Persisted question")],
+    messagePages: [{ threadId: "thread-1", hasMore: false, nextBeforeSequence: null }],
   };
 
   const result = adaptHeavyChatSnapshot(snapshot, new Date("2026-07-19T09:00:00.000Z"));
@@ -123,6 +129,7 @@ test("heavy chat adapter maps Core execution statuses to visible UI states", () 
       message("message-complete", "assistant", "complete", 3, "Complete"),
       message("message-failed", "assistant", "failed", 4, ""),
     ],
+    messagePages: [{ threadId: "thread-1", hasMore: false, nextBeforeSequence: null }],
   };
 
   const result = adaptHeavyChatSnapshot(snapshot, new Date("2026-07-19T09:00:00.000Z"));
@@ -175,6 +182,7 @@ test("P2-05 RED: heavy chat adapter restores persisted action state and target l
       },
     ],
     messages: [assistant],
+    messagePages: [{ threadId: "thread-1", hasMore: false, nextBeforeSequence: null }],
   };
 
   const actions = adaptHeavyChatSnapshot(snapshot).threads[0]?.messages[0]?.actions ?? [];
@@ -183,4 +191,86 @@ test("P2-05 RED: heavy chat adapter restores persisted action state and target l
     ["mailbox", "failed", null],
   ]);
   assert.match(actions[1]?.errorMessage ?? "", /temporarily unavailable/i);
+});
+
+test("heavy chat adapter prepends keyset pages without duplicating messages", () => {
+  const snapshot: HeavyChatSnapshot = {
+    slots: [],
+    projects: [],
+    slotProjects: [],
+    bindings: [],
+    threads: [{
+      id: "thread-1",
+      ownerUserId: "user-1",
+      slotId: "slot-1",
+      projectId: null,
+      title: "Paged thread",
+      favorite: false,
+      sortOrder: 0,
+      createdAt: timestamp,
+      updatedAt: timestamp,
+    }],
+    messages: [
+      message("message-3", "user", "complete", 3, "Third"),
+      message("message-4", "assistant", "streaming", 4, "Partial"),
+    ],
+    messagePages: [{ threadId: "thread-1", hasMore: true, nextBeforeSequence: 3 }],
+  };
+  const page: HeavyChatMessagePage = {
+    threadId: "thread-1",
+    messages: [
+      message("message-1", "user", "complete", 1, "First"),
+      message("message-2", "assistant", "complete", 2, "Second"),
+      message("message-3", "user", "complete", 3, "Third"),
+    ],
+    hasMore: false,
+    nextBeforeSequence: null,
+  };
+
+  const merged = mergeHeavyChatMessagePage(
+    adaptHeavyChatSnapshot(snapshot),
+    adaptHeavyChatMessagePage(page),
+  );
+
+  assert.deepEqual(merged.threads[0]?.messages.map((item) => item.sequence), [1, 2, 3, 4]);
+  assert.equal(merged.threads[0]?.hasMoreMessages, false);
+  assert.equal(merged.threads[0]?.nextBeforeSequence, null);
+});
+
+test("heavy chat snapshot refresh updates live rows while retaining loaded history", () => {
+  const base: HeavyChatSnapshot = {
+    slots: [],
+    projects: [],
+    slotProjects: [],
+    bindings: [],
+    threads: [{
+      id: "thread-1",
+      ownerUserId: "user-1",
+      slotId: "slot-1",
+      projectId: null,
+      title: "Refresh thread",
+      favorite: false,
+      sortOrder: 0,
+      createdAt: timestamp,
+      updatedAt: timestamp,
+    }],
+    messages: [message("message-1", "user", "complete", 1, "Loaded earlier")],
+    messagePages: [{ threadId: "thread-1", hasMore: false, nextBeforeSequence: null }],
+  };
+  const current = adaptHeavyChatSnapshot(base);
+  const incoming = adaptHeavyChatSnapshot({
+    ...base,
+    messages: [
+      message("message-4", "assistant", "complete", 4, "Final response"),
+      message("message-5", "user", "complete", 5, "Latest"),
+    ],
+    messagePages: [{ threadId: "thread-1", hasMore: true, nextBeforeSequence: 4 }],
+  });
+
+  const merged = mergeHeavyChatWorkspaceSnapshot(current, incoming);
+
+  assert.deepEqual(merged.threads[0]?.messages.map((item) => item.sequence), [1, 4, 5]);
+  assert.equal(merged.threads[0]?.hasMoreMessages, false);
+  assert.equal(merged.threads[0]?.nextBeforeSequence, null);
+  assert.match(JSON.stringify(merged.threads[0]?.messages[1]?.blocks), /Final response/);
 });

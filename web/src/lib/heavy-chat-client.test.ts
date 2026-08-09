@@ -3,6 +3,7 @@ import test from "node:test";
 
 import type {
   HeavyChatMessageAttemptResult,
+  HeavyChatMessagePage,
   HeavyChatSendMessageResult,
   HeavyChatSnapshot,
   InternalUserContext,
@@ -10,6 +11,7 @@ import type {
 
 import {
   createHeavyChatThread,
+  getHeavyChatMessagePage,
   getHeavyChatSnapshot,
   HeavyChatWebClientError,
   retryHeavyChatMessage,
@@ -34,6 +36,7 @@ const snapshot: HeavyChatSnapshot = {
   bindings: [],
   threads: [],
   messages: [],
+  messagePages: [],
 };
 
 function jsonResponse(body: unknown, status = 200) {
@@ -88,6 +91,30 @@ test("heavy chat snapshot request sends only internal and authenticated user con
       assert.equal(readHeader(requests[0]?.init, "x-neuro-provider-user-id"), "provider-1");
       assert.equal(readHeader(requests[0]?.init, "x-neuro-username"), "alice");
       assert.equal(readHeader(requests[0]?.init, "authorization"), null);
+    },
+  );
+});
+
+test("heavy chat message page request encodes the thread and keyset query", async () => {
+  const page: HeavyChatMessagePage = {
+    threadId: "thread/one",
+    messages: [],
+    hasMore: true,
+    nextBeforeSequence: 11,
+  };
+  await withCapturedFetch(
+    () => jsonResponse({ page }),
+    async (requests) => {
+      assert.deepEqual(
+        await getHeavyChatMessagePage(userContext, "thread/one", { beforeSequence: 42, limit: 20 }),
+        page,
+      );
+      assert.equal(
+        requests[0]?.url,
+        "http://core-heavy-chat.local/v1/me/heavy-chat/threads/thread%2Fone/messages?beforeSequence=42&limit=20",
+      );
+      assert.equal(requests[0]?.init?.method, "GET");
+      assert.equal(requests[0]?.init?.body, undefined);
     },
   );
 });

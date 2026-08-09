@@ -79,6 +79,13 @@ export type HeavyChatMessageRecord = {
 
 export type HeavyChatGatewayHistoryMessageRecord = Pick<HeavyChatMessageRecord, "role" | "content">;
 
+export type HeavyChatMessagePageRecord = {
+  threadId: string;
+  messages: HeavyChatMessageRecord[];
+  hasMore: boolean;
+  nextBeforeSequence: number | null;
+};
+
 export type HeavyChatMessageAttemptRecord = {
   id: string;
   ownerUserId: string;

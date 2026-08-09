@@ -390,6 +390,36 @@ if (!databaseUrl) {
           .map((message) => message.id),
         [ownerASecondThreadMessage.id],
       );
+      const recentPages = await repositoryA.listRecentMessagePages("owner-a", [
+        ownerAThread.id,
+        ownerASecondThread.id,
+        ownerBThread.id,
+        ownerAThread.id,
+      ], 2);
+      assert.deepEqual(recentPages[0]?.messages.map((message) => message.sequence), [5, 6]);
+      assert.equal(recentPages[0]?.hasMore, true);
+      assert.equal(recentPages[0]?.nextBeforeSequence, 5);
+      assert.deepEqual(recentPages[1]?.messages.map((message) => message.id), [ownerASecondThreadMessage.id]);
+      assert.equal(recentPages[1]?.hasMore, false);
+      assert.deepEqual(recentPages[2], {
+        threadId: ownerBThread.id,
+        messages: [],
+        hasMore: false,
+        nextBeforeSequence: null,
+      });
+
+      const middlePage = await repositoryA.listMessagePage("owner-a", ownerAThread.id, 5, 2);
+      assert.deepEqual(middlePage.messages.map((message) => message.sequence), [3, 4]);
+      assert.equal(middlePage.hasMore, true);
+      assert.equal(middlePage.nextBeforeSequence, 3);
+      const oldestPage = await repositoryA.listMessagePage("owner-a", ownerAThread.id, 3, 2);
+      assert.deepEqual(oldestPage.messages.map((message) => message.sequence), [1, 2]);
+      assert.equal(oldestPage.hasMore, false);
+      assert.equal(oldestPage.nextBeforeSequence, null);
+      assert.deepEqual(
+        (await repositoryB.listMessagePage("owner-b", ownerAThread.id, null, 2)).messages,
+        [],
+      );
       assert.deepEqual(
         await repositoryA.listGatewayHistoryMessages(
           "owner-a",

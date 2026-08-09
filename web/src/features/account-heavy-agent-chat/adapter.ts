@@ -1,6 +1,7 @@
 import type {
   HeavyChatAction as ContractHeavyChatAction,
   HeavyChatMessageStatus,
+  HeavyChatMessagePage,
   HeavyChatMessageView,
   HeavyChatReference as ContractHeavyChatReference,
   HeavyChatSnapshot,
@@ -154,6 +155,7 @@ function adaptMessageBlocks(message: HeavyChatMessageView): HeavyMessageBlock[] 
 function adaptMessage(message: HeavyChatMessageView, now: Date): HeavyChatMessage {
   return {
     id: message.id,
+    sequence: message.sequence,
     role: message.role === "user" ? "user" : "assistant",
     status: adaptMessageStatus(message.status),
     createdAtLabel: formatMessageTime(message.createdAt, now),
@@ -212,12 +214,14 @@ export function adaptHeavyChatSnapshot(snapshot: HeavyChatSnapshot, now = new Da
     messages.push(message);
     messagesByThread.set(message.threadId, messages);
   }
+  const pageByThreadId = new Map(snapshot.messagePages.map((page) => [page.threadId, page]));
 
   const threads: HeavyChatThread[] = snapshot.threads.map((thread) => {
     const persistedMessages = (messagesByThread.get(thread.id) ?? []).sort(
       (left, right) => left.sequence - right.sequence,
     );
     const latestMessage = persistedMessages.at(-1);
+    const page = pageByThreadId.get(thread.id);
     return {
       id: thread.id,
       slotId: thread.slotId,
@@ -229,8 +233,70 @@ export function adaptHeavyChatSnapshot(snapshot: HeavyChatSnapshot, now = new Da
       updatedAtGroup: formatHistoryGroup(thread.updatedAt, now),
       updatedAtSort: parseTimestamp(thread.updatedAt),
       messages: persistedMessages.map((message) => adaptMessage(message, now)),
+      hasMoreMessages: page?.hasMore ?? false,
+      nextBeforeSequence: page?.nextBeforeSequence ?? null,
     };
   });
 
   return { slots, projects, threads };
+}
+
+export function adaptHeavyChatMessagePage(page: HeavyChatMessagePage, now = new Date()) {
+  return {
+    threadId: page.threadId,
+    messages: page.messages
+      .slice()
+      .sort((left, right) => left.sequence - right.sequence)
+      .map((message) => adaptMessage(message, now)),
+    hasMoreMessages: page.hasMore,
+    nextBeforeSequence: page.nextBeforeSequence,
+  };
+}
+
+function mergeMessages(current: HeavyChatMessage[], incoming: HeavyChatMessage[]) {
+  const byId = new Map(current.map((message) => [message.id, message]));
+  for (const message of incoming) byId.set(message.id, message);
+  return [...byId.values()].sort(
+    (left, right) => left.sequence - right.sequence || left.id.localeCompare(right.id),
+  );
+}
+
+export function mergeHeavyChatWorkspaceSnapshot(
+  current: HeavyWorkspaceSnapshot,
+  incoming: HeavyWorkspaceSnapshot,
+): HeavyWorkspaceSnapshot {
+  const currentThreadById = new Map(current.threads.map((thread) => [thread.id, thread]));
+  return {
+    slots: incoming.slots,
+    projects: incoming.projects,
+    threads: incoming.threads.map((thread) => {
+      const existing = currentThreadById.get(thread.id);
+      if (!existing) return thread;
+      return {
+        ...thread,
+        messages: mergeMessages(existing.messages, thread.messages),
+        hasMoreMessages: existing.hasMoreMessages,
+        nextBeforeSequence: existing.nextBeforeSequence,
+      };
+    }),
+  };
+}
+
+export function mergeHeavyChatMessagePage(
+  current: HeavyWorkspaceSnapshot,
+  page: ReturnType<typeof adaptHeavyChatMessagePage>,
+): HeavyWorkspaceSnapshot {
+  return {
+    ...current,
+    threads: current.threads.map((thread) =>
+      thread.id === page.threadId
+        ? {
+            ...thread,
+            messages: mergeMessages(thread.messages, page.messages),
+            hasMoreMessages: page.hasMoreMessages,
+            nextBeforeSequence: page.nextBeforeSequence,
+          }
+        : thread,
+    ),
+  };
 }

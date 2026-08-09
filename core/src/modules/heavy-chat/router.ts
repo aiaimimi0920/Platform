@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import type {
   HeavyChatMessageAttemptResult,
   HeavyChatMessageAttemptView,
+  HeavyChatMessagePage,
   HeavyChatMessageView,
   HeavyChatProjectView,
   HeavyChatSendMessageResult as HeavyChatSendMessageResultView,
@@ -37,6 +38,7 @@ import {
   HeavyChatOwnershipError,
   HeavyChatSlotLimitError,
   type HeavyChatMessageAttemptRecord,
+  type HeavyChatMessagePageRecord,
   type HeavyChatMessageRecord,
   type HeavyChatProjectRecord,
   type HeavyChatSlotAgentBindingRecord,
@@ -48,6 +50,11 @@ import { assertUserContext, withInternalRequest } from "../../platform/internal-
 
 export type HeavyChatRouterService = {
   getSnapshot(ownerUserId: string): Promise<HeavyChatSnapshotRecord>;
+  getMessagePage(
+    ownerUserId: string,
+    threadId: string,
+    options?: { beforeSequence?: number; pageSize?: number },
+  ): Promise<HeavyChatMessagePageRecord>;
   createThread(ownerUserId: string, input: CreateHeavyChatThreadArgs): Promise<HeavyChatThreadRecord>;
   sendMessage(ownerUserId: string, input: HeavyChatSendMessageInput): Promise<HeavyChatSendMessageResult>;
   retryMessage(ownerUserId: string, input: HeavyChatRetryMessageInput): Promise<HeavyChatExecutionResult>;
@@ -85,6 +92,10 @@ const retryMessageSchema = z.object({
 const messageActionSchema = z.object({
   type: z.enum(["task", "mailbox"]),
 });
+const messagePageQuerySchema = z.object({
+  beforeSequence: z.coerce.number().int().positive().optional(),
+  limit: z.coerce.number().int().min(1).max(100).optional(),
+});
 
 let productionServicePromise: Promise<HeavyChatRouterService> | null = null;
 
@@ -94,6 +105,15 @@ function parseRequestBody<T>(schema: z.ZodType<T>, body: unknown): T {
   const issue = parsed.error.issues[0];
   const field = issue?.path.join(".");
   const detail = issue?.message || "Invalid request body";
+  throw new BadRequestError(field ? `${field}: ${detail}` : detail);
+}
+
+function parseRequestQuery<T>(schema: z.ZodType<T>, query: unknown): T {
+  const parsed = schema.safeParse(query);
+  if (parsed.success) return parsed.data;
+  const issue = parsed.error.issues[0];
+  const field = issue?.path.join(".");
+  const detail = issue?.message || "Invalid request query";
   throw new BadRequestError(field ? `${field}: ${detail}` : detail);
 }
 
@@ -156,6 +176,16 @@ function toSnapshotView(snapshot: HeavyChatSnapshotRecord): HeavyChatSnapshot {
     bindings: snapshot.bindings.map(toBindingView),
     threads: snapshot.threads.map(toThreadView),
     messages: snapshot.messages.map(toMessageView),
+    messagePages: snapshot.messagePages.map((page) => ({ ...page })),
+  };
+}
+
+function toMessagePageView(page: HeavyChatMessagePageRecord): HeavyChatMessagePage {
+  return {
+    threadId: page.threadId,
+    messages: page.messages.map(toMessageView),
+    hasMore: page.hasMore,
+    nextBeforeSequence: page.nextBeforeSequence,
   };
 }
 
@@ -323,6 +353,24 @@ export function createHeavyChatRouter(options: HeavyChatRouterOptions = {}): Fas
         try {
           const thread = await (await getService()).createThread(userId, payload);
           return reply.status(201).send({ thread: toThreadView(thread) });
+        } catch (error) {
+          throw normalizeHeavyChatError(error);
+        }
+      },
+    );
+
+    app.get<{ Params: { threadId: string }; Querystring: unknown }>(
+      "/v1/me/heavy-chat/threads/:threadId/messages",
+      { preHandler: withInternalRequest },
+      async (request) => {
+        const { userId } = assertUserContext(request);
+        const query = parseRequestQuery(messagePageQuerySchema, request.query);
+        try {
+          const page = await (await getService()).getMessagePage(userId, request.params.threadId, {
+            beforeSequence: query.beforeSequence,
+            pageSize: query.limit,
+          });
+          return { page: toMessagePageView(page) };
         } catch (error) {
           throw normalizeHeavyChatError(error);
         }

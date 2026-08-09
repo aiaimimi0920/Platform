@@ -150,7 +150,9 @@ describe("independent Platform repository", () => {
       ?.split("async listSlots(ownerUserId: string)")[0] ?? "";
     assert(snapshotBlock.includes("repository.listAgentBindingsForSlots"));
     assert(snapshotBlock.includes("repository.listProjectBindingsForSlots"));
-    assert(snapshotBlock.includes("repository.listMessagesByThreadIds"));
+    assert(snapshotBlock.includes("repository.listRecentMessagePages"));
+    assert(snapshotBlock.includes("messagePages:"));
+    assert(!snapshotBlock.includes("repository.listMessagesByThreadIds"));
     assert(!snapshotBlock.includes("mapWithConcurrency"));
     assert(service.includes("repository.listGatewayHistoryMessages"));
     assert(!service.includes("function buildGatewayHistory"));
@@ -166,6 +168,30 @@ describe("independent Platform repository", () => {
     assert(repository.includes("inArray(heavyChatSlotAgents.slotId, slotIds)"));
     assert(repository.includes("inArray(heavyChatSlotProjects.slotId, slotIds)"));
     assert(repository.includes("inArray(heavyChatMessages.threadId, threadIds)"));
+    const recentPageQueryBlock = repository
+      .split("async listRecentMessagePages(ownerUserId: string, threadIds: string[], pageSize: number)")[1]
+      ?.split("async listMessagePage(")[0] ?? "";
+    assert(recentPageQueryBlock.includes("innerJoinLateral"));
+    assert(recentPageQueryBlock.includes("requested_heavy_chat_threads"));
+    assert(!recentPageQueryBlock.includes("row_number() over"));
+    assert(recentPageQueryBlock.includes("pageSize + 1"));
+    const messagePageQueryBlock = repository
+      .split("async listMessagePage(")[1]
+      ?.split("async listGatewayHistoryMessages")[0] ?? "";
+    assert(messagePageQueryBlock.includes("lt(heavyChatMessages.sequence, beforeSequence)"));
+    assert(messagePageQueryBlock.includes(".limit(pageSize + 1)"));
+
+    const router = read("core/src/modules/heavy-chat/router.ts");
+    assert(router.includes('"/v1/me/heavy-chat/threads/:threadId/messages"'));
+    assert(router.includes("getMessagePage(userId, request.params.threadId"));
+    const webAdapter = read("web/src/features/account-heavy-agent-chat/adapter.ts");
+    assert(webAdapter.includes("mergeHeavyChatWorkspaceSnapshot"));
+    assert(webAdapter.includes("mergeHeavyChatMessagePage"));
+    const webThreadState = read("web/src/features/account-heavy-agent-chat/use-heavy-chat-thread-state.ts");
+    assert(webThreadState.includes("beforeSequence=${thread.nextBeforeSequence}&limit=50"));
+    assert(webThreadState.includes("mergeHeavyChatMessagePage(current, page)"));
+    const webWorkspace = read("web/src/features/account-heavy-agent-chat/chat-workspace.tsx");
+    assert(webWorkspace.includes("currentViewport.scrollHeight - previousScrollHeight"));
   });
 
   it("builds all Platform-owned images without publishing pull requests", () => {

@@ -11,6 +11,7 @@ import type { HeavyChatMessage } from "./types";
 function message(overrides: Partial<HeavyChatMessage> = {}): HeavyChatMessage {
   return {
     id: "message-1",
+    sequence: 1,
     role: "assistant",
     status: "complete",
     createdAtLabel: "12:00",

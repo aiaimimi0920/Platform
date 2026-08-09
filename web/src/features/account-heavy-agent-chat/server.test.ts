@@ -6,6 +6,7 @@ import type { HeavyChatSnapshot, InternalUserContext } from "@neuro/contracts";
 import {
   handleHeavyChatCreateThreadRequest,
   handleHeavyChatMessageActionRequest,
+  handleHeavyChatMessagePageRequest,
   handleHeavyChatSendMessageRequest,
   handleHeavyChatSnapshotRequest,
   loadHeavyChatWorkspace,
@@ -19,6 +20,7 @@ const snapshot: HeavyChatSnapshot = {
   bindings: [],
   threads: [],
   messages: [],
+  messagePages: [],
 };
 
 test("heavy chat browser server returns a no-store snapshot envelope", async () => {
@@ -52,6 +54,54 @@ test("heavy chat browser server rejects invalid create payloads before Core", as
   );
 
   assert.equal(response.status, 400);
+  assert.equal(calls, 0);
+});
+
+test("heavy chat browser server validates and forwards a keyset message page", async () => {
+  let captured: unknown = null;
+  const page = {
+    threadId: "thread-1",
+    messages: [],
+    hasMore: true,
+    nextBeforeSequence: 21,
+  };
+  const response = await handleHeavyChatMessagePageRequest(
+    "thread-1",
+    new Request("https://platform.local/api/heavy-chat/threads/thread-1/messages?beforeSequence=42&limit=20"),
+    {
+      requireUserContext: async () => userContext,
+      getMessagePage: async (context, threadId, options) => {
+        captured = { context, threadId, options };
+        return page;
+      },
+    },
+  );
+
+  assert.equal(response.status, 200);
+  assert.deepEqual(captured, {
+    context: userContext,
+    threadId: "thread-1",
+    options: { beforeSequence: 42, limit: 20 },
+  });
+  assert.deepEqual(await response.json(), { page });
+});
+
+test("heavy chat browser server rejects invalid page queries before Core", async () => {
+  let calls = 0;
+  for (const query of ["limit=101", "limit=0", "beforeSequence=0", "beforeSequence=1.5", "beforeSequence=invalid"]) {
+    const response = await handleHeavyChatMessagePageRequest(
+      "thread-1",
+      new Request(`https://platform.local/api/heavy-chat/threads/thread-1/messages?${query}`),
+      {
+        requireUserContext: async () => userContext,
+        getMessagePage: async () => {
+          calls += 1;
+          return { threadId: "thread-1", messages: [], hasMore: false, nextBeforeSequence: null };
+        },
+      },
+    );
+    assert.equal(response.status, 400, query);
+  }
   assert.equal(calls, 0);
 });
 

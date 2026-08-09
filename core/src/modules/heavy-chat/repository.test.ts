@@ -336,6 +336,37 @@ class MemoryHeavyChatStore {
     );
   }
 
+  async listRecentMessagePages(ownerUserId: string, threadIds: string[], pageSize: number) {
+    return Promise.all(
+      threadIds.map((threadId) => this.listMessagePage(ownerUserId, threadId, null, pageSize)),
+    );
+  }
+
+  async listMessagePage(
+    ownerUserId: string,
+    threadId: string,
+    beforeSequence: number | null,
+    pageSize: number,
+  ) {
+    const rows = this.messages
+      .filter(
+        (row) =>
+          row.ownerUserId === ownerUserId &&
+          row.threadId === threadId &&
+          (beforeSequence === null || row.sequence < beforeSequence),
+      )
+      .sort((left, right) => right.sequence - left.sequence || right.id.localeCompare(left.id))
+      .slice(0, pageSize + 1);
+    const hasMore = rows.length > pageSize;
+    const retained = rows.slice(0, pageSize);
+    return clone({
+      threadId,
+      messages: [...retained].reverse(),
+      hasMore,
+      nextBeforeSequence: hasMore ? retained.at(-1)?.sequence ?? null : null,
+    });
+  }
+
   async listGatewayHistoryMessages(ownerUserId: string, threadId: string, beforeSequence: number) {
     return clone(
       this.messages
@@ -774,6 +805,79 @@ test("bulk message reads stay owner-scoped and Gateway history includes only com
     ],
   );
   assert.deepEqual(await repository.listGatewayHistoryMessages("owner-b", threadA.id, system.sequence + 1), []);
+});
+
+test("message pages use stable sequence keysets and stay owner-scoped", async () => {
+  const { repository } = buildRepository();
+  const ownerSlot = await repository.createOrGetDefaultSlot("owner-a");
+  const foreignSlot = await repository.createOrGetDefaultSlot("owner-b");
+  const thread = await repository.createThread("owner-a", {
+    id: "thread-paged",
+    slotId: ownerSlot.id,
+    title: "Paged thread",
+  });
+  const foreignThread = await repository.createThread("owner-b", {
+    id: "thread-paged-foreign",
+    slotId: foreignSlot.id,
+    title: "Foreign paged thread",
+  });
+
+  for (let sequence = 1; sequence <= 5; sequence += 1) {
+    await repository.appendMessage("owner-a", {
+      id: `message-paged-${sequence}`,
+      threadId: thread.id,
+      role: sequence % 2 === 0 ? "assistant" : "user",
+      status: "complete",
+      content: `message ${sequence}`,
+    });
+  }
+  await repository.appendMessage("owner-b", {
+    id: "message-paged-foreign",
+    threadId: foreignThread.id,
+    role: "user",
+    content: "foreign",
+  });
+
+  const [latest, isolated] = await repository.listRecentMessagePages(
+    "owner-a",
+    [thread.id, foreignThread.id, thread.id],
+    2,
+  );
+  assert.deepEqual(latest?.messages.map((message) => message.sequence), [4, 5]);
+  assert.equal(latest?.hasMore, true);
+  assert.equal(latest?.nextBeforeSequence, 4);
+  assert.deepEqual(isolated, {
+    threadId: foreignThread.id,
+    messages: [],
+    hasMore: false,
+    nextBeforeSequence: null,
+  });
+
+  const middle = await repository.listMessagePage("owner-a", thread.id, 4, 2);
+  assert.deepEqual(middle.messages.map((message) => message.sequence), [2, 3]);
+  assert.equal(middle.hasMore, true);
+  assert.equal(middle.nextBeforeSequence, 2);
+
+  const oldest = await repository.listMessagePage("owner-a", thread.id, 2, 2);
+  assert.deepEqual(oldest.messages.map((message) => message.sequence), [1]);
+  assert.equal(oldest.hasMore, false);
+  assert.equal(oldest.nextBeforeSequence, null);
+
+  const foreignRead = await repository.listMessagePage("owner-b", thread.id, null, 2);
+  assert.deepEqual(foreignRead.messages, []);
+  assert.equal(foreignRead.hasMore, false);
+  await assert.rejects(
+    () => repository.listMessagePage("owner-a", thread.id, 0, 2),
+    /cursor must be a positive integer/i,
+  );
+  await assert.rejects(
+    () => repository.listMessagePage("owner-a", thread.id, null, 0),
+    /page size must be a positive integer/i,
+  );
+  await assert.rejects(
+    () => repository.listRecentMessagePages("owner-a", [thread.id], 0),
+    /page size must be a positive integer/i,
+  );
 });
 
 test("concurrent message appends preserve idempotency and allocate unique sequences", async () => {

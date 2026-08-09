@@ -2,9 +2,14 @@
 
 import { startTransition, useCallback, useMemo, useRef, useState } from "react";
 
-import type { HeavyChatSnapshot, HeavyChatThreadView } from "@neuro/contracts";
+import type { HeavyChatMessagePage, HeavyChatSnapshot, HeavyChatThreadView } from "@neuro/contracts";
 
-import { adaptHeavyChatSnapshot } from "./adapter";
+import {
+  adaptHeavyChatMessagePage,
+  adaptHeavyChatSnapshot,
+  mergeHeavyChatMessagePage,
+  mergeHeavyChatWorkspaceSnapshot,
+} from "./adapter";
 import { runHeavyChatBrowserAction } from "./browser-action";
 import type {
   HeavyActionNotice,
@@ -110,7 +115,9 @@ export function useHeavyChatThreadState({
   );
   const [busy, setBusy] = useState(false);
   const [messageBusy, setMessageBusy] = useState(false);
+  const [loadingEarlierThreadId, setLoadingEarlierThreadId] = useState<string | null>(null);
   const busyRef = useRef(false);
+  const earlierBusyThreadIdsRef = useRef(new Set<string>());
 
   const threadMap = useMemo(
     () => new Map(workspace.threads.map((thread) => [thread.id, thread])),
@@ -120,9 +127,40 @@ export function useHeavyChatThreadState({
   const refreshSnapshot = useCallback(async () => {
     const response = await browserRequest<{ snapshot: HeavyChatSnapshot }>("/api/heavy-chat/snapshot");
     const nextWorkspace = adaptHeavyChatSnapshot(response.snapshot);
-    startTransition(() => setWorkspace(nextWorkspace));
+    startTransition(() =>
+      setWorkspace((current) => mergeHeavyChatWorkspaceSnapshot(current, nextWorkspace)),
+    );
     return nextWorkspace;
   }, []);
+
+  const loadEarlierMessages = useCallback(async (threadId: string) => {
+    const thread = threadMap.get(threadId);
+    if (
+      !thread?.hasMoreMessages ||
+      thread.nextBeforeSequence === null ||
+      earlierBusyThreadIdsRef.current.has(threadId)
+    ) {
+      return 0;
+    }
+    earlierBusyThreadIdsRef.current.add(threadId);
+    setLoadingEarlierThreadId(threadId);
+    try {
+      const response = await browserRequest<{ page: HeavyChatMessagePage }>(
+        `/api/heavy-chat/threads/${encodeURIComponent(threadId)}/messages?beforeSequence=${thread.nextBeforeSequence}&limit=50`,
+      );
+      const page = adaptHeavyChatMessagePage(response.page);
+      startTransition(() =>
+        setWorkspace((current) => mergeHeavyChatMessagePage(current, page)),
+      );
+      return page.messages.length;
+    } catch (error) {
+      setActionNotice(notice("danger", errorMessage(error)));
+      return 0;
+    } finally {
+      earlierBusyThreadIdsRef.current.delete(threadId);
+      setLoadingEarlierThreadId((current) => (current === threadId ? null : current));
+    }
+  }, [threadMap]);
 
   const refreshSnapshotSilently = useCallback(async () => {
     try {
@@ -314,6 +352,8 @@ export function useHeavyChatThreadState({
     busy,
     createThread,
     draft,
+    loadEarlierMessages,
+    loadingEarlierThreadId,
     messageBusy,
     projects: workspace.projects,
     refreshSnapshot,

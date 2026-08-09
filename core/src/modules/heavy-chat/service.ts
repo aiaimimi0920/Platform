@@ -9,6 +9,7 @@ import {
   HeavyChatManagedAgentValidationError,
   HeavyChatOwnershipError,
   type HeavyChatMessageAttemptRecord,
+  type HeavyChatMessagePageRecord,
   type HeavyChatMessageRecord,
   type HeavyChatSlotAgentBindingRecord,
   type HeavyChatSlotRecord,
@@ -115,9 +116,12 @@ export type HeavyChatSnapshotRecord = {
   bindings: HeavyChatSlotAgentBindingRecord[];
   threads: HeavyChatThreadRecord[];
   messages: HeavyChatMessageRecord[];
+  messagePages: Array<Pick<HeavyChatMessagePageRecord, "threadId" | "hasMore" | "nextBeforeSequence">>;
 };
 
 const DEFAULT_ATTEMPT_RECOVERY_AFTER_MS = 5 * 60 * 1000;
+export const HEAVY_CHAT_DEFAULT_MESSAGE_PAGE_SIZE = 50;
+export const HEAVY_CHAT_MAX_MESSAGE_PAGE_SIZE = 100;
 
 function requirePositiveMaxSlots(value: number) {
   if (!Number.isInteger(value) || value < 1) {
@@ -140,6 +144,14 @@ function resolveAttemptRecoveryAfterMs(value: number | undefined) {
     throw new Error("Heavy chat attempt recovery threshold must be a positive finite number");
   }
   return Math.floor(resolved);
+}
+
+function resolveMessagePageSize(value: number | undefined) {
+  if (value === undefined) return HEAVY_CHAT_DEFAULT_MESSAGE_PAGE_SIZE;
+  if (!Number.isInteger(value) || value < 1 || value > HEAVY_CHAT_MAX_MESSAGE_PAGE_SIZE) {
+    throw new Error(`Heavy chat message page size must be an integer between 1 and ${HEAVY_CHAT_MAX_MESSAGE_PAGE_SIZE}`);
+  }
+  return value;
 }
 
 function requireGatewayClient(options: HeavyChatServiceOptions) {
@@ -295,20 +307,15 @@ export function createHeavyChatService(options: HeavyChatServiceOptions) {
       ]);
       const slotIds = slots.map((slot) => slot.id);
 
-      const [bindings, slotProjectRows, messages] = await Promise.all([
+      const [bindings, slotProjectRows, messagePages] = await Promise.all([
         repository.listAgentBindingsForSlots(ownerUserId, slotIds),
         repository.listProjectBindingsForSlots(ownerUserId, slotIds),
-        repository.listMessagesByThreadIds(
+        repository.listRecentMessagePages(
           ownerUserId,
           threads.map((thread) => thread.id),
+          HEAVY_CHAT_DEFAULT_MESSAGE_PAGE_SIZE,
         ),
       ]);
-      const messagesByThreadId = new Map<string, HeavyChatMessageRecord[]>();
-      for (const message of messages) {
-        const threadMessages = messagesByThreadId.get(message.threadId) ?? [];
-        threadMessages.push(message);
-        messagesByThreadId.set(message.threadId, threadMessages);
-      }
       const bindingBySlotId = new Map(bindings.map((binding) => [binding.slotId, binding]));
       const projectBindingsBySlotId = new Map<string, HeavyChatSlotProjectRecord[]>();
       for (const binding of slotProjectRows) {
@@ -330,8 +337,28 @@ export function createHeavyChatService(options: HeavyChatServiceOptions) {
           .map((slot) => bindingBySlotId.get(slot.id) ?? null)
           .filter((binding): binding is HeavyChatSlotAgentBindingRecord => binding !== null),
         threads,
-        messages: threads.flatMap((thread) => messagesByThreadId.get(thread.id) ?? []),
+        messages: messagePages.flatMap((page) => page.messages),
+        messagePages: messagePages.map(({ threadId, hasMore, nextBeforeSequence }) => ({
+          threadId,
+          hasMore,
+          nextBeforeSequence,
+        })),
       };
+    },
+
+    async getMessagePage(
+      ownerUserId: string,
+      threadId: string,
+      options: { beforeSequence?: number; pageSize?: number } = {},
+    ) {
+      const thread = await repository.findThreadById(ownerUserId, threadId);
+      if (!thread) throw new HeavyChatOwnershipError("Heavy chat thread does not belong to the owner");
+      return repository.listMessagePage(
+        ownerUserId,
+        thread.id,
+        options.beforeSequence ?? null,
+        resolveMessagePageSize(options.pageSize),
+      );
     },
 
     async listSlots(ownerUserId: string) {

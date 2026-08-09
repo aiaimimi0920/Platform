@@ -111,6 +111,16 @@ export type HeavyChatSlotProjectView = {
   projectId: string;
 };
 
+export type HeavyChatMessagePageInfo = {
+  threadId: string;
+  hasMore: boolean;
+  nextBeforeSequence: number | null;
+};
+
+export type HeavyChatMessagePage = HeavyChatMessagePageInfo & {
+  messages: HeavyChatMessageView[];
+};
+
 export type HeavyChatSnapshot = {
   slots: HeavyChatSlotView[];
   projects: HeavyChatProjectView[];
@@ -118,6 +128,7 @@ export type HeavyChatSnapshot = {
   bindings: HeavyChatSlotAgentBindingView[];
   threads: HeavyChatThreadView[];
   messages: HeavyChatMessageView[];
+  messagePages: HeavyChatMessagePageInfo[];
 };
 
 export type CreateHeavyChatThreadRequest = {
