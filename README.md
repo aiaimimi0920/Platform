@@ -212,6 +212,7 @@ Build a complete release only after a clean acceptance run for the same commit:
 ```powershell
 npm run acceptance:ci -- --run-id release-<versionId>
 npm run release:build -- --version-id <versionId> --acceptance-manifest .runtime/acceptance/release-<versionId>/acceptance-manifest.json --oci-layout-root .runtime/release-images/<versionId>
+npm run acceptance:release -- --package-dir ../release/Platform/<versionId> --run-id release-smoke-<versionId> --evidence-path .runtime/acceptance/release-smoke-<versionId>/release-smoke.json
 ```
 
 Use `--image-lock <validated-image-lock.json>` instead of `--oci-layout-root`
@@ -223,6 +224,16 @@ six immutable images or offline OCI layouts, migrations, Compose/K8s/OpenTofu,
 sanitized environment contracts, redacted evidence, dependency inventory, and
 complete SHA-256 records. See
 `docs/40-engineering/platform-release-artifact-standard.md`.
+
+The artifact-only smoke first verifies exact checksum coverage, release/image
+manifest consistency, immutable image references, and the absence of source
+builds, bind mounts, `include`, `extends`, or develop watches. It then starts a
+uniquely named Compose project on newly allocated loopback ports with pinned
+PostgreSQL, Valkey, MinIO, and Gateway fixtures, runs migrations plus semantic
+Core/Account/Web readiness and login-entry probes, records secret-free JSON
+evidence, and removes only that project's containers, named volumes, and any
+temporary images imported from packaged OCI layouts. A source-level test pass is
+not a substitute for a fresh successful runtime smoke against the final package.
 
 Build and verify only the versioned Platform Web component package on Windows:
 

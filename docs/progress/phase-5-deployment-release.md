@@ -2,7 +2,7 @@
 
 - [x] `P5-01` Kustomize first-deploy/migration/digest/RBAC contract。
 - [x] `P5-02` staging/production OpenTofu validation。
-- [ ] `P5-03` Platform-local complete release builder with OCI layout and manifest。
+- [x] `P5-03` Platform-local complete release builder with OCI layout and manifest。
 - [ ] `P5-04` artifact-only release runtime smoke。
 
 Acceptance: `release/Platform/<version>/` starts without source bind/build context and contains redacted evidence, migrations, deployment bundle, checksums and SBOM/dependency inventory.
@@ -50,5 +50,24 @@ Acceptance: `release/Platform/<version>/` starts without source bind/build conte
   - `npm run infra:tofu:validate`：递归 fmt check、两个环境 `init -backend=false -lockfile=readonly`、provider-schema validate 全部通过。
   - `node --test scripts/acceptance/tests/tofu-contract.test.mjs scripts/repository-contract.mjs`：`15/15` 通过。
 - 当前剩余边界：本任务没有配置真实 backend、没有使用云凭证，也没有执行 `plan` / `apply`；因此不证明 GCP/Cloudflare 权限、配额、资源创建、k3s、Ingress、DNS 传播或应用可用。真实部署与完整 release 仍属于后续任务。
+
+## P5-03 完成记录
+
+- 新增 `scripts/acceptance/release-build.mjs` 与 `scripts/acceptance/tests/release-build.test.mjs`，并提供 `npm run release:build`。
+- complete release builder 强制只写入 sibling `../release/Platform/<versionId>/`，拒绝仓库内 release、任意 output override、已有 destination、symlink 与脏工作树；构建期间 Git revision 或 dirty 状态发生变化也会失败。
+- release 输入必须来自同一 clean commit 的 passed acceptance manifest，并且 required / external-boundary counters 必须与逐条 result 一致；required 不允许 not-applicable，外部边界只允许 evidence-backed not-applicable。
+- 镜像输入严格二选一：同 revision 的六镜像 immutable lock，或恰好六个 `linux/amd64` OCI layout。最终 Compose/Kustomize 均替换为实际 `neuro-platform-*` immutable digest，release 不包含 source build context。
+- 完整 payload 包含 Web package、六镜像 inventory/可选 OCI layouts、三域 migration 及显式顺序、Compose/K8s/OpenTofu、environment contracts、脱敏 acceptance evidence、dependency inventory 与全文件 SHA-256；唯一 staging 目录在全部校验成功后才原子 rename。
+- `P5-03` 验证：
+  - `node --test scripts/acceptance/tests/release-build.test.mjs scripts/acceptance/tests/release-smoke.test.mjs`：`10/10` 通过（含后续 P5-04 合同）。
+  - `npm run ci`：退出 `0`；仓库/结构门禁、OpenTofu、生产依赖审计、全 workspace tests、Vitest、typecheck 与 Next production build 均通过。
+- 当前没有生成正式 release：final acceptance 尚未通过，构建器会按设计拒绝旧的 failed/cross-commit acceptance evidence。
+
+## P5-04 当前进度（未完成）
+
+- 已新增 `scripts/acceptance/release-smoke.mjs`、`scripts/acceptance/tests/release-smoke.test.mjs` 和 `npm run acceptance:release`。
+- 当前合同覆盖 exact checksum、manifest/image consistency、immutable images、无额外 service、无 source build/bind/include/extends/develop、唯一 Compose project/ports/volumes、semantic readiness/login probes、脱敏 evidence、精确 cleanup 与 cleanup failure owner recovery。
+- 生成的 release + fixture override 已通过 Docker Compose v5.1.4 离线 `config --quiet` 解析；纯合同/编排测试 `5/5` 通过，完整 `npm run ci` 退出 `0`。
+- 本机 Docker Engine 当前对 `docker version` 超时，因此尚未对最终 package 执行真实 migration/readiness/product runtime smoke。`P5-04` 必须继续保持未完成，直到 fresh evidence 同时满足 `status: passed` 与 `cleanup.completed: true`。
 
 产品状态仍为 `Platform 产品未完成`。

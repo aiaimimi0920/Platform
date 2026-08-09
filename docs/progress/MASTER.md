@@ -37,7 +37,7 @@
 - [x] Phase 2: 重度智能体真实闭环 (5/5 tasks) [details](./phase-2-heavy-chat.md)
 - [x] Phase 3: 产品真实性与正式入口 (4/4 tasks) [details](./phase-3-product-truthfulness.md)
 - [x] Phase 4: 核心领域测试与安全可观测性 (4/4 tasks) [details](./phase-4-domain-security-observability.md)
-- [ ] Phase 5: 部署与完整 release (2/4 tasks) [details](./phase-5-deployment-release.md)
+- [ ] Phase 5: 部署与完整 release (3/4 tasks) [details](./phase-5-deployment-release.md)
 - [ ] Phase 6: 全栈、浏览器与最终验收 (0/4 tasks) [details](./phase-6-final-acceptance.md)
 
 Phase 0 当前任务：
@@ -52,11 +52,11 @@ Phase 0 当前任务：
 
 ## Current Status
 
-- 当前阶段：Phase 5 进行中；`P5-01` 与 `P5-02` 已完成，产品本身尚未完成。
+- 当前阶段：Phase 5 进行中；`P5-01`、`P5-02` 与 `P5-03` 已完成，产品本身尚未完成。
 - 已完成：Phase 0 全部设计任务；`P1-01` acceptance manifest、命令执行器、证据脱敏和 required skip-fail runner；`P1-02` isolated Compose、临时 secret/credential root、Platform doubles 与 owner-aware cleanup；`P1-03` production Dev Auth guard、Worker/Account Worker/Executor readiness 与 Compose health gates；`P1-04` strict acceptance inventory、debt 修复、`smoke` bridge 和 external-boundary harness。
 - `P1-04` 最终真实运行记录于 `.runtime/acceptance/platform-acceptance-p104-runtime5/acceptance-manifest.json`：required `14 discovered / 14 executed / 9 passed / 5 failed / 0 skipped`；external-boundary `4 discovered / 4 executed / 3 passed / 0 failed / 1 not-applicable`。required 失败为 integration gate 未获授权以及尚未实现的 Owner、Visitor、Operator、dependency-error 浏览器套件，未被静默标记为 skip；runtime5 对应已提交的 Platform P1-04 commit `77831496c3baa886d9f08ac804b92268f58000f6`。
 - 同一 run 的 Compose render/startup 均成功，服务均 healthy，owner cleanup receipt 已保留；cleanup 后本次验收的容器、网络、volume 均为 `0`。这些是基础设施证据，不是产品验收通过证据。
-- 当前动作：`P5-02` 已完成，staging/production OpenTofu 的 remote-state prefix、required/secret input、网络与节点安全、非 secret 输出、provider source/lock 和 CI schema validation 已落地；下一步进入 `P5-03` Platform-local complete release builder。
+- 当前动作：`P5-03` complete release builder 已完成；`P5-04` artifact-only smoke 的实现、纯合同测试和 Compose 离线 render 已完成，但真实 Docker runtime 仍被本机 Engine 无响应阻塞，因此 P5-04、正式 release 与最终验收均未完成。
 - `P3-02` 证据：Web 全量 `264/264`，TypeScript 检查退出 `0`，Next 生产构建成功，Platform 限定 `git diff --check` 通过。正式改造页面已移除 demo catalog、静默空回退，并对 public-surface 读取提供 strict 失败态；旧兼容调用方仍需在后续任务迁移。
 - `P3-03` 证据：`/mailbox`、`/benefits`、`/my-arbitrations` 已切换为真实工作区，保留 `messageId`、`family`、`serviceId`、`caseId` 等深链接状态，并对 owner / operator 视图保持边界隔离。新增 `p3-03-workspaces`、仲裁 presentation、权益选择和邮箱深链接回归测试；Web 全量 `273/273`，`npm run typecheck --workspace @neuro/web`（`next build`）退出 `0`，Platform 限定 `git diff --check` 退出 `0`（仅有 Git LF/CRLF 提示告警）。
 - `P3-04` 证据：`/agents?role=heavy` 现已根据 live custom heavy-agent 数量计算实际槽位占用，不再硬编码 `1 / 2`；默认觅觅固定保留且不可被批量选中，自创建重度槽位已接入真实新建、编辑、启用、停用、删除入口。新增 `managed-heavy-role-section` 合同测试；Web 全量 `276/276`，`npm run typecheck --workspace @neuro/web`（`next build`）退出 `0`，Platform 限定 `git diff --check` 退出 `0`（仅有 Git LF/CRLF 提示告警）。
@@ -66,10 +66,13 @@ Phase 0 当前任务：
 - `P4-04` 证据：`@neuro/backend-foundation` 统一生成/归一化 `x-request-id`、`x-correlation-id`，并在 Core、Account API 错误边界输出 service/category/occurredAt/requestId/correlationId/retryable/statusCode 安全 diagnostics；Web 内部请求传播 safe correlation headers，对 HTTP 非 2xx 与 network/timeout transport failures 统一分类为 dependency/auth/validation/not_found/conflict/quota/internal，并在 dependency result 中保留安全 operator diagnostics。脱敏覆盖 token、cookie、key、client secret、password、email/oauth/verification code 与 `sk-*` 形态，且 Web request-id / correlation-id 对 secret-shaped 值执行出站拒绝和入站脱敏。验证证据包括：`npm run test --workspace @neuro/backend-foundation`、`npm run typecheck --workspace @neuro/backend-foundation`、`npm run test --workspace @neuro/core`（151/151）、`npm run typecheck --workspace @neuro/core`、`npm run test --workspace @neuro/account-api`、`npm run typecheck --workspace @neuro/account-api`、`npm run test --workspace @neuro/web`（284/284）、`npm run typecheck --workspace @neuro/web`、`node --test scripts/acceptance/tests/manifest.test.mjs`、`git diff --check -- Platform`（仅 Git LF/CRLF 提示）。
 - `P5-01` 证据：新增 `scripts/acceptance/tests/k8s-contract.test.mjs`，并将 `infra/k8s/base` / staging / production overlay 改为 production-grade render contract：staging 与 production 分别使用独立 namespace 和 namePrefix，runtime images 渲染为 digest-pinned references，migration Job 覆盖 core / ai-gateway-domain / account-domain，Gateway secret contract 显式化，account-edge RBAC 降为 Role/RoleBinding 且不读取 Secret，`deploy/apply-k8s.sh` 执行 render、placeholder/digest gate、secret preflight、migration wait、rollout status 和 in-cluster smoke。验证证据包括：`node --test scripts/acceptance/tests/k8s-contract.test.mjs`、`kubectl kustomize infra/k8s/overlays/staging`、`kubectl kustomize infra/k8s/overlays/production`、rendered forbidden-token scan、`bash -n deploy/apply-k8s.sh`、`bash -n deploy/run-migrations.sh`。当前 GHCR 目标镜像 manifest 尚不存在，overlay digest 是 release-contract seed；真实 artifact digest 替换仍属于 `P5-03`。
 - `P5-02` 证据：新增 RED-first `scripts/acceptance/tests/tofu-contract.test.mjs`；staging / production 使用独立 GCS state prefix、资源前缀、子网和 lock，required/secret inputs 无部署默认值，SSH/ingress 拒绝 world-open CIDR，内部防火墙改为显式端口，节点启用专用最小权限服务账号、OS Login、Shielded VM 与独立 Persistent Disk，Cloudflare DNS 修正 provider source 和代理 TTL。OpenTofu 固定为 `1.12.1`，官方 Windows 归档 SHA-256 校验通过；`npm run infra:tofu:validate` 对两个环境完成 `fmt -check`、`init -backend=false -lockfile=readonly` 与 provider-schema validate，OpenTofu/仓库合同 `15/15` 通过。未执行 backend、云端 `plan/apply` 或 live cluster/DNS 验证，不能据此宣称部署完成。
-- 产品状态：`Platform 产品未完成`。Phase 5-6 和完整 release 尚未完成；不能给出产品可验收或 release 完成结论，也不允许生成 release。
+- `P5-03` 证据：Platform-local complete release builder 强制 sibling `../release/Platform/<versionId>/`、clean/current acceptance、六镜像 immutable lock 或离线 OCI、三域 migration order、source-free Compose/K8s/Tofu、environment contract、脱敏 evidence、dependency inventory、全文件 checksum 与原子 publish。`release-build` + `release-smoke` 合同 `10/10`、完整 `npm run ci` 均通过；未使用旧失败证据生成正式 release。
+- `P5-04` 当前证据：artifact-only smoke 已实现 checksum/manifest/image/source-free preflight、唯一 project/ports/volumes、pinned runtime fixtures、semantic Core/Account/Web/login probes、脱敏 evidence 和 owner-aware cleanup；合同 `5/5` 与 Compose v5.1.4 离线 render 通过。Docker Engine 对 `docker version` 超时，真实 package runtime 尚未执行，因此任务仍未完成。
+- 产品状态：`Platform 产品未完成`。P5-04、Phase 6 和完整 release 尚未完成；不能给出产品可验收或 release 完成结论，也不允许生成正式 release。
 
 ## Next Steps
 
-1. 进入 `P5-03`，实现 Platform-local complete release builder、OCI layout、manifest、checksum、SBOM/dependency inventory 与 redacted evidence contract。
-2. 继续 Phase 5-6 的部署、浏览器和 release 门禁。
-3. 每个 task 完成后更新本文件、对应 phase progress 和 evidence manifest；只有所有 required/external-boundary 门禁与最终 release smoke 满足 canonical 条件，才能改变产品状态。
+1. Docker Engine 恢复后只清理 owner record 指向的 Platform 验收项目，重跑 fresh Compose 浏览器矩阵与 official `acceptance:ci`。
+2. 使用同 commit 的 passed acceptance 构建正式 sibling release，并执行 `npm run acceptance:release` 完成 `P5-04` artifact-only runtime smoke。
+3. 继续 Phase 6 的 required/external-boundary/conditional-live 分类、最终 review 与 signoff。
+4. 每个 task 完成后更新本文件、对应 phase progress 和 evidence manifest；只有所有 required/external-boundary 门禁与最终 release smoke 满足 canonical 条件，才能改变产品状态。

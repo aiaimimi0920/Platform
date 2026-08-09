@@ -122,3 +122,35 @@ The tag workflow pins the tag commit, validates the six-image lock from the exac
 Container Images run, and publishes the Web component assets. That hosted asset
 publication does not by itself prove the complete release or artifact-only full
 stack smoke; those are the P5-03 and P5-04 contracts respectively.
+
+## Artifact-only runtime smoke
+
+Run the complete package smoke outside the immutable release directory:
+
+```powershell
+npm run acceptance:release -- `
+  --package-dir ../release/Platform/<versionId> `
+  --run-id release-smoke-<versionId> `
+  --evidence-path .runtime/acceptance/release-smoke-<versionId>/release-smoke.json
+```
+
+The smoke rejects incomplete checksum coverage, modified files, inconsistent
+release/image manifests, mutable or missing Platform image references, extra
+services, source build contexts, bind mounts, Compose includes/extends, and
+develop watches before startup. Fixed-digest mode consumes the published
+immutable references. Offline OCI mode imports each packaged layout through a
+BuildKit `oci-layout://` context into an exact run-scoped temporary tag; it never
+uses the Platform checkout or a sibling repository as a build context.
+
+Runtime dependencies are an isolated, generated Compose override containing
+digest-pinned PostgreSQL, Valkey, MinIO, MinIO Client, and a minimal Gateway
+fixture. Runtime configuration is generated outside the package with restrictive
+file permissions. The smoke runs the packaged migration jobs, waits for the six
+Platform services, verifies semantic Core/Account/Web readiness plus the formal
+Linux.do login entry, captures process inventory, and writes secret-free JSON
+evidence. Cleanup always addresses the exact hashed Compose project, exact named
+volumes, and exact temporary OCI tags; an owner record and runtime configuration
+are retained if cleanup cannot complete so recovery can remain narrowly scoped.
+
+`P5-04` is complete only after this command passes against the final release
+package and the evidence reports `status: passed` with `cleanup.completed: true`.
