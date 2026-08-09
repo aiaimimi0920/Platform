@@ -244,6 +244,7 @@ export function MissionCenterContainer({ enabled, userId }: MissionCenterProps) 
       <button
         aria-expanded={open}
         aria-haspopup="dialog"
+        aria-label="福利中心"
         className={cn("app-mission-trigger", totalActionableCount > 0 && "app-mission-trigger--ready")}
         onClick={() => {
           setOpen(true);
