@@ -8,7 +8,7 @@ import {
   createAcceptanceEnvironment,
   runAcceptanceComposeCommand,
 } from "./compose.mjs";
-import { validateAcceptanceRunId } from "./manifest.mjs";
+import { redactText, validateAcceptanceRunId } from "./manifest.mjs";
 
 const moduleDir = path.dirname(fileURLToPath(import.meta.url));
 const defaultPlatformRoot = path.resolve(moduleDir, "../..");
@@ -16,6 +16,26 @@ const defaultPlatformRoot = path.resolve(moduleDir, "../..");
 function childRunId(runId, stage) {
   const digest = createHash("sha256").update(`${runId}:${stage}`).digest("hex").slice(0, 16);
   return `platform-${stage}-${digest}`;
+}
+
+function sensitiveEnvironmentValues(environment) {
+  return Object.entries(environment)
+    .filter(([name, value]) =>
+      /(?:PASSWORD|TOKEN|SECRET|API_KEY|DATABASE_URL|AUTHORIZATION|CREDENTIAL)/i.test(name)
+      && typeof value === "string"
+      && value.length > 0)
+    .map(([, value]) => value);
+}
+
+function sanitizeDiagnosticResult(result, sensitiveValues) {
+  return {
+    exitCode: result?.exitCode ?? null,
+    timedOut: result?.timedOut === true,
+    durationMs: Number.isFinite(result?.durationMs) ? result.durationMs : null,
+    stdout: result?.stdout ? redactText(result.stdout, sensitiveValues) : null,
+    stderr: result?.stderr ? redactText(result.stderr, sensitiveValues) : null,
+    error: result?.error ? redactText(result.error, sensitiveValues) : null,
+  };
 }
 
 export async function readAcceptanceEnvironment(envFile) {
@@ -61,6 +81,7 @@ export async function runComposeStage({
   let psResult = null;
   let browserResult = null;
   let postBrowserPsResult = null;
+  let startupDiagnosticsPath = null;
   let cleanupResult = null;
   let primaryError = null;
 
@@ -95,65 +116,88 @@ export async function runComposeStage({
       timeoutMs: stage === "startup" ? 45 * 60 * 1000 : 2 * 60 * 1000,
     });
 
-    if (stage === "startup" && commandResult?.exitCode === 0) {
-      psResult = await executeCommand({
-        command: "docker",
-        args: [
-          "compose",
-          "-p",
-          environment.projectName,
-          "--env-file",
-          environment.paths.envFile,
-          "-f",
-          composeFile,
-          "ps",
-          "--format",
-          "json",
-        ],
-        cwd: resolvedPlatformRoot,
-        env: childEnvironment,
-        timeoutMs: 2 * 60 * 1000,
-      });
+    if (stage === "startup") {
       await mkdir(stageEvidenceDir, { recursive: true });
-      if (psResult?.exitCode === 0) {
-        const browserReportPath = path.join(stageEvidenceDir, "browser-results.json");
-        const browserArtifactDir = path.join(stageEvidenceDir, "browser-artifacts");
-        browserResult = await executeCommand({
-          command: process.execPath,
-          args: [
-            path.join(resolvedPlatformRoot, "node_modules", "@playwright", "test", "cli.js"),
-            "test",
-            "--config",
-            path.join(resolvedPlatformRoot, "playwright.config.ts"),
-          ],
-          cwd: resolvedPlatformRoot,
-          env: {
-            ...childEnvironment,
-            PLATFORM_ACCEPTANCE_WEB_URL: `http://127.0.0.1:${environmentValues.WEB_HOST_PORT}`,
-            PLATFORM_ACCEPTANCE_BROWSER_ARTIFACT_DIR: browserArtifactDir,
-            PLAYWRIGHT_JSON_OUTPUT_FILE: browserReportPath,
-          },
-          timeoutMs: 20 * 60 * 1000,
-        });
-        postBrowserPsResult = await executeCommand({
+      const composeArgs = [
+        "compose",
+        "-p",
+        environment.projectName,
+        "--env-file",
+        environment.paths.envFile,
+        "-f",
+        composeFile,
+      ];
+      if (commandResult?.exitCode === 0) {
+        psResult = await executeCommand({
           command: "docker",
-          args: [
-            "compose",
-            "-p",
-            environment.projectName,
-            "--env-file",
-            environment.paths.envFile,
-            "-f",
-            composeFile,
-            "ps",
-            "--all",
-            "--format",
-            "json",
-          ],
+          args: [...composeArgs, "ps", "--format", "json"],
           cwd: resolvedPlatformRoot,
           env: childEnvironment,
           timeoutMs: 2 * 60 * 1000,
         });
+        if (psResult?.exitCode === 0) {
+          const browserReportPath = path.join(stageEvidenceDir, "browser-results.json");
+          const browserArtifactDir = path.join(stageEvidenceDir, "browser-artifacts");
+          browserResult = await executeCommand({
+            command: process.execPath,
+            args: [
+              path.join(resolvedPlatformRoot, "node_modules", "@playwright", "test", "cli.js"),
+              "test",
+              "--config",
+              path.join(resolvedPlatformRoot, "playwright.config.ts"),
+            ],
+            cwd: resolvedPlatformRoot,
+            env: {
+              ...childEnvironment,
+              PLATFORM_ACCEPTANCE_WEB_URL: `http://127.0.0.1:${environmentValues.WEB_HOST_PORT}`,
+              PLATFORM_ACCEPTANCE_BROWSER_ARTIFACT_DIR: browserArtifactDir,
+              PLAYWRIGHT_JSON_OUTPUT_FILE: browserReportPath,
+            },
+            timeoutMs: 20 * 60 * 1000,
+          });
+          postBrowserPsResult = await executeCommand({
+            command: "docker",
+            args: [...composeArgs, "ps", "--all", "--format", "json"],
+            cwd: resolvedPlatformRoot,
+            env: childEnvironment,
+            timeoutMs: 2 * 60 * 1000,
+          });
+        }
+      } else {
+        const diagnosticPsResult = await executeCommand({
+          command: "docker",
+          args: [...composeArgs, "ps", "--all", "--format", "json"],
+          cwd: resolvedPlatformRoot,
+          env: childEnvironment,
+          timeoutMs: 2 * 60 * 1000,
+        });
+        const diagnosticLogsResult = await executeCommand({
+          command: "docker",
+          args: [...composeArgs, "logs", "--no-color", "--timestamps", "--tail", "80"],
+          cwd: resolvedPlatformRoot,
+          env: childEnvironment,
+          timeoutMs: 2 * 60 * 1000,
+        });
+        const sensitiveValues = sensitiveEnvironmentValues(environmentValues);
+        startupDiagnosticsPath = path.join(stageEvidenceDir, "compose-startup-diagnostics.json");
+        await writeFile(
+          startupDiagnosticsPath,
+          `${JSON.stringify(
+            {
+              schemaVersion: 1,
+              runId: safeRunId,
+              composeRunId: environment.runId,
+              projectName: environment.projectName,
+              recordedAt: new Date().toISOString(),
+              up: sanitizeDiagnosticResult(commandResult, sensitiveValues),
+              ps: sanitizeDiagnosticResult(diagnosticPsResult, sensitiveValues),
+              logs: sanitizeDiagnosticResult(diagnosticLogsResult, sensitiveValues),
+            },
+            null,
+            2,
+          )}\n`,
+          "utf8",
+        );
       }
       await writeFile(
         path.join(stageEvidenceDir, "compose-startup.json"),
@@ -168,6 +212,7 @@ export async function runComposeStage({
             psExitCode: psResult?.exitCode ?? null,
             browserExitCode: browserResult?.exitCode ?? null,
             postBrowserPsExitCode: postBrowserPsResult?.exitCode ?? null,
+            startupDiagnosticsPath,
             ps: psResult?.stdout ?? null,
             postBrowserPs: postBrowserPsResult?.stdout ?? null,
           },
@@ -216,6 +261,7 @@ export async function runComposeStage({
     psResult,
     browserResult,
     postBrowserPsResult,
+    startupDiagnosticsPath,
     cleanupResult,
   };
 }

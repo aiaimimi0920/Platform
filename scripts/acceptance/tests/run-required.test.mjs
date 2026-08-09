@@ -466,6 +466,67 @@ test("Compose startup fails but still cleans its project when the browser matrix
   assert.equal(result.exitCode, 1);
 });
 
+test("Compose startup captures redacted diagnostics before cleanup when up fails", async () => {
+  const { runComposeStage } = await import("../compose-run.mjs");
+  const evidenceDir = await mkdtemp(path.join(os.tmpdir(), "platform-compose-startup-diagnostics-"));
+  const calls = [];
+  const secret = "startup-diagnostics-secret-canary";
+  const databaseUrl = "postgres://diagnostic-user:diagnostic-password@postgres:5432/neuroloom";
+
+  const result = await runComposeStage({
+    stage: "startup",
+    runId: "platform-startup-diagnostics-parent",
+    evidenceDir,
+    platformRoot: "C:/platform",
+    createEnvironment: async () => ({
+      runId: "platform-startup-diagnostics-child",
+      projectName: "platform-startup-diagnostics-child",
+      paths: {
+        evidenceDir: path.join(evidenceDir, "owned"),
+        envFile: path.join(evidenceDir, "resources", "acceptance.env"),
+      },
+    }),
+    readEnvironment: async () => ({
+      WEB_HOST_PORT: "45680",
+      NEXTAUTH_SECRET: secret,
+      DATABASE_URL: databaseUrl,
+    }),
+    executeCommand: async (input) => {
+      calls.push(["execute", input]);
+      if (input.args.includes("up")) {
+        return { exitCode: 1, stdout: "", stderr: `startup failed token=${secret}` };
+      }
+      if (input.args.includes("ps")) {
+        return { exitCode: 0, stdout: '[{"Service":"web","Health":"unhealthy"}]', stderr: null };
+      }
+      if (input.args.includes("logs")) {
+        return { exitCode: 0, stdout: `web crashed DATABASE_URL=${databaseUrl}`, stderr: null };
+      }
+      throw new Error("unexpected diagnostic command");
+    },
+    cleanupProject: async (input) => {
+      calls.push(["cleanup", input]);
+      return { cleaned: true };
+    },
+  });
+
+  assert.equal(result.exitCode, 1);
+  assert.deepEqual(calls.map(([kind]) => kind), ["execute", "execute", "execute", "cleanup"]);
+  assert.ok(calls[1][1].args.includes("--all"));
+  assert.ok(calls[2][1].args.includes("logs"));
+  const diagnosticPath = path.join(
+    path.resolve(evidenceDir),
+    "compose",
+    "startup",
+    "compose-startup-diagnostics.json",
+  );
+  const diagnosticText = await readFile(diagnosticPath, "utf8");
+  assert.equal(diagnosticText.includes(secret), false);
+  assert.equal(diagnosticText.includes(databaseUrl), false);
+  assert.match(diagnosticText, /\[REDACTED\]/);
+  assert.match(diagnosticText, /web crashed/);
+});
+
 test("Compose acceptance stage cleans an owned environment when reading its env file fails", async () => {
   const { runComposeStage } = await import("../compose-run.mjs");
   const calls = [];
