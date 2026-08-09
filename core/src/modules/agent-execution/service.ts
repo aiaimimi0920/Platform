@@ -89,7 +89,7 @@ import type {
   UpdateAgentExecutionSubtaskStatusInput,
   UpdateAgentExecutionStatusInput,
 } from "@neuro/contracts";
-import { and, asc, desc, eq, gte, inArray, max, or, sql, type SQL } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, lt, max, or, sql, type SQL } from "drizzle-orm";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 import { transferBalance } from "../../../../packages/account-domain/dist/modules/wallet-ledger/service.js";
 
@@ -4818,17 +4818,12 @@ function hasCallbackAuditDerivedFilters(
   );
 }
 
-async function buildCallbackAuditViewsForOperator(
+const CALLBACK_AUDIT_DERIVED_SCAN_PAGE_SIZE = 200;
+
+async function buildCallbackAuditViewsFromRows(
+  rows: Array<typeof agentExecutionCallbacks.$inferSelect>,
   args?: Omit<CallbackAuditOperatorQuery, "limit">,
 ) {
-  const whereClause = toWhereClause(buildCallbackAuditConditions(args));
-  let query = db.select().from(agentExecutionCallbacks).$dynamic();
-
-  if (whereClause) {
-    query = query.where(whereClause);
-  }
-
-  const rows = await query.orderBy(desc(agentExecutionCallbacks.receivedAt));
   const attemptMap = await buildCallbackRemediationAttemptMap(rows.map((row) => row.id));
   const agentMap = await buildAgentExecutionCallbackPlanAgentMap(rows.map((row) => row.agentId));
   const runtimeContextMap = await buildCallbackAuditRuntimeContextMap(rows.map((row) => row.executionId));
@@ -4849,8 +4844,59 @@ async function buildCallbackAuditViewsForOperator(
   };
 }
 
+async function buildCallbackAuditViewsForOperator(
+  args?: Omit<CallbackAuditOperatorQuery, "limit">,
+) {
+  const whereClause = toWhereClause(buildCallbackAuditConditions(args));
+  let query = db.select().from(agentExecutionCallbacks).$dynamic();
+
+  if (whereClause) {
+    query = query.where(whereClause);
+  }
+
+  const rows = await query.orderBy(desc(agentExecutionCallbacks.receivedAt), desc(agentExecutionCallbacks.id));
+  return buildCallbackAuditViewsFromRows(rows, args);
+}
+
 async function listCallbackAuditViewsForOperator(args?: Omit<CallbackAuditOperatorQuery, "limit">) {
   return (await buildCallbackAuditViewsForOperator(args)).callbacks;
+}
+
+async function listLimitedCallbackAuditViewsForOperator(
+  args: Omit<CallbackAuditOperatorQuery, "limit">,
+  limit: number,
+) {
+  const callbacks: AgentExecutionCallbackAuditView[] = [];
+  let cursor: { receivedAt: Date; id: string } | null = null;
+
+  while (callbacks.length < limit) {
+    const conditions = buildCallbackAuditConditions(args);
+    if (cursor) {
+      conditions.push(
+        or(
+          lt(agentExecutionCallbacks.receivedAt, cursor.receivedAt),
+          and(eq(agentExecutionCallbacks.receivedAt, cursor.receivedAt), lt(agentExecutionCallbacks.id, cursor.id)),
+        ) as SQL,
+      );
+    }
+    const whereClause = toWhereClause(conditions);
+    let query = db.select().from(agentExecutionCallbacks).$dynamic();
+    if (whereClause) query = query.where(whereClause);
+
+    const rows = await query
+      .orderBy(desc(agentExecutionCallbacks.receivedAt), desc(agentExecutionCallbacks.id))
+      .limit(CALLBACK_AUDIT_DERIVED_SCAN_PAGE_SIZE);
+    if (rows.length === 0) break;
+
+    const page = await buildCallbackAuditViewsFromRows(rows, args);
+    callbacks.push(...page.callbacks.slice(0, limit - callbacks.length));
+
+    const lastRow = rows.at(-1)!;
+    cursor = { receivedAt: lastRow.receivedAt, id: lastRow.id };
+    if (rows.length < CALLBACK_AUDIT_DERIVED_SCAN_PAGE_SIZE) break;
+  }
+
+  return callbacks;
 }
 
 function buildCallbackAuditSummaryFromViews(
@@ -5422,36 +5468,40 @@ export async function listCallbackAuditsForOperator(
 ): Promise<AgentExecutionCallbackAuditView[]> {
   const limit = Math.max(1, Math.min(args?.limit ?? 50, 200));
   if (hasCallbackAuditDerivedFilters(args)) {
-    const callbacks = await listCallbackAuditViewsForOperator({
-      agentId: args?.agentId,
-      callbackType: args?.callbackType,
-      status: args?.status,
-      remediationPolicyKey: args?.remediationPolicyKey,
-      callbackVersion: args?.callbackVersion,
-      secretVersion: args?.secretVersion,
-      protocolMatch: args?.protocolMatch,
-      secretMatch: args?.secretMatch,
-      rejectionCategory: args?.rejectionCategory,
-      retryability: args?.retryability,
-      autoRemediationReasonCategory: args?.autoRemediationReasonCategory,
-      autoRemediationReasonDisposition: args?.autoRemediationReasonDisposition,
-      replayPayloadCompatibility: args?.replayPayloadCompatibility,
-      replayPayloadReplayable: args?.replayPayloadReplayable,
-      decisionClass: args?.decisionClass,
-      replayFailureClass: args?.replayFailureClass,
-      runtimeDecisionClass: args?.runtimeDecisionClass,
-      runtimeDecisionSeverity: args?.runtimeDecisionSeverity,
-      runtimePressureLevel: args?.runtimePressureLevel,
-      runtimeSchedulingDecisionClass: args?.runtimeSchedulingDecisionClass,
-    });
-    return callbacks.slice(0, limit);
+    return listLimitedCallbackAuditViewsForOperator(
+      {
+        agentId: args?.agentId,
+        callbackType: args?.callbackType,
+        status: args?.status,
+        remediationPolicyKey: args?.remediationPolicyKey,
+        callbackVersion: args?.callbackVersion,
+        secretVersion: args?.secretVersion,
+        protocolMatch: args?.protocolMatch,
+        secretMatch: args?.secretMatch,
+        rejectionCategory: args?.rejectionCategory,
+        retryability: args?.retryability,
+        autoRemediationReasonCategory: args?.autoRemediationReasonCategory,
+        autoRemediationReasonDisposition: args?.autoRemediationReasonDisposition,
+        replayPayloadCompatibility: args?.replayPayloadCompatibility,
+        replayPayloadReplayable: args?.replayPayloadReplayable,
+        decisionClass: args?.decisionClass,
+        replayFailureClass: args?.replayFailureClass,
+        runtimeDecisionClass: args?.runtimeDecisionClass,
+        runtimeDecisionSeverity: args?.runtimeDecisionSeverity,
+        runtimePressureLevel: args?.runtimePressureLevel,
+        runtimeSchedulingDecisionClass: args?.runtimeSchedulingDecisionClass,
+      },
+      limit,
+    );
   }
   const whereClause = toWhereClause(buildCallbackAuditConditions(args));
   let query = db.select().from(agentExecutionCallbacks).$dynamic();
 
   if (whereClause) query = query.where(whereClause);
 
-  const rows = await query.orderBy(desc(agentExecutionCallbacks.receivedAt)).limit(limit);
+  const rows = await query
+    .orderBy(desc(agentExecutionCallbacks.receivedAt), desc(agentExecutionCallbacks.id))
+    .limit(limit);
   const attemptMap = await buildCallbackRemediationAttemptMap(rows.map((row) => row.id));
   const agentMap = await buildAgentExecutionCallbackPlanAgentMap(rows.map((row) => row.agentId));
   const runtimeContextMap = await buildCallbackAuditRuntimeContextMap(rows.map((row) => row.executionId));

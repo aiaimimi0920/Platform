@@ -24,6 +24,17 @@ export const arbitrationCases = pgTable(
   },
   (table) => ({
     entityStatusIdx: uniqueIndex("arbitration_cases_entity_status_idx").on(table.entityType, table.entityId, table.status),
+    createdIdIdx: index("arbitration_cases_created_id_idx").on(table.createdAt, table.id),
+    requesterCreatedIdIdx: index("arbitration_cases_requester_created_id_idx").on(
+      table.requesterUserId,
+      table.createdAt,
+      table.id,
+    ),
+    respondentCreatedIdIdx: index("arbitration_cases_respondent_created_id_idx").on(
+      table.respondentUserId,
+      table.createdAt,
+      table.id,
+    ),
   }),
 );
 

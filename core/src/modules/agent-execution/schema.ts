@@ -140,29 +140,35 @@ export const agentExecutionSubtasks = pgTable("agent_execution_subtasks", {
   completedAt: timestamp("completed_at", { withTimezone: true }),
 });
 
-export const agentExecutionCallbacks = pgTable("agent_execution_callbacks", {
-  id: text("id").primaryKey(),
-  executionId: text("execution_id").notNull().references(() => agentExecutions.id, { onDelete: "cascade" }),
-  agentId: text("agent_id").notNull().references(() => agents.id, { onDelete: "cascade" }),
-  callbackId: text("callback_id").notNull(),
-  callbackType: text("callback_type").notNull(),
-  status: text("status").notNull(),
-  remediationPolicyKey: text("remediation_policy_key").notNull().default("balanced"),
-  callbackVersion: integer("callback_version").notNull().default(1),
-  secretVersion: integer("secret_version").notNull().default(1),
-  usedPreviousProtocol: boolean("used_previous_protocol").notNull().default(false),
-  usedPreviousSecret: boolean("used_previous_secret").notNull().default(false),
-  callbackTimestamp: timestamp("callback_timestamp", { withTimezone: true }),
-  rejectionCategory: text("rejection_category"),
-  payloadSummary: text("payload_summary"),
-  replayPayload: jsonb("replay_payload"),
-  autoRemediationAttempts: integer("auto_remediation_attempts").notNull().default(0),
-  lastAutoRemediationAt: timestamp("last_auto_remediation_at", { withTimezone: true }),
-  nextAutoRemediationAt: timestamp("next_auto_remediation_at", { withTimezone: true }),
-  autoRemediationExhaustedAt: timestamp("auto_remediation_exhausted_at", { withTimezone: true }),
-  autoRemediationLastError: text("auto_remediation_last_error"),
-  receivedAt: timestamp("received_at", { withTimezone: true }).notNull(),
-});
+export const agentExecutionCallbacks = pgTable(
+  "agent_execution_callbacks",
+  {
+    id: text("id").primaryKey(),
+    executionId: text("execution_id").notNull().references(() => agentExecutions.id, { onDelete: "cascade" }),
+    agentId: text("agent_id").notNull().references(() => agents.id, { onDelete: "cascade" }),
+    callbackId: text("callback_id").notNull(),
+    callbackType: text("callback_type").notNull(),
+    status: text("status").notNull(),
+    remediationPolicyKey: text("remediation_policy_key").notNull().default("balanced"),
+    callbackVersion: integer("callback_version").notNull().default(1),
+    secretVersion: integer("secret_version").notNull().default(1),
+    usedPreviousProtocol: boolean("used_previous_protocol").notNull().default(false),
+    usedPreviousSecret: boolean("used_previous_secret").notNull().default(false),
+    callbackTimestamp: timestamp("callback_timestamp", { withTimezone: true }),
+    rejectionCategory: text("rejection_category"),
+    payloadSummary: text("payload_summary"),
+    replayPayload: jsonb("replay_payload"),
+    autoRemediationAttempts: integer("auto_remediation_attempts").notNull().default(0),
+    lastAutoRemediationAt: timestamp("last_auto_remediation_at", { withTimezone: true }),
+    nextAutoRemediationAt: timestamp("next_auto_remediation_at", { withTimezone: true }),
+    autoRemediationExhaustedAt: timestamp("auto_remediation_exhausted_at", { withTimezone: true }),
+    autoRemediationLastError: text("auto_remediation_last_error"),
+    receivedAt: timestamp("received_at", { withTimezone: true }).notNull(),
+  },
+  (table) => ({
+    receivedIdx: index("agent_execution_callbacks_received_idx").on(table.receivedAt.desc(), table.id.desc()),
+  }),
+);
 
 export const agentExecutionCallbackRemediations = pgTable("agent_execution_callback_remediations", {
   id: text("id").primaryKey(),

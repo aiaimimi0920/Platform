@@ -10,14 +10,14 @@ import {
 
 export async function listArbitrationCasesVisibleToUser(userId: string, includeAll = false) {
   if (includeAll) {
-    return db.select().from(arbitrationCases).orderBy(asc(arbitrationCases.createdAt));
+    return db.select().from(arbitrationCases).orderBy(asc(arbitrationCases.createdAt), asc(arbitrationCases.id));
   }
 
   return db
     .select()
     .from(arbitrationCases)
     .where(or(eq(arbitrationCases.requesterUserId, userId), eq(arbitrationCases.respondentUserId, userId)))
-    .orderBy(asc(arbitrationCases.createdAt));
+    .orderBy(asc(arbitrationCases.createdAt), asc(arbitrationCases.id));
 }
 
 export async function getArbitrationCaseById(caseId: string) {

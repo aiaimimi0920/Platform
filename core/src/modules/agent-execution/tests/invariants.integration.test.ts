@@ -44,6 +44,8 @@ if (!databaseUrl) {
       const { createOwnedAgent } = await import("../../agent-registry/service");
       const {
         createOwnedAgentExecution,
+        getCallbackAuditSummaryForOperator,
+        listCallbackAuditsForOperator,
         requeueOwnedAgentExecution,
         updateOwnedAgentExecutionStatus,
       } = await import("../service");
@@ -71,6 +73,42 @@ if (!databaseUrl) {
       });
       assert.equal(execution.status, "queued");
       assert.equal(execution.agentId, platformAgent.id);
+
+      await pool.query(
+        `insert into agent_execution_callbacks (
+           id,
+           execution_id,
+           agent_id,
+           callback_id,
+           callback_type,
+           status,
+           replay_payload,
+           received_at
+         )
+         select
+           'callback-audit-' || lpad(sequence::text, 3, '0'),
+           $1,
+           $2,
+           'callback-' || sequence::text,
+           'heartbeat',
+           'accepted',
+           case when sequence = 201 then '{"type":"heartbeat"}'::jsonb else null end,
+           timestamptz '2026-08-09T00:00:00.000Z' - sequence * interval '1 second'
+         from generate_series(1, 201) as sequence`,
+        [execution.id, platformAgent.id],
+      );
+
+      const replayableCallbacks = await listCallbackAuditsForOperator({
+        replayPayloadReplayable: true,
+        limit: 1,
+      });
+      assert.deepEqual(replayableCallbacks.map((callback) => callback.id), ["callback-audit-201"]);
+
+      const replayableSummary = await getCallbackAuditSummaryForOperator({
+        replayPayloadReplayable: true,
+        limit: 1,
+      });
+      assert.equal(replayableSummary.totalCount, 1);
 
       await assert.rejects(
         () =>

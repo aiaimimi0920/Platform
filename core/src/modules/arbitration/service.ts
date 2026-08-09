@@ -61,7 +61,7 @@ import {
   setObjectTags,
 } from "@/platform/object-storage/service";
 import { enqueueOutboxEvent } from "@/platform/outbox/service";
-import { getTaskById } from "@/modules/task-hub/repository";
+import { getTaskById, listTasksByIds } from "@/modules/task-hub/repository";
 import { settleTaskLifecycleByOperatorInTx } from "@/modules/task-hub/service";
 
 function now() {
@@ -1178,18 +1178,13 @@ async function loadVisibleArbitrationCaseOrThrow(userId: string, caseId: string)
 export async function listVisibleArbitrationCases(userId: string): Promise<ArbitrationCaseView[]> {
   const rows = await listArbitrationCasesVisibleToUser(userId, isPlatformOperator(userId));
   const taskIds = Array.from(new Set(rows.filter((row) => row.entityType === "task").map((row) => row.entityId)));
-  const [taskEntries, evidenceRows, reviewRoundRows] = await Promise.all([
-    Promise.all(
-      taskIds.map(async (taskId) => {
-        const task = await getTaskById(taskId);
-        return [taskId, task] as const;
-      }),
-    ),
+  const [taskRows, evidenceRows, reviewRoundRows] = await Promise.all([
+    listTasksByIds(taskIds),
     listArbitrationCaseEvidencesByCaseIds(rows.map((row) => row.id)),
     listArbitrationReviewRoundsByCaseIds(rows.map((row) => row.id)),
   ]);
   const attachmentRows = await listArbitrationEvidenceAttachmentsByEvidenceIds(evidenceRows.map((row) => row.id));
-  const taskMap = new Map(taskEntries);
+  const taskMap = new Map(taskRows.map((task) => [task.id, task]));
   const evidenceMap = new Map<string, ArbitrationEvidenceView[]>();
   const attachmentMap = new Map<string, ArbitrationEvidenceAttachmentView[]>();
   const reviewRoundMap = new Map<string, ArbitrationReviewRoundView[]>();

@@ -90,6 +90,11 @@ export async function getTaskById(taskId: string) {
   return task ?? null;
 }
 
+export async function listTasksByIds(taskIds: string[]) {
+  if (taskIds.length === 0) return [];
+  return db.select().from(tasks).where(inArray(tasks.id, taskIds));
+}
+
 export async function getTaskByOwnerAndId(ownerUserId: string, taskId: string) {
   const [task] = await db
     .select()

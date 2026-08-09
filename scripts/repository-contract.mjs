@@ -98,6 +98,10 @@ describe("independent Platform repository", () => {
     const dockerignore = read(".dockerignore");
     assert(workflow.includes("packages: write"));
     assert(workflow.includes("github.event_name != 'pull_request'"));
+    assert(
+      workflow.includes("github.event.pull_request.head.repo.fork == false"),
+      "Fork pull requests must not attempt to export a writable GitHub Actions cache",
+    );
     assert(workflow.includes("ghcr.io/${{ github.repository_owner }}/neuro-platform-${{ matrix.image }}"));
     for (const dockerfile of [
       "core.Dockerfile",
@@ -107,7 +111,13 @@ describe("independent Platform repository", () => {
       "executor.Dockerfile",
       "web.Dockerfile",
     ]) {
-      assert(workflow.includes(dockerfile), `Container workflow does not build ${dockerfile}`);
+      assert.strictEqual(
+        workflow
+          .split(/\r?\n/)
+          .filter((line) => line.trim() === `dockerfile: deploy/docker/${dockerfile}`).length,
+        2,
+        `Container build and publish matrices must both include ${dockerfile}`,
+      );
       const dockerfileText = read(`deploy/docker/${dockerfile}`);
       assert.match(
         dockerfileText,

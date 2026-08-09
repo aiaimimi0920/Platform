@@ -113,6 +113,47 @@ describe("notification webhook payload", () => {
     criticalCount: 2,
   };
 
+  it("reads only a bounded, single-line preview from failed webhook responses", async () => {
+    const { readNotificationWebhookResponsePreview } = await loadWebhookModule();
+    let cancelled = false;
+    const response = new Response(
+      new ReadableStream<Uint8Array>({
+        start(controller) {
+          controller.enqueue(new TextEncoder().encode(`upstream\n${"x".repeat(4_096)}`));
+        },
+        cancel() {
+          cancelled = true;
+        },
+      }),
+      { status: 502 },
+    );
+
+    const preview = await readNotificationWebhookResponsePreview(response, 64);
+
+    assert.equal(cancelled, true);
+    assert.equal(preview.includes("\n"), false);
+    assert.match(preview, /^upstream x+/);
+    assert.match(preview, /\.\.\. \[truncated\]$/);
+    assert.ok(preview.length <= 64 + "... [truncated]".length);
+  });
+
+  it("keeps a complete short webhook response preview", async () => {
+    const { readNotificationWebhookResponsePreview } = await loadWebhookModule();
+
+    const preview = await readNotificationWebhookResponsePreview(new Response("retry\nlater", { status: 429 }), 64);
+
+    assert.equal(preview, "retry later");
+  });
+
+  it("rejects invalid webhook response preview limits", async () => {
+    const { readNotificationWebhookResponsePreview } = await loadWebhookModule();
+
+    await assert.rejects(
+      () => readNotificationWebhookResponsePreview(new Response("failure", { status: 500 }), 0),
+      TypeError,
+    );
+  });
+
   it("builds a vendor-neutral callback remediation alert payload", async () => {
     const { buildCallbackRemediationAlertWebhookPayload } = await loadWebhookModule();
     const payload = buildCallbackRemediationAlertWebhookPayload(alertPayload);

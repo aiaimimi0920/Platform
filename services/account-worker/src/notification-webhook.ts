@@ -1,5 +1,6 @@
 import { createHmac } from "node:crypto";
 
+import { mapWithConcurrency } from "@neuro/backend-foundation/async/map-with-concurrency";
 import { notificationWebhookDefaultTargetRouteName, type EventName } from "@neuro/contracts";
 
 import { env, type NotificationWebhookFormat, type NotificationWebhookRouteConfig } from "./env";
@@ -197,6 +198,73 @@ type NotificationWebhookDeliveryConfig = {
   defaultTarget: NotificationWebhookDeliveryTarget | null;
   routes: NotificationWebhookRouteConfig[];
 };
+
+type NotificationWebhookDeliveryResult = {
+  sent: boolean;
+  failureReason: string | null;
+};
+
+const NOTIFICATION_WEBHOOK_DELIVERY_CONCURRENCY = 4;
+const NOTIFICATION_WEBHOOK_RESPONSE_PREVIEW_MAX_BYTES = 2_048;
+const NOTIFICATION_WEBHOOK_ERROR_PREVIEW_MAX_CHARS = 512;
+
+function normalizeNotificationWebhookLogText(value: string) {
+  return value.replace(/[\r\n\t]+/g, " ").trim();
+}
+
+function truncateNotificationWebhookLogText(value: string, maxChars: number) {
+  const normalized = normalizeNotificationWebhookLogText(value);
+  return normalized.length > maxChars ? `${normalized.slice(0, maxChars)}... [truncated]` : normalized;
+}
+
+export async function readNotificationWebhookResponsePreview(
+  response: Response,
+  maxBytes = NOTIFICATION_WEBHOOK_RESPONSE_PREVIEW_MAX_BYTES,
+) {
+  if (!Number.isInteger(maxBytes) || maxBytes < 1) {
+    throw new TypeError("Webhook response preview limit must be a positive integer");
+  }
+  if (!response.body) return "";
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let preview = "";
+  let remainingBytes = maxBytes;
+  let completed = false;
+  let truncated = false;
+
+  try {
+    while (remainingBytes > 0) {
+      const { done, value } = await reader.read();
+      if (done) {
+        completed = true;
+        break;
+      }
+
+      const consumed = value.byteLength > remainingBytes ? value.subarray(0, remainingBytes) : value;
+      preview += decoder.decode(consumed, { stream: true });
+      remainingBytes -= consumed.byteLength;
+      if (consumed.byteLength < value.byteLength || remainingBytes === 0) {
+        truncated = true;
+        break;
+      }
+    }
+    preview += decoder.decode();
+  } finally {
+    if (!completed) {
+      await reader.cancel().catch(() => undefined);
+    }
+    reader.releaseLock();
+  }
+
+  const normalized = normalizeNotificationWebhookLogText(preview);
+  return truncated ? `${normalized}... [truncated]` : normalized;
+}
+
+function notificationWebhookErrorPreview(error: unknown) {
+  const message = error instanceof Error ? `${error.name}: ${error.message}` : String(error);
+  return truncateNotificationWebhookLogText(message, NOTIFICATION_WEBHOOK_ERROR_PREVIEW_MAX_CHARS);
+}
 
 function toOptionalString(value: unknown) {
   if (typeof value !== "string") return null;
@@ -1194,6 +1262,73 @@ export function selectNotificationWebhookTargets(
   );
 }
 
+async function deliverNotificationWebhookTarget(args: {
+  eventName: EventName;
+  payload: Record<string, unknown>;
+  target: NotificationWebhookDeliveryTarget;
+  incidentKey: string | null;
+  referenceTime: Date;
+}): Promise<NotificationWebhookDeliveryResult> {
+  const { eventName, payload, target, incidentKey, referenceTime } = args;
+  if (incidentKey && target.routeConfig) {
+    const routePolicy = await shouldSendNotificationWebhookRoute({
+      incidentKey,
+      route: target.routeConfig,
+      referenceTime,
+    });
+    if (!routePolicy.allowed) {
+      return { sent: false, failureReason: routePolicy.reason };
+    }
+  }
+
+  const notificationPayload = buildNotificationWebhookPayload(eventName, payload, target.format);
+  if (!notificationPayload) {
+    return { sent: false, failureReason: "unsupported_event" };
+  }
+
+  const body = JSON.stringify(notificationPayload);
+  const headers = buildNotificationWebhookHeaders(eventName, body, target);
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), target.timeoutMs);
+  let sent = false;
+
+  try {
+    const response = await fetch(target.url, {
+      method: "POST",
+      headers,
+      body,
+      signal: controller.signal,
+    });
+
+    if (!response.ok) {
+      const responsePreview = await readNotificationWebhookResponsePreview(response).catch(() => "");
+      console.error(
+        `Notification webhook route ${target.name} returned ${response.status} for ${eventName}: ${responsePreview}`,
+      );
+      return { sent: false, failureReason: `http_${response.status}` };
+    }
+
+    sent = true;
+    if (incidentKey) {
+      await markNotificationWebhookRouteDelivered({
+        incidentKey,
+        routeName: target.routeConfig?.name ?? target.name,
+        profileKey: target.routeConfig?.profileKey ?? null,
+        format: target.format,
+        deliveredAt: referenceTime,
+      });
+    }
+    return { sent: true, failureReason: null };
+  } catch (error) {
+    console.error(
+      `Notification webhook delivery failed for ${eventName} via route ${target.name}: ${notificationWebhookErrorPreview(error)}`,
+    );
+    return { sent, failureReason: "delivery_failed" };
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
 export async function sendNotificationWebhook(
   eventName: EventName,
   payload: Record<string, unknown>,
@@ -1214,69 +1349,28 @@ export async function sendNotificationWebhook(
   const genericPayload = buildGenericNotificationWebhookPayload(eventName, payload);
   const incidentKey = genericPayload?.alertKey ?? null;
   const referenceTime = new Date();
-  let sentCount = 0;
-  let lastFailureReason: string | null = null;
 
   if (incidentKey) {
     await touchNotificationWebhookIncident(incidentKey, referenceTime);
   }
 
-  for (const target of targets) {
-    if (incidentKey && target.routeConfig) {
-      const routePolicy = await shouldSendNotificationWebhookRoute({
+  const results = await mapWithConcurrency(
+    targets,
+    NOTIFICATION_WEBHOOK_DELIVERY_CONCURRENCY,
+    async (target) =>
+      deliverNotificationWebhookTarget({
+        eventName,
+        payload,
+        target,
         incidentKey,
-        route: target.routeConfig,
         referenceTime,
-      });
-      if (!routePolicy.allowed) {
-        lastFailureReason = routePolicy.reason;
-        continue;
-      }
-    }
-
-    const notificationPayload = buildNotificationWebhookPayload(eventName, payload, target.format);
-    if (!notificationPayload) {
-      lastFailureReason = "unsupported_event";
-      continue;
-    }
-
-    const body = JSON.stringify(notificationPayload);
-    const headers = buildNotificationWebhookHeaders(eventName, body, target);
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), target.timeoutMs);
-
-    try {
-      const response = await fetch(target.url, {
-        method: "POST",
-        headers,
-        body,
-        signal: controller.signal,
-      });
-
-      if (!response.ok) {
-        console.error(
-          `Notification webhook route ${target.name} returned ${response.status} for ${eventName}: ${await response.text().catch(() => "")}`,
-        );
-        lastFailureReason = `http_${response.status}`;
-        continue;
-      }
-
-      sentCount += 1;
-      if (incidentKey) {
-        await markNotificationWebhookRouteDelivered({
-          incidentKey,
-          routeName: target.routeConfig?.name ?? target.name,
-          profileKey: target.routeConfig?.profileKey ?? null,
-          format: target.format,
-          deliveredAt: referenceTime,
-        });
-      }
-    } catch (error) {
-      console.error(`Notification webhook delivery failed for ${eventName} via route ${target.name}`, error);
-      lastFailureReason = "delivery_failed";
-    } finally {
-      clearTimeout(timeout);
-    }
+      }),
+  );
+  let sentCount = 0;
+  let lastFailureReason: string | null = null;
+  for (const result of results) {
+    if (result.sent) sentCount += 1;
+    if (result.failureReason) lastFailureReason = result.failureReason;
   }
 
   if (sentCount === 0) {
