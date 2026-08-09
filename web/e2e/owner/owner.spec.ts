@@ -108,6 +108,10 @@ test("O-AGENT-CHAT binds a real managed-heavy agent and persists a Gateway respo
   const latestGatewayResponse = page.locator(".nt-chat-app-message--assistant .nt-chat-app-message__text").last();
   await expect(latestGatewayResponse).toHaveText("Gateway fixture response");
   await page.reload();
+  const mobileConversationDirectory = page.getByRole("button", { name: "打开会话目录" });
+  if (await mobileConversationDirectory.isVisible().catch(() => false)) {
+    await mobileConversationDirectory.click();
+  }
   await page.getByRole("button", { name: /Gateway fixture response/ }).first().click();
   await expect(page.locator(".nt-chat-app-message--user .nt-chat-app-message__text").last()).toHaveText(message);
   await expect(page.locator(".nt-chat-app-message--assistant .nt-chat-app-message__text").last()).toHaveText(
