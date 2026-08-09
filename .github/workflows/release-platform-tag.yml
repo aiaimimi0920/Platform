@@ -136,7 +136,7 @@ jobs:
           --checksumOutput ".\release\Platform\$env:PLATFORM_TAG\packages\Platform-$env:PLATFORM_TAG-container-images.json.sha256"
 
       - name: Upload verified release package
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: platform-web-${{ env.PLATFORM_TAG }}
           path: release/Platform/${{ env.PLATFORM_TAG }}/

@@ -188,7 +188,7 @@ jobs:
           --output ".runtime/container-image-lock/image-lock-$IMAGE_NAME.json"
 
       - name: Upload immutable image digest
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: platform-image-lock-entry-${{ matrix.image }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: .runtime/container-image-lock/image-lock-${{ matrix.image }}.json
@@ -223,7 +223,7 @@ jobs:
           --output ".runtime/container-image-lock/image-lock.json"
 
       - name: Upload aggregate image lock
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: platform-container-image-lock-${{ github.run_id }}-${{ github.run_attempt }}
           path: .runtime/container-image-lock/image-lock.json
