@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
+import { access, mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -460,10 +460,11 @@ test("Compose startup fails but still cleans its project when the browser matrix
     },
   });
 
-  assert.equal(executeCount, 4);
+  assert.equal(executeCount, 9);
   assert.equal(cleanupCount, 1);
   assert.equal(result.browserResult.exitCode, 1);
   assert.equal(result.exitCode, 1);
+  await access(result.startupDiagnosticsPath);
 });
 
 test("Compose startup captures redacted diagnostics before cleanup when up fails", async () => {
@@ -511,7 +512,15 @@ test("Compose startup captures redacted diagnostics before cleanup when up fails
   });
 
   assert.equal(result.exitCode, 1);
-  assert.deepEqual(calls.map(([kind]) => kind), ["execute", "execute", "execute", "cleanup"]);
+  assert.deepEqual(calls.map(([kind]) => kind), [
+    "execute",
+    "execute",
+    "execute",
+    "execute",
+    "execute",
+    "execute",
+    "cleanup",
+  ]);
   assert.ok(calls[1][1].args.includes("--all"));
   assert.ok(calls[2][1].args.includes("logs"));
   const diagnosticPath = path.join(

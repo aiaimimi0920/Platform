@@ -38,6 +38,70 @@ function sanitizeDiagnosticResult(result, sensitiveValues) {
   };
 }
 
+const STARTUP_DIAGNOSTIC_SERVICES = ["web", "core", "account-api", "gateway"];
+
+async function captureStartupDiagnostics({
+  safeRunId,
+  environment,
+  environmentValues,
+  stageEvidenceDir,
+  composeArgs,
+  resolvedPlatformRoot,
+  childEnvironment,
+  executeCommand,
+  commandResult,
+  psResult,
+  browserResult,
+  postBrowserPsResult,
+}) {
+  const diagnosticPsResult = await executeCommand({
+    command: "docker",
+    args: [...composeArgs, "ps", "--all", "--format", "json"],
+    cwd: resolvedPlatformRoot,
+    env: childEnvironment,
+    timeoutMs: 2 * 60 * 1000,
+  });
+  const diagnosticLogs = {};
+  for (const service of STARTUP_DIAGNOSTIC_SERVICES) {
+    diagnosticLogs[service] = await executeCommand({
+      command: "docker",
+      args: [...composeArgs, "logs", "--no-color", "--timestamps", "--tail", "80", service],
+      cwd: resolvedPlatformRoot,
+      env: childEnvironment,
+      timeoutMs: 2 * 60 * 1000,
+    });
+  }
+  const sensitiveValues = sensitiveEnvironmentValues(environmentValues);
+  const diagnosticsPath = path.join(stageEvidenceDir, "compose-startup-diagnostics.json");
+  await writeFile(
+    diagnosticsPath,
+    `${JSON.stringify(
+      {
+        schemaVersion: 1,
+        runId: safeRunId,
+        composeRunId: environment.runId,
+        projectName: environment.projectName,
+        recordedAt: new Date().toISOString(),
+        up: sanitizeDiagnosticResult(commandResult, sensitiveValues),
+        ps: sanitizeDiagnosticResult(psResult, sensitiveValues),
+        browser: sanitizeDiagnosticResult(browserResult, sensitiveValues),
+        postBrowserPs: sanitizeDiagnosticResult(postBrowserPsResult, sensitiveValues),
+        diagnosticPs: sanitizeDiagnosticResult(diagnosticPsResult, sensitiveValues),
+        logs: Object.fromEntries(
+          Object.entries(diagnosticLogs).map(([service, result]) => [
+            service,
+            sanitizeDiagnosticResult(result, sensitiveValues),
+          ]),
+        ),
+      },
+      null,
+      2,
+    )}\n`,
+    "utf8",
+  );
+  return diagnosticsPath;
+}
+
 export async function readAcceptanceEnvironment(envFile) {
   const contents = await readFile(envFile, "utf8");
   const values = {};
@@ -163,41 +227,26 @@ export async function runComposeStage({
             timeoutMs: 2 * 60 * 1000,
           });
         }
-      } else {
-        const diagnosticPsResult = await executeCommand({
-          command: "docker",
-          args: [...composeArgs, "ps", "--all", "--format", "json"],
-          cwd: resolvedPlatformRoot,
-          env: childEnvironment,
-          timeoutMs: 2 * 60 * 1000,
-        });
-        const diagnosticLogsResult = await executeCommand({
-          command: "docker",
-          args: [...composeArgs, "logs", "--no-color", "--timestamps", "--tail", "80"],
-          cwd: resolvedPlatformRoot,
-          env: childEnvironment,
-          timeoutMs: 2 * 60 * 1000,
-        });
-        const sensitiveValues = sensitiveEnvironmentValues(environmentValues);
-        startupDiagnosticsPath = path.join(stageEvidenceDir, "compose-startup-diagnostics.json");
-        await writeFile(
-          startupDiagnosticsPath,
-          `${JSON.stringify(
-            {
-              schemaVersion: 1,
-              runId: safeRunId,
-              composeRunId: environment.runId,
-              projectName: environment.projectName,
-              recordedAt: new Date().toISOString(),
-              up: sanitizeDiagnosticResult(commandResult, sensitiveValues),
-              ps: sanitizeDiagnosticResult(diagnosticPsResult, sensitiveValues),
-              logs: sanitizeDiagnosticResult(diagnosticLogsResult, sensitiveValues),
-            },
-            null,
-            2,
-          )}\n`,
-          "utf8",
+      }
+      const startupFailed = commandResult?.exitCode !== 0
+        || [psResult, browserResult, postBrowserPsResult].some(
+          (result) => result && result.exitCode !== 0,
         );
+      if (startupFailed) {
+        startupDiagnosticsPath = await captureStartupDiagnostics({
+          safeRunId,
+          environment,
+          environmentValues,
+          stageEvidenceDir,
+          composeArgs,
+          resolvedPlatformRoot,
+          childEnvironment,
+          executeCommand,
+          commandResult,
+          psResult,
+          browserResult,
+          postBrowserPsResult,
+        });
       }
       await writeFile(
         path.join(stageEvidenceDir, "compose-startup.json"),
