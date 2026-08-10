@@ -136,15 +136,25 @@ describe("independent Platform repository", () => {
     assert(workflow.includes("name: Platform CI"));
     assert(workflow.includes(pinnedAction("actions/checkout")));
     assert(workflow.includes(pinnedAction("actions/setup-node")));
-    assert(workflow.includes("node --test scripts/repository-contract.mjs"));
-    assert(workflow.includes("npm run prepare:workspaces"));
-    assert(workflow.includes("npm run typecheck:workspaces"));
-    assert(workflow.includes("npm run audit:prod"));
-    assert(workflow.includes("npm run test:vitest"));
+    assert(workflow.includes("npm run ci"));
     assert(workflow.includes(pinnedAction("opentofu/setup-opentofu")));
     assert(workflow.includes("tofu_version_file: .opentofu-version"));
-    assert(workflow.includes("npm run infra:tofu:validate"));
-    assert(packageMetadata.scripts.ci.includes("npm run infra:tofu:validate"));
+    for (const command of [
+      "scripts/container-image-lock.test.mjs",
+      "scripts/repository-contract.mjs",
+      "scripts/smoke.mjs",
+      "scripts/acceptance/tests/release-build.test.mjs",
+      "scripts/acceptance/tests/release-smoke.test.mjs",
+      "scripts/acceptance/tests/tofu-contract.test.mjs",
+      "npm run infra:tofu:validate",
+      "npm run audit:prod",
+      "npm run prepare:workspaces",
+      "npm run test:unit",
+      "npm run test:vitest",
+      "npm run typecheck:workspaces",
+    ]) {
+      assert(packageMetadata.scripts.ci.includes(command), `Root CI script is missing ${command}`);
+    }
     assert(workflow.includes("docker compose -f deploy/docker-compose.local.yml config --quiet"));
     assert(workflow.includes("test-build-platform-web-release-contract.ps1 -DryRunOnly"));
     assert(workflow.includes("test-verify-platform-web-release-package-contract.ps1"));
@@ -153,23 +163,11 @@ describe("independent Platform repository", () => {
 
     const workflowLines = workflow.split(/\r?\n/);
     assert.strictEqual(
-      workflowLines.filter((line) => line.includes("npm run prepare:workspaces")).length,
+      workflowLines.filter((line) => line.trim() === "run: npm run ci").length,
       1,
-      "Quick CI must prepare shared workspaces exactly once",
+      "Hosted CI must delegate orchestration to the root CI script exactly once",
     );
-    const workspaceTestLines = workflowLines.filter((line) => /npm test --workspace /.test(line));
-    assert.strictEqual(
-      workspaceTestLines.length,
-      packageMetadata.workspaces.length,
-      "Quick CI must run every workspace test exactly once",
-    );
-    for (const line of workspaceTestLines) {
-      assert(line.includes("--ignore-scripts"), `Workspace tests must not repeat lifecycle builds: ${line.trim()}`);
-    }
-    assert(
-      packageMetadata.scripts["test:vitest"].includes("--ignore-scripts"),
-      "Vitest workspace fan-out must not run lifecycle scripts",
-    );
+    assert(!workflow.includes("npm test --workspace "), "Hosted CI must not duplicate workspace test orchestration");
   });
 
   it("pins every external workflow Action to an audited commit", () => {

@@ -182,5 +182,5 @@ test("Platform exposes deterministic OpenTofu format and validation gates", () =
   const workflow = read(".github/workflows/ci.yml");
   assert.match(workflow, /opentofu\/setup-opentofu@[0-9a-f]{40}\s+# v2/);
   assert.match(workflow, /tofu_version_file:\s*\.opentofu-version/);
-  assert.match(workflow, /npm run infra:tofu:validate/);
+  assert.match(workflow, /run:\s*npm run ci/);
 });

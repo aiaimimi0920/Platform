@@ -2894,8 +2894,8 @@ describe("monorepo structure", () => {
     const workflowPath = join(rootDir, ".github/workflows/ci.yml");
     const contents = readFileSync(workflowPath, "utf8");
     assert(contents.includes("name: Platform CI"), "Platform workflow has wrong name");
-    assert(contents.includes("node --test scripts/repository-contract.mjs"), "Platform workflow does not run the repository contract");
-    assert(contents.includes("npm run typecheck"), "Platform workflow does not run workspace type checking");
+    assert(contents.includes("npm run ci"), "Platform workflow does not delegate to the root CI script");
+    assert(!contents.includes("npm test --workspace "), "Platform workflow duplicates workspace test orchestration");
     assert(
       contents.includes("docker compose -f deploy/docker-compose.local.yml config --quiet"),
       "Platform workflow does not validate the integrated compose topology",
