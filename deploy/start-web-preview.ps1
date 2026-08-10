@@ -159,7 +159,7 @@ try {
   $envFile = Join-Path $env:TEMP "$containerName.env"
 
   @"
-NODE_ENV=production
+NODE_ENV=development
 PORT=3000
 NEXTAUTH_URL=http://localhost:$port
 NEXT_PUBLIC_APP_URL=http://localhost:$port
@@ -196,7 +196,10 @@ ENABLE_FIGMA_CAPTURE=true
     $ImageName,
     "npm",
     "run",
-    "start"
+    "dev",
+    "--",
+    "--hostname",
+    "0.0.0.0"
   )
 
   $containerId = & docker @runArgs

@@ -19,6 +19,7 @@ const acceptanceComposeFile = path.join(
 );
 const localComposeFile = path.join(platformRoot, "deploy", "docker-compose.local.yml");
 const releaseComposeFile = path.join(platformRoot, "deploy", "docker-compose.release.yml");
+const startWebPreviewFile = path.join(platformRoot, "deploy", "start-web-preview.ps1");
 
 function composeServiceBlock(contents, serviceName) {
   const lines = contents.split(/\r?\n/);
@@ -541,6 +542,15 @@ test("local and acceptance Web auth bypasses run only in explicit development mo
   }
   assert.match(localWeb, /command:\s+\["npm", "run", "dev"/);
   assert.match(acceptanceWeb, /command:\s+\["npm", "run", "start", "--", "--hostname", "0\.0\.0\.0"\]/);
+
+  const previewScript = await readFile(startWebPreviewFile, "utf8");
+  assert.match(previewScript, /^NODE_ENV=development$/m);
+  assert.match(previewScript, /^DEV_AUTH_BYPASS_ENABLED=true$/m);
+  assert.doesNotMatch(previewScript, /^NODE_ENV=production$/m);
+  assert.match(
+    previewScript,
+    /"npm",\s*\r?\n\s*"run",\s*\r?\n\s*"dev",\s*\r?\n\s*"--",\s*\r?\n\s*"--hostname",\s*\r?\n\s*"0\.0\.0\.0"/,
+  );
 
   const localGateway = composeServiceBlock(await readFile(localComposeFile, "utf8"), "gateway");
   assert.match(localGateway, /\/readyz/);
