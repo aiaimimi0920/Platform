@@ -94,8 +94,8 @@ jobs:
           push: false
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha,scope=platform-${{ matrix.image }}
-          cache-to: ${{ github.event.pull_request.head.repo.fork == false && format('type=gha,mode=max,scope=platform-{0}', matrix.image) || '' }}
+          cache-from: type=gha,scope=platform-${{ matrix.image }}-${{ github.event_name }}
+          cache-to: ${{ github.event.pull_request.head.repo.fork == false && format('type=gha,mode=max,scope=platform-{0}-{1}', matrix.image, github.event_name) || '' }}
           provenance: mode=max
           sbom: true
 
@@ -159,8 +159,8 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha,scope=platform-${{ matrix.image }}
-          cache-to: type=gha,mode=max,scope=platform-${{ matrix.image }}
+          cache-from: type=gha,scope=platform-${{ matrix.image }}-${{ github.event_name }}
+          cache-to: type=gha,mode=max,scope=platform-${{ matrix.image }}-${{ github.event_name }}
           provenance: mode=max
           sbom: true
 

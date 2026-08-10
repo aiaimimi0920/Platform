@@ -299,6 +299,15 @@ describe("independent Platform repository", () => {
       workflow.includes("github.event.pull_request.head.repo.fork == false"),
       "Fork pull requests must not attempt to export a writable GitHub Actions cache",
     );
+    assert.strictEqual(
+      workflow
+        .split(/\r?\n/)
+        .filter((line) => line.trim() === "cache-from: type=gha,scope=platform-${{ matrix.image }}-${{ github.event_name }}")
+        .length,
+      2,
+      "Container build and publish matrices must isolate cache scopes by event",
+    );
+    assert(workflow.includes("scope=platform-{0}-{1}', matrix.image, github.event_name"));
     assert(workflow.includes("ghcr.io/${{ github.repository_owner }}/neuro-platform-${{ matrix.image }}"));
     assert(workflow.includes("id: build"));
     assert(workflow.includes("steps.build.outputs.digest"));
