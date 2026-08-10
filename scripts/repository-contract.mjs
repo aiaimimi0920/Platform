@@ -214,11 +214,17 @@ describe("independent Platform repository", () => {
     assert(webWorkspace.includes("currentViewport.scrollHeight - previousScrollHeight"));
   });
 
-  it("builds all Platform-owned images without publishing pull requests", () => {
+  it("builds all Platform-owned images without publishing pull requests or arbitrary dispatch refs", () => {
     const workflow = read(".github/workflows/container-images.yml");
     const dockerignore = read(".dockerignore");
+    const publishGuard = "if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/V')))";
     assert(workflow.includes("packages: write"));
-    assert(workflow.includes("github.event_name != 'pull_request'"));
+    assert.strictEqual(
+      workflow.split(/\r?\n/).filter((line) => line.trim() === publishGuard).length,
+      2,
+      "Only push events or manual dispatches from main/version tags may publish images and locks",
+    );
+    assert(!workflow.includes("if: github.event_name != 'pull_request'"));
     assert(
       workflow.includes("github.event.pull_request.head.repo.fork == false"),
       "Fork pull requests must not attempt to export a writable GitHub Actions cache",
