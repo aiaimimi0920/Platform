@@ -17,13 +17,15 @@ export async function listTasksWithCounts() {
     .select()
     .from(tasks)
     .where(ne(tasks.status, "draft"))
-    .orderBy(desc(tasks.createdAt));
+    .orderBy(desc(tasks.createdAt), desc(tasks.id));
   const counts = await db
     .select({
       taskId: taskApplications.taskId,
       applicationCount: count(taskApplications.id),
     })
     .from(taskApplications)
+    .innerJoin(tasks, eq(taskApplications.taskId, tasks.id))
+    .where(ne(tasks.status, "draft"))
     .groupBy(taskApplications.taskId);
   const arbitrationCounts = await db
     .select({
@@ -31,7 +33,8 @@ export async function listTasksWithCounts() {
       arbitrationCaseCount: count(arbitrationCases.id),
     })
     .from(arbitrationCases)
-    .where(eq(arbitrationCases.entityType, "task"))
+    .innerJoin(tasks, eq(arbitrationCases.entityId, tasks.id))
+    .where(and(eq(arbitrationCases.entityType, "task"), ne(tasks.status, "draft")))
     .groupBy(arbitrationCases.entityId);
 
   const countMap = new Map(counts.map((entry) => [entry.taskId, Number(entry.applicationCount)]));
@@ -50,7 +53,7 @@ export async function listTasksWithCountsByUser(userId: string) {
     .select()
     .from(tasks)
     .where(or(eq(tasks.creatorUserId, userId), eq(tasks.assignedUserId, userId)))
-    .orderBy(desc(tasks.createdAt));
+    .orderBy(desc(tasks.createdAt), desc(tasks.id));
 
   if (rows.length === 0) {
     return [];

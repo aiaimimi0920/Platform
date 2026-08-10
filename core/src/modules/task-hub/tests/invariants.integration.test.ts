@@ -23,7 +23,14 @@ if (!databaseUrl) {
     let accountRedis: { disconnect: () => void } | null = null;
 
     try {
-      const { advanceTaskLifecycle, applyToTask, createTask, getTaskSummary } = await import("../service");
+      const {
+        advanceTaskLifecycle,
+        applyToTask,
+        createTask,
+        createTaskDraft,
+        getTaskSummary,
+        listTasks,
+      } = await import("../service");
       const { getWalletSummary, grantBalance } = await import(
         "../../../../../packages/account-domain/dist/modules/wallet-ledger/service.js"
       );
@@ -136,6 +143,18 @@ if (!databaseUrl) {
       assert.equal(cancelledSummary.assignedUserId, "worker-e");
       cancelledSummary = await advanceTaskLifecycle("creator-1", cancelledTask.id, "cancel");
       assert.equal(cancelledSummary.status, "cancelled");
+
+      const draftResult = await createTaskDraft("creator-1", {
+        title: "Private draft",
+        description: "Remains outside the public task directory.",
+        preferredCapabilityCodes: ["release"],
+        idempotencyKey: "task-hub-integration-private-draft",
+      });
+      const listedTasks = await listTasks();
+      const acceptedListItem = listedTasks.find((task) => task.id === acceptedTask.id);
+      assert.equal(acceptedListItem?.applicationCount, 2);
+      assert.equal(acceptedListItem?.arbitrationCaseCount, 0);
+      assert.equal(listedTasks.some((task) => task.id === draftResult.task.id), false);
 
       const creatorWallet = await getWalletSummary("creator-1");
       const workerAWallet = await getWalletSummary("worker-a");
