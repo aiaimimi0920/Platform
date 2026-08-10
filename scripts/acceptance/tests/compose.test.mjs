@@ -18,6 +18,7 @@ const acceptanceComposeFile = path.join(
   "docker-compose.acceptance.yml",
 );
 const localComposeFile = path.join(platformRoot, "deploy", "docker-compose.local.yml");
+const releaseComposeFile = path.join(platformRoot, "deploy", "docker-compose.release.yml");
 
 function composeServiceBlock(contents, serviceName) {
   const lines = contents.split(/\r?\n/);
@@ -506,7 +507,7 @@ test("local Compose parameterizes every published port and binds it to loopback"
 });
 
 test("Compose stacks gate application dependencies on real readiness", async () => {
-  for (const composeFile of [acceptanceComposeFile, localComposeFile]) {
+  for (const composeFile of [acceptanceComposeFile, localComposeFile, releaseComposeFile]) {
     const contents = await readFile(composeFile, "utf8");
     assert.doesNotMatch(contents, /condition:\s+service_started/);
 
