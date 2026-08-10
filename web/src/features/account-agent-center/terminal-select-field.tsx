@@ -1,6 +1,14 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+  type KeyboardEvent as ReactKeyboardEvent,
+  type MouseEvent as ReactMouseEvent,
+} from "react";
 
 import { cn } from "@/lib/cn";
 
@@ -51,6 +59,8 @@ export function TerminalSelectField({
   className,
 }: TerminalSelectFieldProps) {
   const rootRef = useRef<HTMLDivElement | null>(null);
+  const ignoreNextKeyboardClickRef = useRef(false);
+  const listboxId = useId();
   const controlled = typeof value === "string";
   const normalizedDefaultValue = useMemo(
     () => (options.some((option) => option.value === defaultValue) ? defaultValue : ""),
@@ -91,7 +101,19 @@ export function TerminalSelectField({
   }, [open]);
 
   const selected = options.find((option) => option.value === selectedValue) ?? null;
+  const selectedIndex = options.findIndex((option) => option.value === selectedValue);
+  const [activeOptionValue, setActiveOptionValue] = useState(selectedValue || options[0]?.value || "");
+  const activeOptionIndex = options.findIndex((option) => option.value === activeOptionValue);
   const unavailable = disabled || options.length === 0;
+
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+    setActiveOptionValue((current) =>
+      options.some((option) => option.value === current) ? current : selectedValue || options[0]?.value || "",
+    );
+  }, [open, options, selectedValue]);
 
   function handleSelect(nextValue: string) {
     if (!controlled) {
@@ -101,6 +123,85 @@ export function TerminalSelectField({
     setOpen(false);
   }
 
+  function openMenu(index = Math.max(selectedIndex, 0)) {
+    const boundedIndex = Math.min(Math.max(index, 0), Math.max(options.length - 1, 0));
+    setActiveOptionValue(options[boundedIndex]?.value ?? "");
+    setOpen(true);
+  }
+
+  function handleTriggerClick(event: ReactMouseEvent<HTMLButtonElement>) {
+    if (event.detail === 0 && ignoreNextKeyboardClickRef.current) {
+      ignoreNextKeyboardClickRef.current = false;
+      return;
+    }
+    if (open) {
+      setOpen(false);
+    } else {
+      openMenu();
+    }
+  }
+
+  function handleTriggerKeyUp(event: ReactKeyboardEvent<HTMLButtonElement>) {
+    if ((event.key === "Enter" || event.key === " ") && ignoreNextKeyboardClickRef.current) {
+      window.setTimeout(() => {
+        ignoreNextKeyboardClickRef.current = false;
+      }, 0);
+    }
+  }
+
+  function handleTriggerKeyDown(event: ReactKeyboardEvent<HTMLButtonElement>) {
+    if (unavailable) {
+      return;
+    }
+
+    if (event.key === "ArrowDown") {
+      event.preventDefault();
+      if (!open) {
+        openMenu();
+      } else {
+        const nextIndex = Math.min(Math.max(activeOptionIndex, 0) + 1, options.length - 1);
+        setActiveOptionValue(options[nextIndex]?.value ?? "");
+      }
+      return;
+    }
+
+    if (event.key === "ArrowUp") {
+      event.preventDefault();
+      if (!open) {
+        openMenu();
+      } else {
+        const nextIndex = Math.max(activeOptionIndex - 1, 0);
+        setActiveOptionValue(options[nextIndex]?.value ?? "");
+      }
+      return;
+    }
+
+    if (event.key === "Home" || event.key === "End") {
+      event.preventDefault();
+      openMenu(event.key === "Home" ? 0 : options.length - 1);
+      return;
+    }
+
+    if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      ignoreNextKeyboardClickRef.current = true;
+      if (!open) {
+        openMenu();
+        return;
+      }
+      const activeOption = options[activeOptionIndex];
+      if (activeOption) {
+        handleSelect(activeOption.value);
+      }
+      return;
+    }
+
+    if (event.key === "Escape" && open) {
+      event.preventDefault();
+      setOpen(false);
+    }
+  }
+
   return (
     <div
       className={cn("app-agent-center-terminal-select", open && "app-agent-center-terminal-select--open", className)}
@@ -108,10 +209,19 @@ export function TerminalSelectField({
     >
       <input name={name} type="hidden" value={selectedValue} />
       <button
+        aria-controls={listboxId}
         aria-expanded={open}
+        aria-haspopup="listbox"
+        aria-activedescendant={open && activeOptionIndex >= 0 ? `${listboxId}-option-${activeOptionIndex}` : undefined}
         className="app-agent-center-terminal-select__trigger"
         disabled={unavailable}
-        onClick={() => setOpen((current) => !current)}
+        onClick={handleTriggerClick}
+        onKeyDown={handleTriggerKeyDown}
+        onKeyUp={handleTriggerKeyUp}
+        onPointerDown={() => {
+          ignoreNextKeyboardClickRef.current = false;
+        }}
+        role="combobox"
         type="button"
       >
         <span
@@ -133,7 +243,9 @@ export function TerminalSelectField({
               width={24}
             />
           ) : null}
-          <span className="app-agent-center-terminal-select__trigger-label">{selected?.label || placeholder}</span>
+          <span className="app-agent-center-terminal-select__trigger-label" id={`${listboxId}-label`}>
+            {selected?.label || placeholder}
+          </span>
         </span>
         <span className="app-agent-center-terminal-select__chevron">
           <ChevronIcon />
@@ -150,17 +262,22 @@ export function TerminalSelectField({
         />
       ) : null}
       {open && !unavailable ? (
-        <div className="app-agent-center-terminal-select__panel" role="listbox">
-          {options.map((option) => {
+        <div aria-labelledby={`${listboxId}-label`} className="app-agent-center-terminal-select__panel" id={listboxId} role="listbox">
+          {options.map((option, index) => {
             const active = option.value === selectedValue;
             return (
-              <button
+              <div
                 aria-selected={active}
-                className={cn("app-agent-center-terminal-select__option", active && "app-agent-center-terminal-select__option--active")}
+                className={cn(
+                  "app-agent-center-terminal-select__option",
+                  active && "app-agent-center-terminal-select__option--active",
+                  activeOptionIndex === index && "app-agent-center-terminal-select__option--highlighted",
+                )}
+                id={`${listboxId}-option-${index}`}
                 key={option.value}
                 onClick={() => handleSelect(option.value)}
+                onMouseEnter={() => setActiveOptionValue(option.value)}
                 role="option"
-                type="button"
               >
                 <span className="app-agent-center-terminal-select__option-copy">
                   <span className="app-agent-center-terminal-select__option-main">
@@ -181,7 +298,7 @@ export function TerminalSelectField({
                   </span>
                   {option.description ? <span>{option.description}</span> : null}
                 </span>
-              </button>
+              </div>
             );
           })}
         </div>

@@ -165,6 +165,7 @@ export function HeavyChatDirectory({
           <SearchIcon />
         </span>
         <input
+          aria-label="搜索聊天记录"
           onChange={(event) => onSetSearchQuery(event.target.value)}
           placeholder={collapsed ? "" : "搜索聊天记录"}
           type="search"
@@ -173,7 +174,13 @@ export function HeavyChatDirectory({
         {!collapsed ? <kbd>Ctrl+K</kbd> : null}
       </label>
 
-      <button className="nt-chat-app-sidebar__new" onClick={onCreateThread} type="button">
+      <button
+        aria-label="新聊天"
+        className="nt-chat-app-sidebar__new"
+        onClick={onCreateThread}
+        title="新聊天"
+        type="button"
+      >
         <NewChatIcon />
         {!collapsed ? <span>新聊天</span> : null}
       </button>

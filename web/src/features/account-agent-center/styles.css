@@ -1193,6 +1193,11 @@ body:has(.app-agent-page--embedded) .app-root--terminal {
     rgba(11, 16, 21, 0.86);
 }
 
+.app-agent-center-terminal-select__option--highlighted {
+  border-color: var(--neuro-yellow-line);
+  background: var(--neuro-yellow-soft);
+}
+
 .app-agent-center-terminal-select__option-copy {
   display: grid;
   gap: 0.18rem;

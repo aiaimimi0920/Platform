@@ -170,6 +170,20 @@ export function MissionCenterContainer({ enabled, userId }: MissionCenterProps) 
       return;
     }
 
+    void refreshPanel();
+
+    return () => {
+      panelRequestRef.current?.controller.abort();
+      panelRequestRef.current = null;
+      panelRequestIdRef.current += 1;
+    };
+  }, [enabled, userId]);
+
+  useEffect(() => {
+    if (!enabled || !userId || !open) {
+      return;
+    }
+
     let cancelled = false;
 
     async function syncPanel() {
@@ -179,7 +193,6 @@ export function MissionCenterContainer({ enabled, userId }: MissionCenterProps) 
       await refreshPanel();
     }
 
-    void syncPanel();
     const intervalId = window.setInterval(() => {
       void syncPanel();
     }, MISSION_POLL_INTERVAL_MS);
@@ -191,7 +204,7 @@ export function MissionCenterContainer({ enabled, userId }: MissionCenterProps) 
       panelRequestRef.current = null;
       panelRequestIdRef.current += 1;
     };
-  }, [enabled, userId]);
+  }, [enabled, open, userId]);
 
   useEffect(() => {
     if (!open) {
