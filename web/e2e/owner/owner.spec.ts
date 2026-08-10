@@ -31,6 +31,17 @@ async function fundAcceptanceWallet(page: Parameters<typeof loginAsAcceptanceUse
   await expect(page.locator(".app-redeem__result--success")).toContainText(/20|曜石|obsidian/i);
 }
 
+async function ensureAcceptanceWallet(page: Parameters<typeof loginAsAcceptanceUser>[0], code: string) {
+  await page.goto("/wallet");
+  await expect(page.getByRole("heading", { name: "正式钱包与账本" })).toBeVisible();
+  const obsidianCard = page.locator(".app-account-balance-card").filter({ hasText: "耀晶" }).first();
+  await expect(obsidianCard).toBeVisible();
+  const availableText = await obsidianCard.locator(".app-account-balance-card__value").innerText();
+  const available = Number(availableText.replace(/[^\d.-]/g, ""));
+  if (Number.isFinite(available) && available >= 1) return;
+  await fundAcceptanceWallet(page, code);
+}
+
 test("O-AUTH protects owner routes and supports login, logout, and idempotent re-login", async ({ page }) => {
   await page.goto("/dashboard");
   await expectLocalLogin(page);
@@ -68,7 +79,7 @@ test("O-COMMERCE creates and redeems a wallet grant while keeping an invalid red
 
 test("O-TASK persists a newly published task across refresh", async ({ page }, testInfo) => {
   await loginAsAcceptanceUser(page);
-  await fundAcceptanceWallet(page, acceptanceCode(testInfo.project.name, "task"));
+  await ensureAcceptanceWallet(page, acceptanceCode(testInfo.project.name, "task"));
   await expectHeading(page, "/my-tasks", "我的任务");
   const taskTitle = `Acceptance task ${testInfo.project.name}`;
   await page.getByPlaceholder("任务标题").fill(taskTitle);
