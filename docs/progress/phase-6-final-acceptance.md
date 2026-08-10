@@ -1,8 +1,26 @@
 # Phase 6 全栈、浏览器与最终验收
 
-- [ ] `P6-01` Owner and Visitor desktop/mobile Playwright journeys。
-- [ ] `P6-02` Operator and dependency-error journeys。
-- [ ] `P6-03` required/external-boundary/conditional-live matrix and classification。
+- [x] `P6-01` Owner and Visitor desktop/mobile Playwright journeys。
+- [x] `P6-02` Operator and dependency-error journeys。
+- [x] `P6-03` required/external-boundary/conditional-live matrix and classification。
 - [ ] `P6-04` final release, review, P2 register and signoff。
 
 Acceptance: use exactly one canonical conclusion phrase; no internal P0/P1, no unclassified live failure, no required skip, and release smoke passes.
+
+## P6-01 / P6-02 完成记录
+
+- fresh official run 位于 `.runtime/acceptance/platform-round15-6070450/acceptance-manifest.json`，对应 clean revision `6070450f71ddc0c65f4e6960bd2813c8d081d9c2`。
+- `browser-owner`、`browser-visitor`、`browser-operator`、`browser-errors` 全部通过；Owner、Visitor、Operator 与 dependency-error canonical journeys 均由 desktop/mobile Playwright projects 覆盖。
+- 同一 run 的 required 为 `14 discovered / 14 executed / 14 passed / 0 failed / 0 skipped`；external-boundary 为 `4 discovered / 4 executed / 3 passed / 0 failed / 0 skipped / 1 not-applicable`，其中 Hook 由 source/dependency inventory 证明当前无 Platform-owned runtime call point。
+
+## P6-03 完成记录
+
+- same-day conditional-live run 位于 `.runtime/acceptance/platform-live-round15-6070450/acceptance-manifest.json`，同样对应 clean revision `6070450f71ddc0c65f4e6960bd2813c8d081d9c2`。
+- Linux.do OAuth、Gateway、Loom 与 Tea 均执行环境 preflight，并因缺少对应 live URL/token 或 OAuth client 配置分类为 `external-blocked`；证据只记录环境变量名，不记录凭证值。Hook 分类为 evidence-backed `not-applicable`。
+- conditional-live 合计 `5 discovered / 5 executed / 0 failed / 0 skipped / 4 external-blocked / 1 not-applicable`，不存在未分类的 `failed` 或无证据 `not-run`。
+
+## P6-04 剩余边界
+
+- 已验证的 immutable `V0.1.0` release 来源是 `3d2f653663eb4796362ffa278eafd74df308ec7d`；本轮 release Compose readiness 修复位于更晚的 revision，不能覆盖或改写现有 `V0.1.0`。
+- 最终签收仍需完成当前 revision 的新版本 release 与 artifact-only smoke、最终规格/代码质量 review、P0/P1 清零复核、P2 register 和 clean-worktree signoff。
+- 当前唯一 canonical 结论保持为：`Platform 产品未完成`。

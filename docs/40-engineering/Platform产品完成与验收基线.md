@@ -19,9 +19,9 @@
 - `infra`
 - Platform release 交付面
 
-## 当前实施快照（2026-07-19）
+## 当前实施快照（2026-08-10）
 
-Phase 1 验收基础设施已完成 `4/4`（包括 P1-04 strict entry point、debt 修复和 external-boundary harness），但这不是产品完成。最终真实验收 run `.runtime/acceptance/platform-acceptance-p104-runtime5/acceptance-manifest.json` 的 required 层仍为 `14 discovered / 14 executed / 9 passed / 5 failed / 0 skipped`；external-boundary 为 `4 discovered / 4 executed / 3 passed / 0 failed / 1 not-applicable`。Phase 2-6、完整 release 和最终浏览器验收仍未完成，因此当前 canonical 结论必须保持为 `Platform 产品未完成`。
+Phase 0-5 已完成，Phase 6 已完成 `P6-01` 至 `P6-03`。fresh run `.runtime/acceptance/platform-round15-6070450/acceptance-manifest.json` 对应 clean revision `6070450f71ddc0c65f4e6960bd2813c8d081d9c2`：required 为 `14/14` 全部通过且无 skip，external-boundary 为 `3 passed + 1 evidence-backed not-applicable`，Owner、Visitor、Operator 与 dependency-error 浏览器套件全部通过。同日 conditional-live run 将 Linux.do、Gateway、Loom、Tea 分类为有 preflight 证据的 `external-blocked`，Hook 分类为 `not-applicable`。immutable `V0.1.0` 已从较早 clean revision `3d2f653663eb4796362ffa278eafd74df308ec7d` 构建并通过 artifact-only runtime smoke；由于当前源码更新尚未生成新版本 release，且 `P6-04` 的最终 review、P2 register 与 signoff 未完成，当前 canonical 结论仍为 `Platform 产品未完成`。
 
 ## 1. 正式范围
 
@@ -111,15 +111,15 @@ Platform 只有同时满足下面条件，才允许标记为产品完成。
 - `P2`：不影响核心正确性和交付的局部体验、维护性或低风险运维问题。必须记录 owner、边界和不阻塞理由。
 - 每个缺陷只能有一个当前严重度；第三方账号、额度、网络和服务状态归 `external-blocked`，不得混入 P0/P1/P2。
 
-## 3. 当前必须先解决的 P0
+## 3. 实施起点的 P0 与持续回归约束
 
-### 3.1 重度智能体不是实时产品
+### 3.1 重度智能体历史缺口与当前闭环
 
-当前 `/chat` 使用客户端 seed 数据、React 内存状态和定时器生成模板回复。线程、消息、收藏、项目绑定、重试、转任务和投递邮箱都没有形成真实服务端闭环。
+实施起点的 `/chat` 曾使用客户端 seed 数据、React 内存状态和定时器生成模板回复，线程、消息、收藏、项目绑定、重试、转任务和投递邮箱没有形成真实服务端闭环。
 
-同时，Core 当前明确拒绝创建 `managed_heavy` Agent。这与 `/chat` 和 Agent Center 将重度智能体声明为正式产品入口相冲突。
+Phase 2 已完成重度对话领域持久化、`managed_heavy` 服务、Gateway execution、Web 状态恢复以及 task/mailbox 动作；fresh required/browser matrix 已通过。下面的约束继续作为防回归基线，而不是未实现清单：
 
-正式修复方向：
+持续约束：
 
 - 新增独立的 Platform 重度对话领域模块，不把逻辑重新堆入现有超大 Agent 文件。
 - 以 `slot / project / thread / message` 为最小持久化层级。
@@ -132,11 +132,11 @@ Platform 只有同时满足下面条件，才允许标记为产品完成。
 - 投递邮箱必须创建真实站内邮件草稿或投递记录。
 - 页面刷新后必须恢复同一用户的真实线程和消息。
 
-### 3.2 隔离验收栈不存在
+### 3.2 隔离验收栈历史缺口与当前结果
 
-当前 Compose 使用固定宿主端口、默认 compose project、固定本地 secret，并挂载宿主 `${USERPROFILE}/.neuro`。这不能作为无副作用验收环境。
+实施起点的 Compose 曾使用固定宿主端口、默认 compose project、固定本地 secret，并挂载宿主 `${USERPROFILE}/.neuro`。当前 acceptance runner 已使用唯一 project、loopback 动态端口、run-owned volume/secret/credential root 和 owner-aware cleanup；fresh Compose startup 与浏览器矩阵均通过。
 
-正式修复方向：
+持续约束：
 
 - 所有宿主端口参数化并默认绑定 `127.0.0.1`。
 - 验收 wrapper 必须要求非空、唯一的 compose project id。
@@ -147,21 +147,22 @@ Platform 只有同时满足下面条件，才允许标记为产品完成。
 - 依赖必须按 `service_healthy` 启动，不以进程已启动替代 ready。
 - 浏览器矩阵结束后、cleanup 之前必须再次记录该 project 的 `compose ps --all` 结果，以区分产品 journey 失败、容器退出和 Docker Engine 诊断失败。
 
-### 3.3 生产部署清单需与 release artifact 对齐
+### 3.3 生产部署清单与 release artifact 对齐
 
 `P5-01` 已移除 Kubernetes 清单中的 `ghcr.io/example/*:latest`、`example.com`、示例对象存储地址，并补齐 staging / production namespace + namePrefix、digest replacement、migration Job、Gateway secret contract、namespace-scoped account-edge RBAC 与 deploy helper gates。
 
-后续 release 仍必须完成：
+`P5-03` / `P5-04` 已完成首个 immutable `V0.1.0` 的实际 OCI digest 替换、complete release 组装和 artifact-only smoke。后续版本仍必须保持：
 
-- `P5-03` 用真实 release artifact digest 替换当前 overlay 中的 release-contract seed digest。
+- 用真实 release artifact digest 替换 overlay 中的 release-contract seed digest。
 - `acceptance:release` 只接受 OCI/digest 输入，不得从源码 bind/build context 启动。
 - deploy helper 的 render、placeholder gate、migration wait、rollout status 和 smoke 结果需要被 release evidence 记录。
+- 已发布版本不可覆盖；当前源码晚于 `V0.1.0` 时必须使用新 version id 生成并验证新 release。
 
-### 3.4 当前 release 不是完整 Platform 交付
+### 3.4 完整 Platform release 的当前结果与持续要求
 
-现有 Platform release 只包含 `web + contracts`。它可以作为 Web 构建产物，但不能代表 Core、Account API、Workers、Executor、migration 和部署面已经交付。
+当前 `release/Platform/V0.1.0` 已包含六个 `linux/amd64` OCI layout、三域 migration、Web package、部署/环境合同、脱敏 evidence、依赖清单和完整 checksum，并已通过 artifact-only runtime smoke。该 release 只证明其固定 source revision，不自动覆盖后续源码提交。
 
-正式 release 至少必须包含：
+每个正式 release 仍至少必须包含：
 
 - 当前 Git identity 和 dirty 状态。
 - Platform Web 包及 checksum。
