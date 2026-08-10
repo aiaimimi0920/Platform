@@ -329,7 +329,13 @@ test("failed release startup captures redacted Compose diagnostics before cleanu
             return { exitCode: 1, durationMs: 1, timedOut: false, stdout: "", stderr: `Bearer ${secret}` };
           }
           if (input.args.includes("ps")) {
-            return { exitCode: 0, durationMs: 1, timedOut: false, stdout: `postgres://user:${secret}@postgres/db`, stderr: "" };
+            return {
+              exitCode: 0,
+              durationMs: 1,
+              timedOut: false,
+              stdout: JSON.stringify({ Service: "executor", State: "running", Health: "unhealthy", ExitCode: 0 }),
+              stderr: "",
+            };
           }
           if (input.args.includes("logs")) {
             return { exitCode: 0, durationMs: 1, timedOut: false, stdout: `Authorization: Bearer ${secret}`, stderr: "" };
@@ -345,11 +351,13 @@ test("failed release startup captures redacted Compose diagnostics before cleanu
     assert.equal(evidence.status, "failed");
     assert.equal(evidence.cleanup.completed, true);
     assert.equal(evidence.commands.up.exitCode, 1);
+    assert.deepEqual(evidence.startupDiagnostics.services, ["executor"]);
     assert.equal(evidence.startupDiagnostics.ps.exitCode, 0);
     assert.equal(evidence.startupDiagnostics.logs.exitCode, 0);
     assert.match(evidenceText, /\[REDACTED\]/);
     assert.doesNotMatch(evidenceText, new RegExp(secret));
     assert.equal(calls.length, 4);
+    assert.equal(calls.find((call) => call.args.includes("logs")).args.includes("executor"), true);
   } finally {
     await rm(root, { recursive: true, force: true });
   }

@@ -581,26 +581,52 @@ function redactedCommandOutput(result, secretCanaries) {
   return redactText(output, secretCanaries).slice(-32_768);
 }
 
+function diagnosticServicesFromPs(result) {
+  const services = new Set();
+  for (const line of String(result?.stdout ?? "").split(/\r?\n/).filter(Boolean)) {
+    try {
+      const item = JSON.parse(line);
+      const health = String(item?.Health ?? "").toLowerCase();
+      const state = String(item?.State ?? "").toLowerCase();
+      const exitCode = Number(item?.ExitCode ?? 0);
+      if (
+        health === "unhealthy"
+        || ["dead", "removing", "restarting"].includes(state)
+        || (state === "exited" && exitCode !== 0)
+      ) {
+        const service = String(item?.Service ?? "");
+        if (/^[a-zA-Z0-9_.-]+$/.test(service)) services.add(service);
+      }
+    } catch {
+      // Preserve the bounded raw ps output below even if one line is not JSON.
+    }
+  }
+  return [...services].sort();
+}
+
 async function captureStartupDiagnostics({ executeCommand, baseArgs, cwd, environment }) {
   const secretCanaries = releaseSecretCanaries(environment);
-  const diagnostics = {};
-  for (const [name, args] of [
-    ["ps", ["ps", "--all", "--format", "json"]],
-    ["logs", ["logs", "--no-color", "--tail", "120"]],
-  ]) {
-    const result = await executeCommand({
-      command: "docker",
-      args: [...baseArgs, ...args],
-      cwd,
-      env: { ...process.env, ...environment },
-      timeoutMs: 2 * 60 * 1000,
-    });
-    diagnostics[name] = {
-      ...commandSummary(result),
-      output: redactedCommandOutput(result, secretCanaries),
-    };
-  }
-  return diagnostics;
+  const runDiagnostic = async (args) => executeCommand({
+    command: "docker",
+    args: [...baseArgs, ...args],
+    cwd,
+    env: { ...process.env, ...environment },
+    timeoutMs: 2 * 60 * 1000,
+  });
+  const psResult = await runDiagnostic(["ps", "--all", "--format", "json"]);
+  const services = diagnosticServicesFromPs(psResult);
+  const logsResult = await runDiagnostic(["logs", "--no-color", "--tail", "200", ...services]);
+  return {
+    services,
+    ps: {
+      ...commandSummary(psResult),
+      output: redactedCommandOutput(psResult, secretCanaries),
+    },
+    logs: {
+      ...commandSummary(logsResult),
+      output: redactedCommandOutput(logsResult, secretCanaries),
+    },
+  };
 }
 
 async function requireCommand(executeCommand, input, label) {
