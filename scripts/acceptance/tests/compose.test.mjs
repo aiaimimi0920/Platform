@@ -20,6 +20,7 @@ const acceptanceComposeFile = path.join(
 const localComposeFile = path.join(platformRoot, "deploy", "docker-compose.local.yml");
 const releaseComposeFile = path.join(platformRoot, "deploy", "docker-compose.release.yml");
 const startWebPreviewFile = path.join(platformRoot, "deploy", "start-web-preview.ps1");
+const restartWebPreviewFile = path.join(platformRoot, "deploy", "restart-web-next-port.ps1");
 
 function composeServiceBlock(contents, serviceName) {
   const lines = contents.split(/\r?\n/);
@@ -555,6 +556,8 @@ test("local and acceptance Web auth bypasses run only in explicit development mo
   assert.match(previewScript, /WaitOne\(\[TimeSpan\]::FromSeconds\(\$TimeoutSeconds\)\)/);
   assert.match(previewScript, /Remove-Item -LiteralPath \$envFile -Force/);
   assert.match(previewScript, /\$containerStarted -and -not \$previewReady/);
+  assert.match(previewScript, /\/api\/auth\/providers/);
+  assert.match(previewScript, /PSObject\.Properties\.Name -contains "local-dev"/);
 
   const localGateway = composeServiceBlock(await readFile(localComposeFile, "utf8"), "gateway");
   assert.match(localGateway, /\/readyz/);
@@ -573,6 +576,18 @@ test("local workers receive every readiness-critical Core and Gateway dependency
   assert.match(accountWorker, /PLATFORM_INTERNAL_URL:\s+http:\/\/core:4000/);
   assert.match(accountWorker, /AI_GATEWAY_INTERNAL_URL:\s+http:\/\/gateway:4200/);
   assert.match(accountWorker, /AI_GATEWAY_MANAGEMENT_TOKEN:\s+local-internal-token/);
+});
+
+test("Compose Web restart serializes port allocation and preserves atomic state", async () => {
+  const restartScript = await readFile(restartWebPreviewFile, "utf8");
+  assert.match(restartScript, /Local\\NeuroPlatformWebPreviewAllocation/);
+  assert.match(restartScript, /System\.Threading\.Mutex/);
+  assert.match(restartScript, /System\.Guid\]::NewGuid/);
+  assert.match(restartScript, /System\.IO\.File\]::Replace/);
+  assert.doesNotMatch(restartScript, /\$Path\.\$PID\.(?:tmp|bak)/);
+  assert.match(restartScript, /\$upAttempted -and -not \$webReady/);
+  assert.match(restartScript, /docker compose -f \$composeFile rm -sf web/);
+  assert.doesNotMatch(restartScript, /Set-Content -Path \$stateFile/);
 });
 
 test("Gateway double proves management to project token to chat runtime boundary", async (t) => {

@@ -22,6 +22,14 @@ function read(relativePath) {
   return readFileSync(join(rootDir, relativePath), "utf8");
 }
 
+function collectWorkflowPaths() {
+  const workflowDirectory = join(rootDir, ".github", "workflows");
+  return readdirSync(workflowDirectory, { withFileTypes: true })
+    .filter((entry) => entry.isFile() && /\.ya?ml$/i.test(entry.name))
+    .map((entry) => `.github/workflows/${entry.name}`)
+    .sort();
+}
+
 function pinnedAction(action) {
   const pin = ACTION_PINS[action];
   assert(pin, `Missing audited Action pin: ${action}`);
@@ -30,7 +38,6 @@ function pinnedAction(action) {
 
 function assertExternalActionsPinned(workflow, relativePath) {
   const actionLines = workflow.split(/\r?\n/).filter((line) => /^\s*uses:\s+/.test(line));
-  assert(actionLines.length > 0, `Workflow has no external Actions to verify: ${relativePath}`);
 
   for (const line of actionLines) {
     if (/^\s*uses:\s+\.\//.test(line)) continue;
@@ -142,14 +149,32 @@ describe("independent Platform repository", () => {
     assert(workflow.includes("test-build-platform-web-release-contract.ps1 -DryRunOnly"));
     assert(workflow.includes("test-verify-platform-web-release-package-contract.ps1"));
     assert(workflow.includes("test-smoke-platform-web-release-package-contract.ps1"));
+
+    const workflowLines = workflow.split(/\r?\n/);
+    assert.strictEqual(
+      workflowLines.filter((line) => line.includes("npm run prepare:workspaces")).length,
+      1,
+      "Quick CI must prepare shared workspaces exactly once",
+    );
+    const workspaceTestLines = workflowLines.filter((line) => /npm test --workspace /.test(line));
+    assert.strictEqual(
+      workspaceTestLines.length,
+      packageMetadata.workspaces.length,
+      "Quick CI must run every workspace test exactly once",
+    );
+    for (const line of workspaceTestLines) {
+      assert(line.includes("--ignore-scripts"), `Workspace tests must not repeat lifecycle builds: ${line.trim()}`);
+    }
+    assert(
+      packageMetadata.scripts["test:vitest"].includes("--ignore-scripts"),
+      "Vitest workspace fan-out must not run lifecycle scripts",
+    );
   });
 
   it("pins every external workflow Action to an audited commit", () => {
-    for (const relativePath of [
-      ".github/workflows/ci.yml",
-      ".github/workflows/container-images.yml",
-      ".github/workflows/release-platform-tag.yml",
-    ]) {
+    const workflowPaths = collectWorkflowPaths();
+    assert(workflowPaths.length > 0, "Repository must own at least one workflow");
+    for (const relativePath of workflowPaths) {
       assertExternalActionsPinned(read(relativePath), relativePath);
     }
   });

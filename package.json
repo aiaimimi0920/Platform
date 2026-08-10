@@ -61,7 +61,7 @@
     "test:integration": "npm run test:integration -ws --if-present",
     "test:integration:required": "node --import tsx scripts/acceptance/integration-fixture.mjs",
     "test:e2e:acceptance": "playwright test --config playwright.config.ts",
-    "test:vitest": "npm run test:vitest -ws --if-present",
+    "test:vitest": "npm run test:vitest -ws --if-present --ignore-scripts",
     "test:debt": "npm run test:debt -ws --if-present",
     "test:all": "npm run test && npm run test:vitest && npm run test:integration"
   },

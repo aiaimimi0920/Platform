@@ -1,7 +1,9 @@
 param(
   [int]$BasePort = 3028,
   [int]$Step = 2,
-  [switch]$NoBuild
+  [switch]$NoBuild,
+  [int]$AllocationLockTimeoutSeconds = 120,
+  [int]$WebReadyTimeoutSeconds = 300
 )
 
 Set-StrictMode -Version Latest
@@ -11,6 +13,7 @@ $repoRoot = Split-Path -Parent $PSScriptRoot
 $composeFile = Join-Path $PSScriptRoot "docker-compose.local.yml"
 $runtimeDir = Join-Path $repoRoot ".runtime"
 $stateFile = Join-Path $runtimeDir "local-web-port.txt"
+$previewAllocationMutexName = "Local\NeuroPlatformWebPreviewAllocation"
 
 function Wait-ForHttpOk {
   param(
@@ -95,30 +98,123 @@ function Get-NextWebPort {
   return $candidate
 }
 
-if (-not (Test-Path $runtimeDir)) {
-  New-Item -ItemType Directory -Path $runtimeDir -Force | Out-Null
-}
+function Enter-PreviewAllocationLock {
+  param(
+    [string]$Name,
+    [int]$TimeoutSeconds
+  )
 
-$port = Get-NextWebPort -InitialPort $BasePort -Increment $Step -ComposePath $composeFile -StatePath $stateFile
-$env:WEB_HOST_PORT = "$port"
+  $mutex = New-Object System.Threading.Mutex($false, $Name)
+  $lockTaken = $false
+  try {
+    try {
+      $lockTaken = $mutex.WaitOne([TimeSpan]::FromSeconds($TimeoutSeconds))
+    } catch [System.Threading.AbandonedMutexException] {
+      $lockTaken = $true
+    }
 
-if (-not $NoBuild) {
-  Write-Host "Building fresh web image for http://127.0.0.1:$port ..."
-  & docker compose -f $composeFile build web
-  if ($LASTEXITCODE -ne 0) {
-    throw "Failed to build web image."
+    if (-not $lockTaken) {
+      throw "Timed out waiting for the Platform preview allocation lock."
+    }
+
+    return $mutex
+  } catch {
+    if (-not $lockTaken) {
+      $mutex.Dispose()
+    }
+    throw
   }
 }
 
-Write-Host "Recreating web service on http://127.0.0.1:$port ..."
-& docker compose -f $composeFile up -d --no-deps --force-recreate web
-if ($LASTEXITCODE -ne 0) {
-  throw "Failed to recreate web service."
+function Exit-PreviewAllocationLock {
+  param([System.Threading.Mutex]$Mutex)
+
+  try {
+    $Mutex.ReleaseMutex()
+  } finally {
+    $Mutex.Dispose()
+  }
 }
 
-Wait-ForHttpOk -Name "web" -Url "http://127.0.0.1:$port/health"
-Set-Content -Path $stateFile -Value "$port" -Encoding ascii
+function Write-PortStateAtomically {
+  param(
+    [string]$Path,
+    [int]$Port
+  )
 
-Write-Output "PORT=$port"
-Write-Output "URL=http://127.0.0.1:$port"
-Write-Output "STATE_FILE=$stateFile"
+  $operationId = [System.Guid]::NewGuid().ToString("N")
+  $temporaryPath = "$Path.$operationId.tmp"
+  $backupPath = "$Path.$operationId.bak"
+  try {
+    [System.IO.File]::WriteAllText(
+      $temporaryPath,
+      "$Port`r`n",
+      [System.Text.Encoding]::ASCII
+    )
+    if ([System.IO.File]::Exists($Path)) {
+      [System.IO.File]::Replace($temporaryPath, $Path, $backupPath)
+    } else {
+      [System.IO.File]::Move($temporaryPath, $Path)
+    }
+  } finally {
+    if ([System.IO.File]::Exists($temporaryPath)) {
+      [System.IO.File]::Delete($temporaryPath)
+    }
+    if ([System.IO.File]::Exists($backupPath)) {
+      [System.IO.File]::Delete($backupPath)
+    }
+  }
+}
+
+if (-not (Test-Path -LiteralPath $runtimeDir)) {
+  New-Item -ItemType Directory -Path $runtimeDir -Force | Out-Null
+}
+
+$allocationMutex = $null
+$upAttempted = $false
+$webReady = $false
+try {
+  $allocationMutex = Enter-PreviewAllocationLock `
+    -Name $previewAllocationMutexName `
+    -TimeoutSeconds $AllocationLockTimeoutSeconds
+
+  $port = Get-NextWebPort -InitialPort $BasePort -Increment $Step -ComposePath $composeFile -StatePath $stateFile
+  $env:WEB_HOST_PORT = "$port"
+
+  if (-not $NoBuild) {
+    Write-Host "Building fresh web image for http://127.0.0.1:$port ..."
+    & docker compose -f $composeFile build web
+    if ($LASTEXITCODE -ne 0) {
+      throw "Failed to build web image."
+    }
+  }
+
+  Write-Host "Recreating web service on http://127.0.0.1:$port ..."
+  $upAttempted = $true
+  & docker compose -f $composeFile up -d --no-deps --force-recreate web
+  if ($LASTEXITCODE -ne 0) {
+    throw "Failed to recreate web service."
+  }
+
+  Wait-ForHttpOk -Name "web" -Url "http://127.0.0.1:$port/health" -TimeoutSeconds $WebReadyTimeoutSeconds
+  $webReady = $true
+  Write-PortStateAtomically -Path $stateFile -Port $port
+
+  Write-Output "PORT=$port"
+  Write-Output "URL=http://127.0.0.1:$port"
+  Write-Output "STATE_FILE=$stateFile"
+} catch {
+  if ($upAttempted -and -not $webReady) {
+    & docker compose -f $composeFile rm -sf web | Out-Null
+    if ($LASTEXITCODE -ne 0) {
+      Write-Warning "Failed to remove the unready Compose Web service."
+    }
+  }
+  throw
+} finally {
+  if ($allocationMutex) {
+    $mutexToRelease = $allocationMutex
+    $allocationMutex = $null
+    Exit-PreviewAllocationLock -Mutex $mutexToRelease
+  }
+}

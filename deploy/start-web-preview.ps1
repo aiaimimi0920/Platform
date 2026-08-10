@@ -48,12 +48,36 @@ function Wait-ForHttpOk {
       if ($response.StatusCode -ge 200 -and $response.StatusCode -lt 300) {
         return
       }
-    } catch {
-      Start-Sleep -Seconds 2
-    }
+    } catch {}
+    Start-Sleep -Seconds 2
   }
 
   throw "Timed out waiting for $Name at $Url"
+}
+
+function Wait-ForPreviewReady {
+  param(
+    [string]$BaseUrl,
+    [int]$TimeoutSeconds
+  )
+
+  $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
+  while ((Get-Date) -lt $deadline) {
+    try {
+      $readyResponse = Invoke-WebRequest -Uri "$BaseUrl/ready" -UseBasicParsing -TimeoutSec 5
+      $providers = Invoke-RestMethod -Uri "$BaseUrl/api/auth/providers" -TimeoutSec 5
+      if (
+        $readyResponse.StatusCode -ge 200 -and
+        $readyResponse.StatusCode -lt 300 -and
+        $providers.PSObject.Properties.Name -contains "local-dev"
+      ) {
+        return
+      }
+    } catch {}
+    Start-Sleep -Seconds 2
+  }
+
+  throw "Timed out waiting for preview readiness and the Local Dev auth provider at $BaseUrl"
 }
 
 function Ensure-PreviewDependencies {
@@ -268,9 +292,8 @@ ENABLE_FIGMA_CAPTURE=true
 
   Remove-Item -LiteralPath $envFile -Force
 
-  Wait-ForHttpOk `
-    -Name "preview-web" `
-    -Url "http://127.0.0.1:$port" `
+  Wait-ForPreviewReady `
+    -BaseUrl "http://127.0.0.1:$port" `
     -TimeoutSeconds $PreviewReadyTimeoutSeconds
   $previewReady = $true
 
