@@ -7,6 +7,7 @@ import test from "node:test";
 
 import { PLATFORM_CONTAINER_IMAGES } from "../../container-image-lock.mjs";
 import {
+  createOciLayoutUri,
   createReleaseRuntimeOverride,
   inspectCompleteRelease,
   runArtifactOnlyReleaseSmoke,
@@ -26,7 +27,7 @@ const SERVICE_IMAGES = [
   ["web", "web"],
 ];
 
-function createImageInventory(mode = "fixed-digest") {
+function createImageInventory(mode = "fixed-digest", ociDigest = null) {
   return {
     schemaVersion: "neuro-platform-release-images/v1",
     mode,
@@ -34,7 +35,7 @@ function createImageInventory(mode = "fixed-digest") {
     workflow: null,
     platform: "linux/amd64",
     images: PLATFORM_CONTAINER_IMAGES.map((image, index) => {
-      const digest = `sha256:${(index + 1).toString(16).repeat(64)}`;
+      const digest = ociDigest ?? `sha256:${(index + 1).toString(16).repeat(64)}`;
       const reference = `ghcr.io/aiaimimi0920/neuro-platform-${image}`;
       return {
         image,
@@ -90,7 +91,9 @@ async function writeChecksums(packageDir) {
 
 async function createReleaseFixture(root, mode = "fixed-digest") {
   const packageDir = path.join(root, "release-fixture");
-  const inventory = createImageInventory(mode);
+  const ociManifest = Buffer.from("{}\n", "utf8");
+  const ociDigest = `sha256:${createHash("sha256").update(ociManifest).digest("hex")}`;
+  const inventory = createImageInventory(mode, mode === "oci-layout" ? ociDigest : null);
   await mkdir(path.join(packageDir, "images"), { recursive: true });
   await mkdir(path.join(packageDir, "deployment"), { recursive: true });
   await writeFile(
@@ -98,6 +101,26 @@ async function createReleaseFixture(root, mode = "fixed-digest") {
     `${JSON.stringify(inventory, null, 2)}\n`,
   );
   await writeFile(path.join(packageDir, "deployment", "docker-compose.yml"), createCompose(inventory));
+  if (mode === "oci-layout") {
+    for (const image of inventory.images) {
+      const imageRoot = path.join(packageDir, "oci", image.image);
+      await mkdir(path.join(imageRoot, "blobs", "sha256"), { recursive: true });
+      await writeFile(path.join(imageRoot, "oci-layout"), '{"imageLayoutVersion":"1.0.0"}\n');
+      await writeFile(
+        path.join(imageRoot, "index.json"),
+        `${JSON.stringify({
+          schemaVersion: 2,
+          manifests: [{
+            mediaType: "application/vnd.oci.image.manifest.v1+json",
+            digest: ociDigest,
+            size: ociManifest.length,
+            platform: { os: "linux", architecture: "amd64" },
+          }],
+        })}\n`,
+      );
+      await writeFile(path.join(imageRoot, "blobs", "sha256", ociDigest.slice("sha256:".length)), ociManifest);
+    }
+  }
   await writeFile(
     path.join(packageDir, "release-manifest.json"),
     `${JSON.stringify({
@@ -176,6 +199,62 @@ test("OCI runtime override consumes temporary artifact tags without build contex
   assert.match(override, /neuro-platform-release-smoke-0123456789abcdef\/core:artifact/);
   assert.match(override, /pull_policy: never/);
   assert.match(override, /postgres:16-bookworm@sha256:[0-9a-f]{64}/);
+});
+
+test("OCI layout URI is drive-free and relative to the smoke resources on Windows", () => {
+  const cwd = "C:\\workspace\\Platform\\.runtime\\acceptance\\smoke\\resources";
+  const layoutPath = "C:\\workspace\\release\\Platform\\V0.1.0\\oci\\core";
+  const digest = `sha256:${"a".repeat(64)}`;
+  const relative = path.win32.relative(cwd, layoutPath).replaceAll("\\", "/");
+
+  assert.equal(
+    createOciLayoutUri(layoutPath, digest, { cwd, platform: "win32" }),
+    `oci-layout://${relative}@${digest}`,
+  );
+  assert.throws(
+    () => createOciLayoutUri("D:\\release\\oci\\core", digest, { cwd, platform: "win32" }),
+    /share a drive/i,
+  );
+});
+
+test("failed OCI import cleans the project without removing images that were not imported", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "platform-release-smoke-oci-failure-"));
+  const evidencePath = path.join(root, "evidence", "release-smoke.json");
+  const resourcesDir = path.join(path.dirname(evidencePath), "release-smoke-oci-failure-release-resources");
+  const calls = [];
+  try {
+    const { packageDir } = await createReleaseFixture(root, "oci-layout");
+    await assert.rejects(
+      runArtifactOnlyReleaseSmoke({
+        packageDir,
+        runId: "release-smoke-oci-failure",
+        evidencePath,
+      }, {
+        allocatePorts: async () => [45301, 45302, 45303],
+        executeCommand: async (input) => {
+          calls.push(input);
+          if (input.args[0] === "buildx") {
+            return { exitCode: 1, durationMs: 1, timedOut: false, stdout: "", stderr: "import failed" };
+          }
+          return { exitCode: 0, durationMs: 1, timedOut: false, stdout: "", stderr: "" };
+        },
+      }),
+      /OCI import for core failed/i,
+    );
+
+    const evidence = JSON.parse(await readFile(evidencePath, "utf8"));
+    assert.equal(evidence.status, "failed");
+    assert.equal(evidence.cleanup.completed, true);
+    assert.equal(calls.length, 2);
+    assert.equal(calls[0].args[0], "buildx");
+    assert.deepEqual(calls[1].args.slice(-3), ["down", "--volumes", "--remove-orphans"]);
+    const context = calls[0].args[calls[0].args.indexOf("--build-context") + 1];
+    assert.match(context, /^artifact=oci-layout:\/\//);
+    if (process.platform === "win32") assert.doesNotMatch(context, /oci-layout:\/\/[A-Za-z]:\//);
+    await assert.rejects(readFile(path.join(resourcesDir, "owner.json")), /ENOENT/);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
 });
 
 test("release smoke starts, probes, inventories, and cleans only its unique Compose project", async () => {

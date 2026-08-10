@@ -511,9 +511,21 @@ function createRuntimeEnvironment({ projectName, runtimeEnvPath, ports, volumeNa
   };
 }
 
-function ociLayoutUri(layoutPath, digest) {
-  let normalized = path.resolve(layoutPath).replaceAll("\\", "/");
-  if (/^[A-Za-z]:\//.test(normalized)) normalized = `/${normalized}`;
+export function createOciLayoutUri(
+  layoutPath,
+  digest,
+  { cwd = process.cwd(), platform = process.platform } = {},
+) {
+  let normalized;
+  if (platform === "win32") {
+    const relative = path.win32.relative(path.win32.resolve(cwd), path.win32.resolve(layoutPath)) || ".";
+    if (path.win32.isAbsolute(relative)) {
+      throw new Error("Windows OCI layout and release smoke resources must share a drive");
+    }
+    normalized = relative.replaceAll("\\", "/");
+  } else {
+    normalized = path.resolve(layoutPath).replaceAll("\\", "/");
+  }
   return `oci-layout://${normalized}@${digest}`;
 }
 
@@ -615,9 +627,7 @@ export async function runArtifactOnlyReleaseSmoke(options, dependencies = {}) {
     ports,
     createdAt: new Date().toISOString(),
   };
-  const importedImages = release.imageInventory.mode === "oci-layout"
-    ? PLATFORM_CONTAINER_IMAGES.map((image) => temporaryImageReference(runKey, image))
-    : [];
+  const importedImages = [];
   const baseArgs = [
     "compose",
     "-p",
@@ -663,24 +673,30 @@ export async function runArtifactOnlyReleaseSmoke(options, dependencies = {}) {
       const dockerfilePath = path.join(importContext, "Dockerfile");
       await writeFile(dockerfilePath, "FROM artifact\n", "ascii");
       for (const image of release.imageInventory.images) {
+        const importedImage = temporaryImageReference(runKey, image.image);
         const result = await requireCommand(executeCommand, {
           command: "docker",
           args: [
             "buildx",
             "build",
             "--build-context",
-            `artifact=${ociLayoutUri(path.join(release.packageDir, image.layoutPath), image.digest)}`,
+            `artifact=${createOciLayoutUri(
+              path.join(release.packageDir, image.layoutPath),
+              image.digest,
+              { cwd: resourcesDir },
+            )}`,
             "--file",
             dockerfilePath,
             "--load",
             "--tag",
-            temporaryImageReference(runKey, image.image),
+            importedImage,
             importContext,
           ],
           cwd: resourcesDir,
           env: process.env,
           timeoutMs: 15 * 60 * 1000,
         }, `OCI import for ${image.image}`);
+        importedImages.push(importedImage);
         evidence.commands.imports.push({ image: image.image, ...commandSummary(result) });
       }
     }
