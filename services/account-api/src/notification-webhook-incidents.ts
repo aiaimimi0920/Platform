@@ -1,4 +1,5 @@
 import { redis } from "@neuro/account-domain";
+import { mapWithConcurrency } from "@neuro/backend-foundation/async/map-with-concurrency";
 import {
   notificationWebhookIncidentBatchActionKinds,
   buildNotificationWebhookIncidentHistoryEntry,
@@ -35,6 +36,7 @@ import { buildNotificationWebhookCatalogFromEnv } from "./notification-webhook-c
 
 const notificationWebhookStateTtlSeconds =
   Math.max(1, Number(process.env.NOTIFICATION_WEBHOOK_STATE_TTL_HOURS || 24)) * 60 * 60;
+const notificationWebhookIncidentReadConcurrency = 8;
 
 type NotificationWebhookIncidentFilter = {
   limit: number;
@@ -273,8 +275,10 @@ export async function listNotificationWebhookIncidents(
     }
   } while (cursor !== "0");
 
-  const incidents = await Promise.all(
-    candidateKeys.map(async (key) => {
+  const incidents = await mapWithConcurrency(
+    candidateKeys,
+    notificationWebhookIncidentReadConcurrency,
+    async (key) => {
       const incidentKey = key.slice(notificationWebhookIncidentStateKeyPrefix.length);
       const parsed = parseNotificationWebhookIncidentKey(incidentKey);
       if (!parsed) {
@@ -364,7 +368,7 @@ export async function listNotificationWebhookIncidents(
         history,
         routeStates,
       };
-    }),
+    },
   );
 
   const sorted = incidents
