@@ -68,17 +68,17 @@ export function LandingGate({
       "--entry-panel-mobile-offset": "28px",
       "--entry-panel-mobile-scale": "0.985",
       "--entry-panel-pointer": "auto",
-      "--entry-status-mark-bg": "linear-gradient(180deg, #fff500 0%, #d9ff38 100%)",
-      "--entry-status-mark-shadow": "0 0 18px rgba(217, 255, 56, 0.34)",
-      "--entry-status-value-color": "#fff500",
-      "--entry-status-label-color": "rgba(255, 255, 255, 0.72)",
+      "--entry-status-mark-bg": "var(--neuro-signal-yellow)",
+      "--entry-status-mark-shadow": "0 0 18px var(--neuro-yellow-line)",
+      "--entry-status-value-color": "var(--neuro-signal-yellow)",
+      "--entry-status-label-color": "var(--neuro-text-muted)",
     };
 
     if (statusOnSignalField) {
-      style["--entry-status-mark-bg"] = "linear-gradient(180deg, rgba(10, 12, 15, 0.96), rgba(47, 57, 69, 0.92))";
-      style["--entry-status-mark-shadow"] = "0 0 12px rgba(10, 12, 15, 0.18)";
-      style["--entry-status-value-color"] = "rgba(10, 12, 15, 0.96)";
-      style["--entry-status-label-color"] = "rgba(17, 22, 28, 0.82)";
+      style["--entry-status-mark-bg"] = "var(--neuro-focus-ink)";
+      style["--entry-status-mark-shadow"] = "none";
+      style["--entry-status-value-color"] = "var(--neuro-on-yellow)";
+      style["--entry-status-label-color"] = "var(--neuro-focus-ink)";
     }
 
     if (phase === "expand" || phase === "ready") {
