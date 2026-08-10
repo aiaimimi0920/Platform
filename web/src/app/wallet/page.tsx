@@ -16,6 +16,7 @@ import {
   AccountHomeStat,
   AccountHomeStatGrid,
 } from "@/components/account-home/templates";
+import { PublicSurfaceDependencyState } from "@/components/public-surface-dependency-state";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -26,7 +27,8 @@ import {
   formatAccountNumber,
 } from "@/lib/account-center";
 import { getCurrentUser, getWalletPanel } from "@/lib/account-client";
-import { getFeatureSnapshot, getPublicSurfaceSnapshot, isFeatureSnapshotUnavailable } from "@/lib/platform-client";
+import { getFeatureSnapshot, isFeatureSnapshotUnavailable } from "@/lib/platform-client";
+import { hasPublicSurfaceSnapshot, loadPublicSurfaceDependency } from "@/lib/public-surface-dependency";
 import {
   buildAccountCenterSurfaceVisibility,
   isPublicSurfaceVisibleForViewer,
@@ -116,9 +118,9 @@ export default async function WalletPage({ searchParams }: WalletPageProps) {
     username: session.user.username,
   };
 
-  const [features, publicSurfaces, user, walletPanel] = await Promise.all([
+  const [features, publicSurfaceDependency, user, walletPanel] = await Promise.all([
     getFeatureSnapshot(),
-    getPublicSurfaceSnapshot(),
+    loadPublicSurfaceDependency(),
     getCurrentUser(userContext),
     getWalletPanel(userContext),
   ]);
@@ -126,6 +128,11 @@ export default async function WalletPage({ searchParams }: WalletPageProps) {
   if (!user) {
     redirect("/login");
   }
+
+  if (!hasPublicSurfaceSnapshot(publicSurfaceDependency)) {
+    return <PublicSurfaceDependencyState result={publicSurfaceDependency} />;
+  }
+  const publicSurfaces = publicSurfaceDependency.data;
 
   if (!isPublicSurfaceVisibleForViewer(publicSurfaces, "wallet", session.user.id, session.user.providerUserId)) {
     redirect("/dashboard");

@@ -15,6 +15,7 @@ import {
   AccountHomeStat,
   AccountHomeStatGrid,
 } from "@/components/account-home/templates";
+import { PublicSurfaceDependencyState } from "@/components/public-surface-dependency-state";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import {
@@ -24,7 +25,8 @@ import {
   formatAccountRate,
 } from "@/lib/account-center";
 import { getCurrentUser } from "@/lib/account-client";
-import { getFeatureSnapshot, getPublicSurfaceSnapshot, isFeatureSnapshotUnavailable } from "@/lib/platform-client";
+import { getFeatureSnapshot, isFeatureSnapshotUnavailable } from "@/lib/platform-client";
+import { hasPublicSurfaceSnapshot, loadPublicSurfaceDependency } from "@/lib/public-surface-dependency";
 import {
   buildAccountCenterSurfaceVisibility,
   isPublicSurfaceVisibleForViewer,
@@ -41,15 +43,20 @@ export default async function GrowthPage() {
     username: session.user.username,
   };
 
-  const [features, publicSurfaces, user] = await Promise.all([
+  const [features, publicSurfaceDependency, user] = await Promise.all([
     getFeatureSnapshot(),
-    getPublicSurfaceSnapshot(),
+    loadPublicSurfaceDependency(),
     getCurrentUser(userContext),
   ]);
 
   if (!user) {
     redirect("/login");
   }
+
+  if (!hasPublicSurfaceSnapshot(publicSurfaceDependency)) {
+    return <PublicSurfaceDependencyState result={publicSurfaceDependency} />;
+  }
+  const publicSurfaces = publicSurfaceDependency.data;
 
   if (!isPublicSurfaceVisibleForViewer(publicSurfaces, "growth", session.user.id, session.user.providerUserId)) {
     redirect("/dashboard");

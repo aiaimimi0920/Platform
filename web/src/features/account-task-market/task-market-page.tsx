@@ -10,10 +10,11 @@ import type {
 } from "@neuro/contracts";
 
 import { auth } from "@/auth";
+import { PublicSurfaceDependencyState } from "@/components/public-surface-dependency-state";
 import { formatAccountDateTime, formatAccountNumber } from "@/lib/account-center";
-import { getPublicSurfaceSnapshot } from "@/lib/core-client";
 import { getTaskRouteMatch, normalizeRouteKeywords } from "@/lib/agent-market-routing";
 import { cn } from "@/lib/cn";
+import { hasPublicSurfaceSnapshot, loadPublicSurfaceDependency } from "@/lib/public-surface-dependency";
 import { isPublicSurfaceVisibleForViewer } from "@/lib/public-surface-visibility";
 import {
   acceptTaskAgentProposalAction,
@@ -333,7 +334,11 @@ function getQuotedAmount(task: TaskView, listing: AgentMarketplaceListingView) {
 export default async function TaskMarketPage({ searchParams }: PageProps) {
   const session = await auth();
   if (!session?.user?.id) redirect("/login");
-  const publicSurfaces = await getPublicSurfaceSnapshot();
+  const publicSurfaceDependency = await loadPublicSurfaceDependency();
+  if (!hasPublicSurfaceSnapshot(publicSurfaceDependency)) {
+    return <PublicSurfaceDependencyState result={publicSurfaceDependency} />;
+  }
+  const publicSurfaces = publicSurfaceDependency.data;
   if (!isPublicSurfaceVisibleForViewer(publicSurfaces, "tasks", session.user.id, session.user.providerUserId)) {
     redirect("/dashboard");
   }

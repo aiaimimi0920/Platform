@@ -17,6 +17,7 @@ import {
   AccountHomeStat,
   AccountHomeStatGrid,
 } from "@/components/account-home/templates";
+import { PublicSurfaceDependencyState } from "@/components/public-surface-dependency-state";
 import { Badge } from "@/components/ui/badge";
 import {
   buildAccountCenterNavItems,
@@ -26,7 +27,8 @@ import {
 } from "@/lib/account-center";
 import { getCurrentUser } from "@/lib/account-client";
 import { resolveAccountLoginSourceLabel } from "@/lib/account-session-display";
-import { getFeatureSnapshot, getPublicSurfaceSnapshot, isFeatureSnapshotUnavailable } from "@/lib/core-client";
+import { getFeatureSnapshot, isFeatureSnapshotUnavailable } from "@/lib/core-client";
+import { hasPublicSurfaceSnapshot, loadPublicSurfaceDependency } from "@/lib/public-surface-dependency";
 import {
   buildAccountCenterSurfaceVisibility,
   isPublicSurfaceVisibleForViewer,
@@ -61,15 +63,20 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
     username: session.user.username,
   };
 
-  const [features, publicSurfaces, user] = await Promise.all([
+  const [features, publicSurfaceDependency, user] = await Promise.all([
     getFeatureSnapshot(),
-    getPublicSurfaceSnapshot(),
+    loadPublicSurfaceDependency(),
     getCurrentUser(userContext),
   ]);
 
   if (!user) {
     redirect("/login");
   }
+
+  if (!hasPublicSurfaceSnapshot(publicSurfaceDependency)) {
+    return <PublicSurfaceDependencyState result={publicSurfaceDependency} />;
+  }
+  const publicSurfaces = publicSurfaceDependency.data;
 
   const accountDisplayName = user.username || session.user.username || "NeuroLoom User";
   const accountAvatarUrl = user.avatarUrl || session.user.avatarUrl || null;

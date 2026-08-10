@@ -166,7 +166,7 @@ export function isPublicSurfaceVisibleForViewer(
   userId?: string | null,
   providerUserId?: string | null,
 ): boolean {
-  return applyPublicSurfaceVisibilityForViewer(snapshot, userId, providerUserId)[surfaceKey]?.enabled !== false;
+  return applyPublicSurfaceVisibilityForViewer(snapshot, userId, providerUserId)[surfaceKey]?.enabled === true;
 }
 
 export function buildAccountCenterSurfaceVisibility(

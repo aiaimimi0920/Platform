@@ -1,7 +1,9 @@
 import { redirect } from "next/navigation";
 
 import { auth } from "@/auth";
-import { getFeatureSnapshot, getPublicSurfaceSnapshot } from "@/lib/core-client";
+import { PublicSurfaceDependencyState } from "@/components/public-surface-dependency-state";
+import { getFeatureSnapshot } from "@/lib/core-client";
+import { hasPublicSurfaceSnapshot, loadPublicSurfaceDependency } from "@/lib/public-surface-dependency";
 import { isPublicSurfaceVisibleForViewer } from "@/lib/public-surface-visibility";
 
 import { resolveChatActionAvailability } from "./action-availability";
@@ -20,10 +22,14 @@ export default async function HeavyAgentChatPage({ searchParams }: HeavyAgentCha
     redirect("/login");
   }
 
-  const [publicSurfaces, features] = await Promise.all([
-    getPublicSurfaceSnapshot(),
+  const [publicSurfaceDependency, features] = await Promise.all([
+    loadPublicSurfaceDependency(),
     getFeatureSnapshot(),
   ]);
+  if (!hasPublicSurfaceSnapshot(publicSurfaceDependency)) {
+    return <PublicSurfaceDependencyState result={publicSurfaceDependency} />;
+  }
+  const publicSurfaces = publicSurfaceDependency.data;
   if (!isPublicSurfaceVisibleForViewer(publicSurfaces, "heavyChat", session.user.id, session.user.providerUserId)) {
     redirect("/dashboard");
   }

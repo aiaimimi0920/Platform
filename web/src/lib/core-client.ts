@@ -191,7 +191,6 @@ const coreRequestTimeoutMs = resolveInternalRequestTimeoutMs(
   process.env.INTERNAL_FETCH_TIMEOUT_MS,
 );
 export const FEATURE_SNAPSHOT_UNAVAILABLE_NOTE = "Feature snapshot unavailable; module state unknown.";
-export const PUBLIC_SURFACE_SNAPSHOT_UNAVAILABLE_NOTE = "Public surface snapshot unavailable; defaulting to visible.";
 
 export type ItemUnitIssueReason = "invalidated" | "expired" | "quota_exhausted" | "normal_exhaustion";
 export type ItemIssueReportOutcome = "replaced" | "rejected" | "manual_review";
@@ -557,30 +556,6 @@ function unavailableFeatureSnapshot(): FeatureSnapshot {
   ) as FeatureSnapshot;
 }
 
-function availablePublicSurfaceSnapshot(): PublicSurfaceSnapshot {
-  const updatedAt = new Date().toISOString();
-  return {
-    announcements: { surfaceKey: "announcements", enabled: true, updatedAt },
-    store: { surfaceKey: "store", enabled: true, updatedAt },
-    marketplace: { surfaceKey: "marketplace", enabled: true, updatedAt },
-    redemption: { surfaceKey: "redemption", enabled: true, updatedAt },
-    mailbox: { surfaceKey: "mailbox", enabled: true, updatedAt },
-    benefits: { surfaceKey: "benefits", enabled: true, updatedAt },
-    missions: { surfaceKey: "missions", enabled: true, updatedAt },
-    opinions: { surfaceKey: "opinions", enabled: true, updatedAt },
-    projects: { surfaceKey: "projects", enabled: true, updatedAt },
-    honor: { surfaceKey: "honor", enabled: true, updatedAt },
-    heavyChat: { surfaceKey: "heavyChat", enabled: true, updatedAt },
-    agents: { surfaceKey: "agents", enabled: true, updatedAt },
-    tasks: { surfaceKey: "tasks", enabled: true, updatedAt },
-    wallet: { surfaceKey: "wallet", enabled: true, updatedAt },
-    growth: { surfaceKey: "growth", enabled: true, updatedAt },
-    reputation: { surfaceKey: "reputation", enabled: true, updatedAt },
-    inventory: { surfaceKey: "inventory", enabled: true, updatedAt },
-    arbitrations: { surfaceKey: "arbitrations", enabled: true, updatedAt },
-  };
-}
-
 export function isFeatureSnapshotUnavailable(features: FeatureSnapshot): boolean {
   return Object.values(features).every(
     (feature) => feature.enabled === false && feature.rolloutNote === FEATURE_SNAPSHOT_UNAVAILABLE_NOTE,
@@ -606,14 +581,6 @@ export async function getFeatureSnapshot(): Promise<FeatureSnapshot> {
 export async function getPublicSurfaceSnapshotStrict(): Promise<PublicSurfaceSnapshot> {
   const response = await coreRequest<{ surfaces: PublicSurfaceSnapshot }>("/internal/public-surfaces");
   return response.surfaces;
-}
-
-export async function getPublicSurfaceSnapshot(): Promise<PublicSurfaceSnapshot> {
-  try {
-    return await getPublicSurfaceSnapshotStrict();
-  } catch {
-    return availablePublicSurfaceSnapshot();
-  }
 }
 
 export async function updatePublicSurfaceSnapshot(

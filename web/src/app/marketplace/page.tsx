@@ -1,8 +1,10 @@
 import { redirect } from "next/navigation";
 
 import { auth } from "@/auth";
+import { PublicSurfaceDependencyState } from "@/components/public-surface-dependency-state";
 import { Card } from "@/components/ui/card";
-import { getFeatureSnapshot, getPublicSurfaceSnapshot, isFeatureSnapshotUnavailable } from "@/lib/core-client";
+import { getFeatureSnapshot, isFeatureSnapshotUnavailable } from "@/lib/core-client";
+import { hasPublicSurfaceSnapshot, loadPublicSurfaceDependency } from "@/lib/public-surface-dependency";
 import { isPublicSurfaceVisibleForViewer } from "@/lib/public-surface-visibility";
 
 export default async function MarketplacePage() {
@@ -11,7 +13,11 @@ export default async function MarketplacePage() {
     redirect("/login");
   }
 
-  const publicSurfaces = await getPublicSurfaceSnapshot();
+  const publicSurfaceDependency = await loadPublicSurfaceDependency();
+  if (!hasPublicSurfaceSnapshot(publicSurfaceDependency)) {
+    return <PublicSurfaceDependencyState result={publicSurfaceDependency} />;
+  }
+  const publicSurfaces = publicSurfaceDependency.data;
   if (!isPublicSurfaceVisibleForViewer(publicSurfaces, "marketplace", session.user.id, session.user.providerUserId)) {
     redirect("/dashboard");
   }

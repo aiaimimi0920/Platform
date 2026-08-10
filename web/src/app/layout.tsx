@@ -2,9 +2,15 @@ import type { Metadata } from "next";
 
 import { auth } from "@/auth";
 import { AppShell } from "@/components/app-shell";
+import { DependencyState } from "@/components/dependency-state";
 import { SignInButton } from "@/components/sign-in-button";
 import { SignOutButton } from "@/components/sign-out-button";
-import { getFeatureSnapshot, getPublicSurfaceSnapshot } from "@/lib/core-client";
+import { getFeatureSnapshot } from "@/lib/core-client";
+import {
+  createClosedPublicSurfaceSnapshot,
+  hasPublicSurfaceSnapshot,
+  loadPublicSurfaceDependency,
+} from "@/lib/public-surface-dependency";
 import { applyPublicSurfaceVisibilityForViewer } from "@/lib/public-surface-visibility";
 import "@/app/globals.css";
 import "@/features/account-announcement-center/styles.css";
@@ -21,12 +27,18 @@ export const metadata: Metadata = {
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
   const session = await auth();
-  const [features, rawPublicSurfaces] = await Promise.all([getFeatureSnapshot(), getPublicSurfaceSnapshot()]);
-  const publicSurfaces = applyPublicSurfaceVisibilityForViewer(
-    rawPublicSurfaces,
-    session?.user?.id,
-    session?.user?.providerUserId,
-  );
+  const [features, publicSurfaceDependency] = await Promise.all([
+    getFeatureSnapshot(),
+    loadPublicSurfaceDependency(),
+  ]);
+  const hasPublicSurfaces = hasPublicSurfaceSnapshot(publicSurfaceDependency);
+  const publicSurfaces = hasPublicSurfaces
+    ? applyPublicSurfaceVisibilityForViewer(
+        publicSurfaceDependency.data,
+        session?.user?.id,
+        session?.user?.providerUserId,
+      )
+    : createClosedPublicSurfaceSnapshot();
 
   return (
     <html lang="zh-CN">
@@ -40,6 +52,11 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           features={features}
           publicSurfaces={publicSurfaces}
         >
+          {!hasPublicSurfaces ? (
+            <div className="nt-shell" style={{ paddingBlock: 16 }}>
+              <DependencyState label="公开入口配置" result={publicSurfaceDependency} />
+            </div>
+          ) : null}
           {children}
         </AppShell>
       </body>

@@ -2,8 +2,9 @@ import { redirect } from "next/navigation";
 
 import { auth } from "@/auth";
 import { PublicSurfaceVisibilityClient } from "@/app/ops/account/surface-visibility/client";
-import { getPublicSurfaceSnapshot } from "@/lib/core-client";
+import { PublicSurfaceDependencyState } from "@/components/public-surface-dependency-state";
 import { isPlatformOperatorUserId } from "@/lib/platform-session";
+import { hasPublicSurfaceSnapshot, loadPublicSurfaceDependency } from "@/lib/public-surface-dependency";
 
 export default async function SurfaceVisibilityPage() {
   const session = await auth();
@@ -15,7 +16,10 @@ export default async function SurfaceVisibilityPage() {
     redirect("/dashboard");
   }
 
-  const snapshot = await getPublicSurfaceSnapshot();
+  const publicSurfaceDependency = await loadPublicSurfaceDependency();
+  if (!hasPublicSurfaceSnapshot(publicSurfaceDependency)) {
+    return <PublicSurfaceDependencyState result={publicSurfaceDependency} />;
+  }
 
-  return <PublicSurfaceVisibilityClient snapshot={snapshot} />;
+  return <PublicSurfaceVisibilityClient snapshot={publicSurfaceDependency.data} />;
 }

@@ -15,6 +15,7 @@ import {
   AccountHomeStat,
   AccountHomeStatGrid,
 } from "@/components/account-home/templates";
+import { PublicSurfaceDependencyState } from "@/components/public-surface-dependency-state";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -26,7 +27,8 @@ import {
 } from "@/lib/account-center";
 import { getCurrentUser } from "@/lib/account-client";
 import { createListingAction, submitOrderAction } from "@/lib/platform-actions";
-import { getFeatureSnapshot, getPublicSurfaceSnapshot, isFeatureSnapshotUnavailable, listItems, listOrders } from "@/lib/platform-client";
+import { getFeatureSnapshot, isFeatureSnapshotUnavailable, listItems, listOrders } from "@/lib/platform-client";
+import { hasPublicSurfaceSnapshot, loadPublicSurfaceDependency } from "@/lib/public-surface-dependency";
 import {
   buildAccountCenterSurfaceVisibility,
   isPublicSurfaceVisibleForViewer,
@@ -100,15 +102,20 @@ export default async function InventoryPage({ searchParams }: InventoryPageProps
     username: session.user.username,
   };
 
-  const [features, publicSurfaces, user] = await Promise.all([
+  const [features, publicSurfaceDependency, user] = await Promise.all([
     getFeatureSnapshot(),
-    getPublicSurfaceSnapshot(),
+    loadPublicSurfaceDependency(),
     getCurrentUser(userContext),
   ]);
 
   if (!user) {
     redirect("/login");
   }
+
+  if (!hasPublicSurfaceSnapshot(publicSurfaceDependency)) {
+    return <PublicSurfaceDependencyState result={publicSurfaceDependency} />;
+  }
+  const publicSurfaces = publicSurfaceDependency.data;
 
   if (!isPublicSurfaceVisibleForViewer(publicSurfaces, "inventory", session.user.id, session.user.providerUserId)) {
     redirect("/dashboard");

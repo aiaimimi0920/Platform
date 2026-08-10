@@ -1,14 +1,20 @@
 import { redirect } from "next/navigation";
 
 import { auth } from "@/auth";
+import { PublicSurfaceDependencyState } from "@/components/public-surface-dependency-state";
 import { Card } from "@/components/ui/card";
-import { getFeatureSnapshot, getPublicSurfaceSnapshot, isFeatureSnapshotUnavailable } from "@/lib/core-client";
+import { getFeatureSnapshot, isFeatureSnapshotUnavailable } from "@/lib/core-client";
+import { hasPublicSurfaceSnapshot, loadPublicSurfaceDependency } from "@/lib/public-surface-dependency";
 import { isPublicSurfaceVisibleForViewer } from "@/lib/public-surface-visibility";
 
 export default async function RedeemPage() {
   const session = await auth();
   if (!session?.user?.id) redirect("/login");
-  const publicSurfaces = await getPublicSurfaceSnapshot();
+  const publicSurfaceDependency = await loadPublicSurfaceDependency();
+  if (!hasPublicSurfaceSnapshot(publicSurfaceDependency)) {
+    return <PublicSurfaceDependencyState result={publicSurfaceDependency} />;
+  }
+  const publicSurfaces = publicSurfaceDependency.data;
   if (!isPublicSurfaceVisibleForViewer(publicSurfaces, "redemption", session.user.id, session.user.providerUserId)) {
     redirect("/dashboard");
   }
