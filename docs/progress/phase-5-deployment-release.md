@@ -44,7 +44,7 @@ Acceptance: `release/Platform/<version>/` starts without source bind/build conte
 - GCP 网络内部规则从全 TCP/UDP 收敛为显式 k3s / PostgreSQL / Valkey / MinIO / VXLAN 端口并限定 target tag；SSH 与 ingress 拒绝 world-open CIDR。
 - 节点启用专用服务账号和日志/监控最小写入角色、OS Login、project SSH key 阻断、Shielded VM，并将数据节点状态盘拆成独立 Persistent Disk。
 - Cloudflare 子模块固定 `cloudflare/cloudflare` provider source，代理记录使用 TTL `1`；模块 provider source 缺失曾在首次真实 init 中触发错误的 `hashicorp/cloudflare` 解析，现已增加回归断言并从 lock 清除。
-- OpenTofu 固定为 `1.12.1`，staging / production 均提交包含 `windows_amd64` 与 `linux_amd64` 校验值的 provider lock；CI 使用 `opentofu/setup-opentofu@v2` 和 `.opentofu-version`。
+- OpenTofu 固定为 `1.12.1`，staging / production 均提交包含 `windows_amd64` 与 `linux_amd64` 校验值的 provider lock；CI 使用固定到完整 commit SHA 的 `opentofu/setup-opentofu` v2 和 `.opentofu-version`。
 - `P5-02` 通过验证：
   - 官方 Windows 归档与发布清单 SHA-256 匹配，`tofu version` 为 `OpenTofu v1.12.1 on windows_amd64`。
   - `npm run infra:tofu:validate`：递归 fmt check、两个环境 `init -backend=false -lockfile=readonly`、provider-schema validate 全部通过。

@@ -9,7 +9,9 @@ param(
   [string]$HeavyTaskImplementationLine = "web/local_preview",
   [int]$HeavyTaskLeaseSeconds = 1800,
   [string]$HeavyTaskStatePath,
-  [switch]$HeavyTaskFailIfBusy
+  [switch]$HeavyTaskFailIfBusy,
+  [int]$AllocationLockTimeoutSeconds = 120,
+  [int]$PreviewReadyTimeoutSeconds = 180
 )
 
 Set-StrictMode -Version Latest
@@ -18,6 +20,7 @@ $ErrorActionPreference = "Stop"
 $composeFile = Join-Path $PSScriptRoot "docker-compose.local.yml"
 $claimHeavyScript = Join-Path $PSScriptRoot "claim-heavy-task.ps1"
 $releaseHeavyScript = Join-Path $PSScriptRoot "release-heavy-task.ps1"
+$previewAllocationMutexName = "Local\NeuroPlatformWebPreviewAllocation"
 $previewDependencyServices = @(
   "postgres",
   "valkey",
@@ -102,6 +105,44 @@ function Get-NextPreviewPort {
   return $candidate
 }
 
+function Enter-PreviewAllocationLock {
+  param(
+    [string]$Name,
+    [int]$TimeoutSeconds
+  )
+
+  $mutex = New-Object System.Threading.Mutex($false, $Name)
+  $lockTaken = $false
+  try {
+    try {
+      $lockTaken = $mutex.WaitOne([TimeSpan]::FromSeconds($TimeoutSeconds))
+    } catch [System.Threading.AbandonedMutexException] {
+      $lockTaken = $true
+    }
+
+    if (-not $lockTaken) {
+      throw "Timed out waiting for the Platform preview allocation lock."
+    }
+
+    return $mutex
+  } catch {
+    if (-not $lockTaken) {
+      $mutex.Dispose()
+    }
+    throw
+  }
+}
+
+function Exit-PreviewAllocationLock {
+  param([System.Threading.Mutex]$Mutex)
+
+  try {
+    $Mutex.ReleaseMutex()
+  } finally {
+    $Mutex.Dispose()
+  }
+}
+
 function Invoke-HeavyTaskClaimIfNeeded {
   if ([string]::IsNullOrWhiteSpace($HeavyTaskDialogId)) {
     return
@@ -150,15 +191,25 @@ function Invoke-HeavyTaskReleaseIfNeeded {
   }
 }
 
+$envFile = $null
+$containerName = $null
+$containerStarted = $false
+$previewReady = $false
+$allocationMutex = $null
+
 Invoke-HeavyTaskClaimIfNeeded
 try {
   $null = Ensure-PreviewDependencies -ComposePath $composeFile -Services $previewDependencyServices
 
-  $port = Get-NextPreviewPort -BasePort $StartPort -Increment $Step -Prefix $ContainerPrefix
-  $containerName = "$ContainerPrefix-$port"
-  $envFile = Join-Path $env:TEMP "$containerName.env"
+  $allocationMutex = Enter-PreviewAllocationLock `
+    -Name $previewAllocationMutexName `
+    -TimeoutSeconds $AllocationLockTimeoutSeconds
+  try {
+    $port = Get-NextPreviewPort -BasePort $StartPort -Increment $Step -Prefix $ContainerPrefix
+    $containerName = "$ContainerPrefix-$port"
+    $envFile = Join-Path $env:TEMP "$containerName.env"
 
-  @"
+    @"
 NODE_ENV=development
 PORT=3000
 NEXTAUTH_URL=http://localhost:$port
@@ -182,37 +233,68 @@ PLATFORM_OPERATOR_USER_IDS=local-operator,local-dev-account
 ENABLE_FIGMA_CAPTURE=true
 "@ | Set-Content -Path $envFile -Encoding ascii
 
-  if (& docker ps -a --format "{{.Names}}" | Select-String -Pattern "^$([regex]::Escape($containerName))$" -Quiet) {
-    & docker rm -f $containerName | Out-Null
+    if (& docker ps -a --format "{{.Names}}" | Select-String -Pattern "^$([regex]::Escape($containerName))$" -Quiet) {
+      & docker rm -f $containerName | Out-Null
+    }
+
+    $runArgs = @(
+      "run",
+      "-d",
+      "--name", $containerName,
+      "--network", $DockerNetwork,
+      "-p", "${port}:3000",
+      "--env-file", $envFile,
+      $ImageName,
+      "npm",
+      "run",
+      "dev",
+      "--",
+      "--hostname",
+      "0.0.0.0"
+    )
+
+    $containerId = & docker @runArgs
+    if ($LASTEXITCODE -ne 0) {
+      throw "Failed to start preview container."
+    }
+    $containerStarted = $true
+  } finally {
+    if ($allocationMutex) {
+      $mutexToRelease = $allocationMutex
+      $allocationMutex = $null
+      Exit-PreviewAllocationLock -Mutex $mutexToRelease
+    }
   }
 
-  $runArgs = @(
-    "run",
-    "-d",
-    "--name", $containerName,
-    "--network", $DockerNetwork,
-    "-p", "${port}:3000",
-    "--env-file", $envFile,
-    $ImageName,
-    "npm",
-    "run",
-    "dev",
-    "--",
-    "--hostname",
-    "0.0.0.0"
-  )
+  Remove-Item -LiteralPath $envFile -Force
 
-  $containerId = & docker @runArgs
-  if ($LASTEXITCODE -ne 0) {
-    throw "Failed to start preview container."
-  }
-
-  Wait-ForHttpOk -Name "preview-web" -Url "http://127.0.0.1:$port"
+  Wait-ForHttpOk `
+    -Name "preview-web" `
+    -Url "http://127.0.0.1:$port" `
+    -TimeoutSeconds $PreviewReadyTimeoutSeconds
+  $previewReady = $true
 
   Write-Output "PORT=$port"
   Write-Output "URL=http://localhost:$port"
   Write-Output "CONTAINER=$containerName"
   Write-Output "CONTAINER_ID=$containerId"
 } finally {
+  if ($allocationMutex) {
+    $mutexToRelease = $allocationMutex
+    $allocationMutex = $null
+    Exit-PreviewAllocationLock -Mutex $mutexToRelease
+  }
+  if ($envFile -and (Test-Path -LiteralPath $envFile)) {
+    Remove-Item -LiteralPath $envFile -Force -ErrorAction SilentlyContinue
+    if (Test-Path -LiteralPath $envFile) {
+      Write-Warning "Failed to remove temporary preview environment file: $envFile"
+    }
+  }
+  if ($containerStarted -and -not $previewReady) {
+    & docker rm -f $containerName | Out-Null
+    if ($LASTEXITCODE -ne 0) {
+      Write-Warning "Failed to remove unhealthy preview container: $containerName"
+    }
+  }
   Invoke-HeavyTaskReleaseIfNeeded
 }

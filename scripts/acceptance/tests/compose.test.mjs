@@ -551,6 +551,10 @@ test("local and acceptance Web auth bypasses run only in explicit development mo
     previewScript,
     /"npm",\s*\r?\n\s*"run",\s*\r?\n\s*"dev",\s*\r?\n\s*"--",\s*\r?\n\s*"--hostname",\s*\r?\n\s*"0\.0\.0\.0"/,
   );
+  assert.match(previewScript, /System\.Threading\.Mutex/);
+  assert.match(previewScript, /WaitOne\(\[TimeSpan\]::FromSeconds\(\$TimeoutSeconds\)\)/);
+  assert.match(previewScript, /Remove-Item -LiteralPath \$envFile -Force/);
+  assert.match(previewScript, /\$containerStarted -and -not \$previewReady/);
 
   const localGateway = composeServiceBlock(await readFile(localComposeFile, "utf8"), "gateway");
   assert.match(localGateway, /\/readyz/);

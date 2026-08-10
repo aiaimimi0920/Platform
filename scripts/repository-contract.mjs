@@ -5,9 +5,44 @@ import { fileURLToPath } from "node:url";
 import { describe, it } from "node:test";
 
 const rootDir = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+const ACTION_PINS = Object.freeze({
+  "actions/checkout": ["v5", "fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09"],
+  "actions/download-artifact": ["v8", "3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c"],
+  "actions/setup-node": ["v6", "249970729cb0ef3589644e2896645e5dc5ba9c38"],
+  "actions/upload-artifact": ["v7", "043fb46d1a93c77aae656e7c1c64a875d1fc6a0a"],
+  "docker/build-push-action": ["v7", "53b7df96c91f9c12dcc8a07bcb9ccacbed38856a"],
+  "docker/login-action": ["v4", "dbcb813823bdd20940b903addbd779551569679f"],
+  "docker/metadata-action": ["v6", "dc802804100637a589fabce1cb79ff13a1411302"],
+  "docker/setup-buildx-action": ["v4", "bb05f3f5519dd87d3ba754cc423b652a5edd6d2c"],
+  "opentofu/setup-opentofu": ["v2", "a1320f892987e89d278cc92dc5adc984fb93aca4"],
+  "softprops/action-gh-release": ["v3", "3d0d9888cb7fd7b750713d6e236d1fcb99157228"],
+});
 
 function read(relativePath) {
   return readFileSync(join(rootDir, relativePath), "utf8");
+}
+
+function pinnedAction(action) {
+  const pin = ACTION_PINS[action];
+  assert(pin, `Missing audited Action pin: ${action}`);
+  return `${action}@${pin[1]}`;
+}
+
+function assertExternalActionsPinned(workflow, relativePath) {
+  const actionLines = workflow.split(/\r?\n/).filter((line) => /^\s*uses:\s+/.test(line));
+  assert(actionLines.length > 0, `Workflow has no external Actions to verify: ${relativePath}`);
+
+  for (const line of actionLines) {
+    if (/^\s*uses:\s+\.\//.test(line)) continue;
+    const match = line.match(/^\s*uses:\s+([^@\s]+)@([^\s#]+)(?:\s+#\s+(\S+))?\s*$/);
+    assert(match, `Unable to parse Action reference in ${relativePath}: ${line.trim()}`);
+    const [, action, revision, versionComment] = match;
+    const pin = ACTION_PINS[action];
+    assert(pin, `Action is not in the audited pin registry: ${action}`);
+    assert.match(revision, /^[0-9a-f]{40}$/, `Action must use a full commit SHA: ${action}`);
+    assert.strictEqual(revision, pin[1], `Action SHA differs from the audited pin: ${action}`);
+    assert.strictEqual(versionComment, pin[0], `Action pin must retain its audited major comment: ${action}`);
+  }
 }
 
 function collectMarkdownFiles(directory) {
@@ -92,13 +127,14 @@ describe("independent Platform repository", () => {
     const packageMetadata = JSON.parse(read("package.json"));
     const workflow = read(".github/workflows/ci.yml");
     assert(workflow.includes("name: Platform CI"));
-    assert(workflow.includes("actions/checkout@v5"));
+    assert(workflow.includes(pinnedAction("actions/checkout")));
+    assert(workflow.includes(pinnedAction("actions/setup-node")));
     assert(workflow.includes("node --test scripts/repository-contract.mjs"));
     assert(workflow.includes("npm run prepare:workspaces"));
     assert(workflow.includes("npm run typecheck:workspaces"));
     assert(workflow.includes("npm run audit:prod"));
     assert(workflow.includes("npm run test:vitest"));
-    assert(workflow.includes("opentofu/setup-opentofu@v2"));
+    assert(workflow.includes(pinnedAction("opentofu/setup-opentofu")));
     assert(workflow.includes("tofu_version_file: .opentofu-version"));
     assert(workflow.includes("npm run infra:tofu:validate"));
     assert(packageMetadata.scripts.ci.includes("npm run infra:tofu:validate"));
@@ -106,6 +142,16 @@ describe("independent Platform repository", () => {
     assert(workflow.includes("test-build-platform-web-release-contract.ps1 -DryRunOnly"));
     assert(workflow.includes("test-verify-platform-web-release-package-contract.ps1"));
     assert(workflow.includes("test-smoke-platform-web-release-package-contract.ps1"));
+  });
+
+  it("pins every external workflow Action to an audited commit", () => {
+    for (const relativePath of [
+      ".github/workflows/ci.yml",
+      ".github/workflows/container-images.yml",
+      ".github/workflows/release-platform-tag.yml",
+    ]) {
+      assertExternalActionsPinned(read(relativePath), relativePath);
+    }
   });
 
   it("serializes every schema migration runner and preserves cleanup boundaries", () => {
@@ -239,20 +285,15 @@ describe("independent Platform repository", () => {
     assert(workflow.includes("platform-container-image-lock-${{ github.run_id }}-${{ github.run_attempt }}"));
     assert(workflow.includes("retention-days: 90"));
     for (const action of [
-      "docker/setup-buildx-action@v4",
-      "docker/metadata-action@v6",
-      "docker/build-push-action@v7",
-      "docker/login-action@v4",
-      "actions/upload-artifact@v7",
-      "actions/download-artifact@v8",
+      "docker/setup-buildx-action",
+      "docker/metadata-action",
+      "docker/build-push-action",
+      "docker/login-action",
+      "actions/upload-artifact",
+      "actions/download-artifact",
     ]) {
-      assert(workflow.includes(action), `Container workflow must use the Node 24 action: ${action}`);
+      assert(workflow.includes(pinnedAction(action)), `Container workflow must use the audited Action pin: ${action}`);
     }
-    assert.doesNotMatch(
-      workflow,
-      /(?:setup-buildx-action@v3|metadata-action@v5|build-push-action@v6|login-action@v3|upload-artifact@v4|download-artifact@v4)/,
-      "Container workflow must not regress to Node 20 action majors",
-    );
     const imageLockScript = read("scripts/container-image-lock.mjs");
     assert(imageLockScript.includes("sha256:[0-9a-f]{64}"));
     assert(imageLockScript.includes("Expected ${PLATFORM_CONTAINER_IMAGES.length} image lock entries"));
@@ -305,7 +346,7 @@ describe("independent Platform repository", () => {
     assert(workflow.includes("verify-platform-web-release-package.ps1"));
     assert(workflow.includes("smoke-platform-web-release-package.ps1"));
     assert(workflow.includes("npm run test:integration:required"));
-    assert(workflow.includes("softprops/action-gh-release@v3"));
+    assert(workflow.includes(pinnedAction("softprops/action-gh-release")));
     assert(workflow.includes("container-image-lock.mjs resolve-run"));
     assert(workflow.includes("container-image-lock.mjs validate"));
     assert(workflow.includes("steps.image-lock-run.outputs.runId"));
@@ -318,10 +359,10 @@ describe("independent Platform repository", () => {
     assert(workflow.includes("checksums.sha256"));
     assert.match(workflow, /permissions:\s+contents: read/);
     assert.match(workflow, /jobs:\s+release:\s+name:[^\n]+\s+permissions:\s+actions: read\s+contents: write/);
-    assert(workflow.includes("opentofu/setup-opentofu@v2"));
+    assert(workflow.includes(pinnedAction("opentofu/setup-opentofu")));
     assert(workflow.includes("tofu_version_file: .opentofu-version"));
-    assert(workflow.includes("actions/upload-artifact@v7"));
-    assert(workflow.includes("actions/download-artifact@v8"));
+    assert(workflow.includes(pinnedAction("actions/upload-artifact")));
+    assert(workflow.includes(pinnedAction("actions/download-artifact")));
     assert.doesNotMatch(workflow, /actions\/(?:upload|download)-artifact@v4/);
   });
 

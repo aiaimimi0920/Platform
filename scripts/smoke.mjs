@@ -2943,7 +2943,7 @@ describe("monorepo structure", () => {
       "Release workflow does not runtime-smoke the Platform Web package",
     );
     assert(
-      releaseWorkflow.includes("softprops/action-gh-release@v3"),
+      /softprops\/action-gh-release@[0-9a-f]{40}/.test(releaseWorkflow),
       "Release workflow does not publish verified GitHub Release assets",
     );
   });
