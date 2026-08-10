@@ -308,6 +308,53 @@ test("release smoke starts, probes, inventories, and cleans only its unique Comp
   }
 });
 
+test("failed release startup captures redacted Compose diagnostics before cleanup", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "platform-release-smoke-diagnostics-"));
+  const evidencePath = path.join(root, "evidence", "release-smoke.json");
+  const calls = [];
+  const secret = "should-not-leak";
+  try {
+    const { packageDir } = await createReleaseFixture(root);
+    await assert.rejects(
+      runArtifactOnlyReleaseSmoke({
+        packageDir,
+        runId: "release-smoke-diagnostics",
+        evidencePath,
+      }, {
+        allocatePorts: async () => [45401, 45402, 45403],
+        executeCommand: async (input) => {
+          calls.push(input);
+          const action = input.args.at(-1);
+          if (action === "900") {
+            return { exitCode: 1, durationMs: 1, timedOut: false, stdout: "", stderr: `Bearer ${secret}` };
+          }
+          if (input.args.includes("ps")) {
+            return { exitCode: 0, durationMs: 1, timedOut: false, stdout: `postgres://user:${secret}@postgres/db`, stderr: "" };
+          }
+          if (input.args.includes("logs")) {
+            return { exitCode: 0, durationMs: 1, timedOut: false, stdout: `Authorization: Bearer ${secret}`, stderr: "" };
+          }
+          return { exitCode: 0, durationMs: 1, timedOut: false, stdout: "", stderr: "" };
+        },
+      }),
+      /startup failed/i,
+    );
+
+    const evidenceText = await readFile(evidencePath, "utf8");
+    const evidence = JSON.parse(evidenceText);
+    assert.equal(evidence.status, "failed");
+    assert.equal(evidence.cleanup.completed, true);
+    assert.equal(evidence.commands.up.exitCode, 1);
+    assert.equal(evidence.startupDiagnostics.ps.exitCode, 0);
+    assert.equal(evidence.startupDiagnostics.logs.exitCode, 0);
+    assert.match(evidenceText, /\[REDACTED\]/);
+    assert.doesNotMatch(evidenceText, new RegExp(secret));
+    assert.equal(calls.length, 4);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 test("failed cleanup retains the exact owner record without leaking command secrets", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "platform-release-smoke-recovery-"));
   const evidencePath = path.join(root, "evidence", "release-smoke.json");

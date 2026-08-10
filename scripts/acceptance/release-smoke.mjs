@@ -13,7 +13,7 @@ import { pathToFileURL } from "node:url";
 
 import { PLATFORM_CONTAINER_IMAGES } from "../container-image-lock.mjs";
 import { allocateLoopbackPorts, runAcceptanceComposeCommand } from "./compose.mjs";
-import { validateAcceptanceRunId } from "./manifest.mjs";
+import { redactText, validateAcceptanceRunId } from "./manifest.mjs";
 import { validateOciImageLayouts } from "./release-build.mjs";
 
 const RELEASE_SCHEMA_VERSION = "neuro-platform-release/v1";
@@ -553,8 +553,54 @@ function commandSummary(result) {
     exitCode: result?.exitCode ?? null,
     durationMs: result?.durationMs ?? null,
     timedOut: result?.timedOut ?? false,
-    error: result?.error ? "command reported an error" : null,
+    error: result?.exitCode !== 0 && result?.error ? "command reported an error" : null,
   };
+}
+
+function releaseSecretCanaries(environment) {
+  return [
+    "RELEASE_POSTGRES_PASSWORD",
+    "RELEASE_MINIO_PASSWORD",
+    "DATABASE_URL",
+    "ACCOUNT_DATABASE_URL",
+    "INTERNAL_API_TOKEN",
+    "AI_GATEWAY_MANAGEMENT_TOKEN",
+    "AI_GATEWAY_API_KEY_SECRET",
+    "BENEFIT_SERVICE_API_KEY_SECRET",
+    "TEA_AUTH_TOKEN",
+    "OAUTH_CLIENT_SECRET",
+    "NEXTAUTH_SECRET",
+    "OBJECT_STORAGE_SECRET_ACCESS_KEY",
+  ].map((name) => String(environment[name] ?? "")).filter(Boolean);
+}
+
+function redactedCommandOutput(result, secretCanaries) {
+  const output = [result?.stdout, result?.stderr, result?.error]
+    .filter((value) => typeof value === "string" && value.trim())
+    .join("\n");
+  return redactText(output, secretCanaries).slice(-32_768);
+}
+
+async function captureStartupDiagnostics({ executeCommand, baseArgs, cwd, environment }) {
+  const secretCanaries = releaseSecretCanaries(environment);
+  const diagnostics = {};
+  for (const [name, args] of [
+    ["ps", ["ps", "--all", "--format", "json"]],
+    ["logs", ["logs", "--no-color", "--tail", "120"]],
+  ]) {
+    const result = await executeCommand({
+      command: "docker",
+      args: [...baseArgs, ...args],
+      cwd,
+      env: { ...process.env, ...environment },
+      timeoutMs: 2 * 60 * 1000,
+    });
+    diagnostics[name] = {
+      ...commandSummary(result),
+      output: redactedCommandOutput(result, secretCanaries),
+    };
+  }
+  return diagnostics;
 }
 
 async function requireCommand(executeCommand, input, label) {
@@ -654,6 +700,7 @@ export async function runArtifactOnlyReleaseSmoke(options, dependencies = {}) {
     startedAt: new Date().toISOString(),
     finishedAt: null,
     commands: { imports: [], up: null, ps: null, down: null, imageCleanup: [] },
+    startupDiagnostics: null,
     probes: [],
     cleanup: { completed: false },
     failure: null,
@@ -701,14 +748,24 @@ export async function runArtifactOnlyReleaseSmoke(options, dependencies = {}) {
       }
     }
 
-    const upResult = await requireCommand(executeCommand, {
+    const upInput = {
       command: "docker",
       args: [...baseArgs, "up", "--detach", "--wait", "--wait-timeout", "900"],
       cwd: resourcesDir,
       env: { ...process.env, ...environment },
       timeoutMs: 20 * 60 * 1000,
-    }, "Artifact-only release startup");
+    };
+    const upResult = await executeCommand(upInput);
     evidence.commands.up = commandSummary(upResult);
+    if (!upResult || upResult.exitCode !== 0) {
+      evidence.startupDiagnostics = await captureStartupDiagnostics({
+        executeCommand,
+        baseArgs,
+        cwd: resourcesDir,
+        environment,
+      });
+      throw new Error(`Artifact-only release startup failed (${upResult?.exitCode ?? "unknown"})`);
+    }
 
     const probes = [
       [`http://127.0.0.1:${ports.core}/ready`, (_response, text) => {
