@@ -21,7 +21,7 @@
 
 ## 当前实施快照（2026-08-10）
 
-Phase 0-5 已完成，Phase 6 已完成 `P6-01` 至 `P6-03`。fresh run `.runtime/acceptance/platform-round15-6070450/acceptance-manifest.json` 对应 clean revision `6070450f71ddc0c65f4e6960bd2813c8d081d9c2`：required 为 `14/14` 全部通过且无 skip，external-boundary 为 `3 passed + 1 evidence-backed not-applicable`，Owner、Visitor、Operator 与 dependency-error 浏览器套件全部通过。同日 conditional-live run 将 Linux.do、Gateway、Loom、Tea 分类为有 preflight 证据的 `external-blocked`，Hook 分类为 `not-applicable`。immutable `V0.1.0` 已从较早 clean revision `3d2f653663eb4796362ffa278eafd74df308ec7d` 构建并通过 artifact-only runtime smoke；后续 P6-04 review 已修复 release evidence link escape、public-surface fail-open 与 arbitrary-dispatch GHCR 写路径，并建立 P2 register。由于这些当前源码更新尚未生成新版本 release，且最终 fresh P0/P1 复核与 signoff 未完成，当前 canonical 结论仍为 `Platform 产品未完成`。
+Phase 0-5 已完成，Phase 6 已完成 `P6-01` 至 `P6-03`。fresh run `.runtime/acceptance/platform-round16-640f77d/acceptance-manifest.json` 对应 clean revision `640f77dddedf5b5773db5cdb81b65b376fc134c7`：required 为 `14/14` 全部通过且无 skip，external-boundary 为 `3 passed + 1 evidence-backed not-applicable`，Owner、Visitor、Operator 与 dependency-error 浏览器套件全部通过。同日 conditional-live run 将 Linux.do、Gateway、Loom、Tea 分类为有 preflight 证据的 `external-blocked`，Hook 分类为 `not-applicable`。immutable `V0.1.0` 已从较早 clean revision `3d2f653663eb4796362ffa278eafd74df308ec7d` 构建并通过 artifact-only runtime smoke；后续 P6-04 review 已修复 release evidence link escape、public-surface fail-open 与 arbitrary-dispatch GHCR 写路径，并建立 P2 register。由于这些当前源码更新尚未生成新版本 release，且最终 fresh P0/P1 复核与 signoff 未完成，当前 canonical 结论仍为 `Platform 产品未完成`。
 
 ## 1. 正式范围
 

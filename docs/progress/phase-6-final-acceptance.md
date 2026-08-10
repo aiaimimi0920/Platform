@@ -9,13 +9,13 @@ Acceptance: use exactly one canonical conclusion phrase; no internal P0/P1, no u
 
 ## P6-01 / P6-02 完成记录
 
-- fresh official run 位于 `.runtime/acceptance/platform-round15-6070450/acceptance-manifest.json`，对应 clean revision `6070450f71ddc0c65f4e6960bd2813c8d081d9c2`。
+- fresh official run 位于 `.runtime/acceptance/platform-round16-640f77d/acceptance-manifest.json`，对应 clean revision `640f77dddedf5b5773db5cdb81b65b376fc134c7`。
 - `browser-owner`、`browser-visitor`、`browser-operator`、`browser-errors` 全部通过；Owner、Visitor、Operator 与 dependency-error canonical journeys 均由 desktop/mobile Playwright projects 覆盖。
 - 同一 run 的 required 为 `14 discovered / 14 executed / 14 passed / 0 failed / 0 skipped`；external-boundary 为 `4 discovered / 4 executed / 3 passed / 0 failed / 0 skipped / 1 not-applicable`，其中 Hook 由 source/dependency inventory 证明当前无 Platform-owned runtime call point。
 
 ## P6-03 完成记录
 
-- same-day conditional-live run 位于 `.runtime/acceptance/platform-live-round15-6070450/acceptance-manifest.json`，同样对应 clean revision `6070450f71ddc0c65f4e6960bd2813c8d081d9c2`。
+- same-day conditional-live run 位于 `.runtime/acceptance/platform-live-round16-640f77d/acceptance-manifest.json`，同样对应 clean revision `640f77dddedf5b5773db5cdb81b65b376fc134c7`。
 - Linux.do OAuth、Gateway、Loom 与 Tea 均执行环境 preflight，并因缺少对应 live URL/token 或 OAuth client 配置分类为 `external-blocked`；证据只记录环境变量名，不记录凭证值。Hook 分类为 evidence-backed `not-applicable`。
 - conditional-live 合计 `5 discovered / 5 executed / 0 failed / 0 skipped / 4 external-blocked / 1 not-applicable`，不存在未分类的 `failed` 或无证据 `not-run`。
 
