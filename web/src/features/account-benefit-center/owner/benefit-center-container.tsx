@@ -151,6 +151,8 @@ export function BenefitCenterContainer({
   const triggerButtonRef = useRef<HTMLButtonElement | null>(null);
   const wasOpenRef = useRef(false);
   const panelErrorToastRef = useRef<string | null>(null);
+  const panelRequestIdRef = useRef(0);
+  const panelRequestRef = useRef<{ controller: AbortController; id: number } | null>(null);
   const targetedFamilyKeyRef = useRef<string | null>(null);
   const targetedServiceIdRef = useRef<string | null>(null);
   const titleId = useId();
@@ -187,10 +189,16 @@ export function BenefitCenterContainer({
       return;
     }
 
+    panelRequestRef.current?.controller.abort();
+    const requestId = panelRequestIdRef.current + 1;
+    panelRequestIdRef.current = requestId;
+    const controller = new AbortController();
+    panelRequestRef.current = { controller, id: requestId };
     setLoading(true);
     try {
       const response = await fetch("/api/account-benefits/panel", {
         cache: "no-store",
+        signal: controller.signal,
       });
       const payload = (await response.json()) as BenefitPanelPayload;
 
@@ -198,6 +206,9 @@ export function BenefitCenterContainer({
         throw new Error(payload.error || BENEFIT_CENTER_UNAVAILABLE_MESSAGE);
       }
 
+      if (controller.signal.aborted || panelRequestIdRef.current !== requestId) {
+        return;
+      }
       const normalized = sanitizeBenefitPanel(payload.panel);
       setFamilies(normalized);
       setSummary(payload.panel.summary);
@@ -212,6 +223,9 @@ export function BenefitCenterContainer({
       setPanelError(null);
       panelErrorToastRef.current = null;
     } catch (error) {
+      if (controller.signal.aborted || panelRequestIdRef.current !== requestId) {
+        return;
+      }
       const message =
         error instanceof Error ? error.message : BENEFIT_CENTER_UNAVAILABLE_MESSAGE;
       setPanelError(message);
@@ -224,7 +238,10 @@ export function BenefitCenterContainer({
         panelErrorToastRef.current = message;
       }
     } finally {
-      setLoading(false);
+      if (panelRequestRef.current?.id === requestId) {
+        panelRequestRef.current = null;
+        setLoading(false);
+      }
     }
   }
 
@@ -414,7 +431,7 @@ export function BenefitCenterContainer({
     let cancelled = false;
 
     async function syncPanel() {
-      if (cancelled) {
+      if (cancelled || panelRequestRef.current) {
         return;
       }
       await refreshPanel();
@@ -428,6 +445,9 @@ export function BenefitCenterContainer({
     return () => {
       cancelled = true;
       window.clearInterval(intervalId);
+      panelRequestRef.current?.controller.abort();
+      panelRequestRef.current = null;
+      panelRequestIdRef.current += 1;
     };
   }, [enabled, userId]);
 
