@@ -3,7 +3,7 @@
 - [x] `P5-01` Kustomize first-deploy/migration/digest/RBAC contract。
 - [x] `P5-02` staging/production OpenTofu validation。
 - [x] `P5-03` Platform-local complete release builder with OCI layout and manifest。
-- [ ] `P5-04` artifact-only release runtime smoke。
+- [x] `P5-04` artifact-only release runtime smoke。
 
 Acceptance: `release/Platform/<version>/` starts without source bind/build context and contains redacted evidence, migrations, deployment bundle, checksums and SBOM/dependency inventory.
 
@@ -61,13 +61,16 @@ Acceptance: `release/Platform/<version>/` starts without source bind/build conte
 - `P5-03` 验证：
   - `node --test scripts/acceptance/tests/release-build.test.mjs scripts/acceptance/tests/release-smoke.test.mjs`：`10/10` 通过（含后续 P5-04 合同）。
   - `npm run ci`：退出 `0`；仓库/结构门禁、OpenTofu、生产依赖审计、全 workspace tests、Vitest、typecheck 与 Next production build 均通过。
-- 当前没有生成正式 release：final acceptance 尚未通过，构建器会按设计拒绝旧的 failed/cross-commit acceptance evidence。
+- P5-03 构建器随后已使用同一 clean commit 的正式 acceptance 生成 release；实际 artifact 与 runtime smoke 证据见 P5-04。
 
-## P5-04 当前进度（未完成）
+## P5-04 完成记录
 
-- 已新增 `scripts/acceptance/release-smoke.mjs`、`scripts/acceptance/tests/release-smoke.test.mjs` 和 `npm run acceptance:release`。
-- 当前合同覆盖 exact checksum、manifest/image consistency、immutable images、无额外 service、无 source build/bind/include/extends/develop、唯一 Compose project/ports/volumes、semantic readiness/login probes、脱敏 evidence、精确 cleanup 与 cleanup failure owner recovery。
-- 生成的 release + fixture override 已通过 Docker Compose v5.1.4 离线 `config --quiet` 解析；纯合同/编排测试 `5/5` 通过，完整 `npm run ci` 退出 `0`。
-- 本机 Docker Engine 当前对 `docker version` 超时，因此尚未对最终 package 执行真实 migration/readiness/product runtime smoke。`P5-04` 必须继续保持未完成，直到 fresh evidence 同时满足 `status: passed` 与 `cleanup.completed: true`。
+- 正式 `V0.1.0` release 已原子发布到 canonical sibling `../release/Platform/V0.1.0`，来源为 clean revision `3d2f653663eb4796362ffa278eafd74df308ec7d` 与 passed acceptance run `platform-1786323406483-58880-5e89cba0`。
+- release 包含六个真实 `linux/amd64` OCI layout、3 个 migration domain 共 227 个 SQL 文件、Web 包、部署与环境合同、脱敏 acceptance evidence、依赖清单，以及精确覆盖 2598 个文件的 SHA-256 inventory。
+- Windows OCI import 使用相对于 run-owned smoke resources 的 drive-free URI，规避 Buildx 把绝对盘符误解析为 image reference；不同盘符会 fail closed。
+- artifact-only override 在 executor 首次运行前等待 Core `service_healthy`，避免低频执行循环在 Core 监听前失败后进入最长 180 秒冷却；该门禁不放宽 executor readiness。
+- 启动失败时先解析 Compose `ps`，再只采集 unhealthy/非零退出服务的有界脱敏日志；失败清理只删除实际成功导入的临时 OCI 标签。
+- 正式验证命令：`npm run acceptance:release -- --package-dir ../release/Platform/V0.1.0 --run-id release-smoke-v0-1-0-cf8a112 --evidence-path .runtime/acceptance/release-smoke-v0-1-0-cf8a112/release-smoke.json`。
+- fresh evidence 为 `status: passed`、`cleanup.completed: true`：六次 OCI import、Compose up、process inventory、Core/Account/Web readiness、Linux.do 登录入口、Compose down 与六个临时镜像删除均退出 `0`；运行后对应容器、卷和临时标签均为零。
 
 产品状态仍为 `Platform 产品未完成`。

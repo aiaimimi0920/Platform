@@ -141,6 +141,9 @@ develop watches before startup. Fixed-digest mode consumes the published
 immutable references. Offline OCI mode imports each packaged layout through a
 BuildKit `oci-layout://` context into an exact run-scoped temporary tag; it never
 uses the Platform checkout or a sibling repository as a build context.
+On Windows, the client URI is relative to the run-owned smoke resources so a
+drive letter cannot be misparsed as an image reference; the canonical sibling
+release and smoke resources therefore must remain on the same drive.
 
 Runtime dependencies are an isolated, generated Compose override containing
 digest-pinned PostgreSQL, Valkey, MinIO, MinIO Client, and a minimal Gateway
