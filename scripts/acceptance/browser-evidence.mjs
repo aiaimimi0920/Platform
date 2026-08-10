@@ -45,19 +45,22 @@ function lastResult(test) {
   return results.length > 0 ? results[results.length - 1] : null;
 }
 
-function assertPassingTest(spec, journeyId, projectName) {
-  const test = (Array.isArray(spec?.tests) ? spec.tests : []).find(
-    (candidate) => candidate?.projectName === projectName,
-  );
-  if (!test) {
+function assertPassingTest(specs, journeyId, projectName) {
+  const tests = specs.flatMap((spec) =>
+    (Array.isArray(spec?.tests) ? spec.tests : []).filter(
+      (candidate) => candidate?.projectName === projectName,
+    ));
+  if (tests.length === 0) {
     throw new Error(`Browser journey ${journeyId} is missing project ${projectName}`);
   }
-  const result = lastResult(test);
-  if (test.status !== "expected" || result?.status !== "passed") {
-    throw new Error(
-      `Browser journey ${journeyId} project ${projectName} is not passed ` +
-      `(test=${test.status ?? "unknown"}, result=${result?.status ?? "missing"})`,
-    );
+  for (const test of tests) {
+    const result = lastResult(test);
+    if (test.status !== "expected" || result?.status !== "passed") {
+      throw new Error(
+        `Browser journey ${journeyId} project ${projectName} is not passed ` +
+        `(test=${test.status ?? "unknown"}, result=${result?.status ?? "missing"})`,
+      );
+    }
   }
 }
 
@@ -90,14 +93,14 @@ export async function verifyBrowserEvidence({ journey, reportPath } = {}) {
 
   const journeyIds = BROWSER_JOURNEY_REQUIREMENTS[journey];
   for (const journeyId of journeyIds) {
-    const spec = journeySpecs.find(
+    const specs = journeySpecs.filter(
       (candidate) => typeof candidate?.title === "string" && candidate.title.startsWith(journeyId),
     );
-    if (!spec) {
+    if (specs.length === 0) {
       throw new Error(`Playwright report is missing canonical browser journey ${journeyId}`);
     }
     for (const projectName of REQUIRED_BROWSER_PROJECTS) {
-      assertPassingTest(spec, journeyId, projectName);
+      assertPassingTest(specs, journeyId, projectName);
     }
   }
 

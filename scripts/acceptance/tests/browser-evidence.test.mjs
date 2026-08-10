@@ -53,6 +53,22 @@ test("browser evidence requires every canonical journey id in desktop and mobile
   }
 });
 
+test("browser evidence combines Playwright project-split specs with the same journey title", async () => {
+  const report = passingReport("owner");
+  report.suites[0].specs = report.suites[0].specs.flatMap((spec) =>
+    spec.tests.map((projectTest) => ({ ...spec, tests: [projectTest] })));
+
+  const result = await verifyBrowserEvidence({
+    journey: "owner",
+    reportPath: await writeReport(report),
+  });
+  assert.equal(result.status, "passed");
+  assert.equal(
+    result.verifiedTestRuns,
+    BROWSER_JOURNEY_REQUIREMENTS.owner.length * REQUIRED_BROWSER_PROJECTS.length,
+  );
+});
+
 test("browser evidence rejects a missing mobile project, a skipped test, or an unexpected run", async () => {
   const missingMobile = passingReport("visitor");
   missingMobile.suites[0].specs[0].tests.pop();
