@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { link, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -149,6 +149,87 @@ test("release acceptance must be passed, clean, current, complete, and evidence-
     }),
     /evidence/i,
   );
+});
+
+test("complete release rejects acceptance evidence that escapes through filesystem links", async () => {
+  const fixtureRoot = await mkdtemp(path.join(os.tmpdir(), "platform-release-evidence-link-"));
+  const evidenceDir = path.join(fixtureRoot, "evidence");
+  const outsideDir = path.join(fixtureRoot, "outside");
+  const linkedDir = path.join(evidenceDir, "linked");
+  const hardLinkedEvidence = path.join(evidenceDir, "hard-linked.json");
+  const outputRoot = path.resolve(REAL_REPO_ROOT, "..", "release", "Platform");
+  const versionId = `p5-03-evidence-link-${process.pid}-${Date.now()}`;
+  const destination = path.join(outputRoot, versionId);
+  await mkdir(evidenceDir, { recursive: true });
+  await mkdir(outsideDir, { recursive: true });
+  await writeFile(path.join(outsideDir, "outside.json"), '{"credential":"outside-evidence-root"}\n');
+  await writeFile(path.join(evidenceDir, "external.json"), '{"status":"not-applicable"}\n');
+  await symlink(outsideDir, linkedDir, process.platform === "win32" ? "junction" : "dir");
+  await link(path.join(outsideDir, "outside.json"), hardLinkedEvidence);
+
+  const acceptance = createPassingAcceptance(evidenceDir);
+  acceptance.results = [
+    {
+      id: "required",
+      layer: "required",
+      status: "passed",
+      evidencePath: path.join(linkedDir, "outside.json"),
+      stdoutPath: null,
+      stderrPath: null,
+    },
+    {
+      id: "external",
+      layer: "externalBoundary",
+      status: "not-applicable",
+      evidencePath: path.join(evidenceDir, "external.json"),
+      stdoutPath: null,
+      stderrPath: null,
+      skipReason: "No fixture endpoint",
+    },
+  ];
+  const acceptanceManifestPath = path.join(evidenceDir, "acceptance-manifest.json");
+  await writeFile(acceptanceManifestPath, `${JSON.stringify(acceptance, null, 2)}\n`);
+
+  try {
+    await assert.rejects(
+      buildCompletePlatformRelease({
+        repoRoot: REAL_REPO_ROOT,
+        outputRoot,
+        versionId,
+        acceptanceManifestPath,
+        ociLayoutRoot: path.join(fixtureRoot, "unused-oci"),
+        currentGit: {
+          commit: REVISION,
+          dirty: false,
+          repository: "aiaimimi0920/Platform",
+          sourceDateEpoch: 1_780_876_800,
+        },
+      }),
+      /symbolic link|resolves outside the acceptance evidence directory/i,
+    );
+
+    acceptance.results[0].evidencePath = hardLinkedEvidence;
+    await writeFile(acceptanceManifestPath, `${JSON.stringify(acceptance, null, 2)}\n`);
+    await assert.rejects(
+      buildCompletePlatformRelease({
+        repoRoot: REAL_REPO_ROOT,
+        outputRoot,
+        versionId,
+        acceptanceManifestPath,
+        ociLayoutRoot: path.join(fixtureRoot, "unused-oci"),
+        currentGit: {
+          commit: REVISION,
+          dirty: false,
+          repository: "aiaimimi0920/Platform",
+          sourceDateEpoch: 1_780_876_800,
+        },
+      }),
+      /hard-linked file/i,
+    );
+  } finally {
+    await rm(destination, { recursive: true, force: true });
+    await rm(fixtureRoot, { recursive: true, force: true });
+  }
 });
 
 test("offline image source requires six valid linux-amd64 OCI layouts", async () => {

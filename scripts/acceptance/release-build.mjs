@@ -3,6 +3,7 @@ import {
   cp,
   lstat,
   mkdir,
+  open,
   readFile,
   readdir,
   realpath,
@@ -75,6 +76,82 @@ function requireContainedPath(root, candidate, label) {
     throw new Error(`${label} must stay inside the acceptance evidence directory`);
   }
   return path.resolve(candidate);
+}
+
+async function requireContainedRegularFile(root, candidate, label) {
+  const resolvedRoot = path.resolve(root);
+  const resolvedCandidate = requireContainedPath(resolvedRoot, candidate, label);
+  const rootStat = await lstat(resolvedRoot);
+  if (rootStat.isSymbolicLink()) {
+    throw new Error("Acceptance evidence directory may not be a symbolic link");
+  }
+  if (!rootStat.isDirectory()) {
+    throw new Error("Acceptance evidence directory must be a directory");
+  }
+
+  const relative = path.relative(resolvedRoot, resolvedCandidate);
+  const segments = relative ? relative.split(path.sep) : [];
+  if (segments.length === 0) {
+    throw new Error(`${label} must be a regular file inside the acceptance evidence directory`);
+  }
+  let currentPath = resolvedRoot;
+  let fileStat = null;
+  for (const [index, segment] of segments.entries()) {
+    currentPath = path.join(currentPath, segment);
+    const currentStat = await lstat(currentPath);
+    if (currentStat.isSymbolicLink()) {
+      throw new Error(`${label} may not traverse a symbolic link: ${currentPath}`);
+    }
+    const isFinalSegment = index === segments.length - 1;
+    if (!isFinalSegment && !currentStat.isDirectory()) {
+      throw new Error(`${label} parent must be a directory: ${currentPath}`);
+    }
+    if (isFinalSegment && !currentStat.isFile()) {
+      throw new Error(`${label} must be a regular file: ${currentPath}`);
+    }
+    if (isFinalSegment) {
+      if (currentStat.nlink !== 1) {
+        throw new Error(`${label} may not be a hard-linked file: ${currentPath}`);
+      }
+      fileStat = currentStat;
+    }
+  }
+
+  const [resolvedRealRoot, resolvedRealCandidate] = await Promise.all([
+    realpath(resolvedRoot),
+    realpath(resolvedCandidate),
+  ]);
+  if (!isContainedPath(resolvedRealRoot, resolvedRealCandidate)) {
+    throw new Error(`${label} resolves outside the acceptance evidence directory`);
+  }
+  return { path: resolvedCandidate, stat: fileStat };
+}
+
+function isSameFile(left, right) {
+  return left.dev === right.dev && left.ino === right.ino && left.mode === right.mode;
+}
+
+async function readContainedEvidenceText(root, candidate, label) {
+  const verified = await requireContainedRegularFile(root, candidate, label);
+  const handle = await open(verified.path, "r");
+  try {
+    const openedStat = await handle.stat();
+    if (openedStat.nlink !== 1 || !isSameFile(verified.stat, openedStat)) {
+      throw new Error(`${label} changed while it was being opened: ${verified.path}`);
+    }
+    const contents = await handle.readFile("utf8");
+    const currentStat = await lstat(verified.path);
+    if (
+      currentStat.isSymbolicLink()
+      || currentStat.nlink !== 1
+      || !isSameFile(openedStat, currentStat)
+    ) {
+      throw new Error(`${label} changed while it was being read: ${verified.path}`);
+    }
+    return contents;
+  } finally {
+    await handle.close();
+  }
 }
 
 function requireObject(value, label) {
@@ -194,6 +271,23 @@ export function validateAcceptanceForRelease(manifest, { manifestPath, currentGi
     }
   }
   return { manifest, evidenceDir, manifestPath: path.resolve(manifestPath), runId: manifest.runId };
+}
+
+async function validateAcceptanceEvidenceFiles(validatedAcceptance) {
+  const sourcePaths = new Set([validatedAcceptance.manifestPath]);
+  for (const result of validatedAcceptance.manifest.results) {
+    for (const field of ["evidencePath", "stdoutPath", "stderrPath"]) {
+      if (result[field]) sourcePaths.add(path.resolve(result[field]));
+    }
+  }
+  for (const sourcePath of [...sourcePaths].sort()) {
+    await requireContainedRegularFile(
+      validatedAcceptance.evidenceDir,
+      sourcePath,
+      "Acceptance evidence",
+    );
+  }
+  return validatedAcceptance;
 }
 
 async function readJson(filePath, label) {
@@ -409,7 +503,11 @@ async function copyRedactedAcceptanceEvidence(validatedAcceptance, stagingRoot, 
 
   const copied = [];
   for (const sourcePath of [...sourcePaths].sort()) {
-    requireContainedPath(validatedAcceptance.evidenceDir, sourcePath, "Acceptance evidence");
+    await requireContainedRegularFile(
+      validatedAcceptance.evidenceDir,
+      sourcePath,
+      "Acceptance evidence",
+    );
     const extension = path.extname(sourcePath).toLowerCase();
     if (!TEXT_EVIDENCE_EXTENSIONS.has(extension)) {
       throw new Error(`Acceptance evidence must be a text artifact: ${sourcePath}`);
@@ -429,7 +527,11 @@ async function copyRedactedAcceptanceEvidence(validatedAcceptance, stagingRoot, 
       );
       await writeFile(destinationPath, `${JSON.stringify(sanitizedManifest, null, 2)}\n`, "utf8");
     } else {
-      const sourceText = await readFile(sourcePath, "utf8");
+      const sourceText = await readContainedEvidenceText(
+        validatedAcceptance.evidenceDir,
+        sourcePath,
+        "Acceptance evidence",
+      );
       if (sourceText.includes("\0")) throw new Error(`Acceptance evidence is not UTF-8 text: ${sourcePath}`);
       await writeFile(destinationPath, redactText(sourceText, secretCanaries), "utf8");
     }
@@ -735,10 +837,12 @@ export async function buildCompletePlatformRelease(options, dependencies = {}) {
   const currentGit = options.currentGit ?? await resolveGitMetadata(repoRoot);
   const acceptanceManifestPath = path.resolve(options.acceptanceManifestPath);
   const acceptanceManifest = await readJson(acceptanceManifestPath, "acceptance manifest");
-  const acceptance = validateAcceptanceForRelease(acceptanceManifest, {
-    manifestPath: acceptanceManifestPath,
-    currentGit,
-  });
+  const acceptance = await validateAcceptanceEvidenceFiles(
+    validateAcceptanceForRelease(acceptanceManifest, {
+      manifestPath: acceptanceManifestPath,
+      currentGit,
+    }),
+  );
   const imageInventory = await resolveImages({
     imageLockPath: options.imageLockPath,
     ociLayoutRoot: options.ociLayoutRoot,
