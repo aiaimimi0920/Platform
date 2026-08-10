@@ -530,14 +530,16 @@ test("Compose stacks gate application dependencies on real readiness", async () 
   }
 });
 
-test("local and acceptance Web dev auth run only in explicit development mode", async () => {
-  for (const composeFile of [acceptanceComposeFile, localComposeFile]) {
-    const web = composeServiceBlock(await readFile(composeFile, "utf8"), "web");
+test("local and acceptance Web auth bypasses run only in explicit development mode", async () => {
+  const localWeb = composeServiceBlock(await readFile(localComposeFile, "utf8"), "web");
+  const acceptanceWeb = composeServiceBlock(await readFile(acceptanceComposeFile, "utf8"), "web");
+  for (const web of [localWeb, acceptanceWeb]) {
     assert.match(web, /NODE_ENV:\s+["']?development["']?/);
     assert.match(web, /DEV_AUTH_BYPASS_ENABLED:\s+["']?true["']?/);
-    assert.match(web, /command:\s+\["npm", "run", "dev"/);
     assert.doesNotMatch(web, /NODE_ENV:\s+["']?production["']?/);
   }
+  assert.match(localWeb, /command:\s+\["npm", "run", "dev"/);
+  assert.match(acceptanceWeb, /command:\s+\["npm", "run", "start", "--", "--hostname", "0\.0\.0\.0"\]/);
 
   const localGateway = composeServiceBlock(await readFile(localComposeFile, "utf8"), "gateway");
   assert.match(localGateway, /\/readyz/);

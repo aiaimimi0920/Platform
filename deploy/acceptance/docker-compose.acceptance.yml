@@ -323,7 +323,7 @@ services:
       DEV_AUTH_BYPASS_NAME: Acceptance User
       DEV_AUTH_BYPASS_EMAIL: acceptance-user@example.test
       DEV_AUTH_BYPASS_TRUST_LEVEL: "4"
-    command: ["npm", "run", "dev", "--", "--hostname", "0.0.0.0"]
+    command: ["npm", "run", "start", "--", "--hostname", "0.0.0.0"]
     ports:
       - "127.0.0.1:${WEB_HOST_PORT:?WEB_HOST_PORT is required}:3000"
     healthcheck:
