@@ -26,7 +26,7 @@ Phase 1 的基础设施任务已全部完成（`4/4`），但这不等于 Platfo
 - runtime probe run `platform-acceptance-p102-config`：Web `/health`、Core/Account API `/health` 与 `/ready` 返回 `200`；三个 double `/ready` 返回 `fixture: true`、`x-platform-fixture: true` 和 request-id echo；Gateway SSE 返回 fixture header/body 与 `[DONE]`；已认证 Loom 未知路由返回 `404/FIXTURE_NOT_FOUND`；Tea ticket array 返回 `200` 与 fixture header。
 - 脱敏启动证据保留于 `.runtime/acceptance/platform-acceptance-p102-config/compose-startup.json`；owner-aware cleanup receipt 为 `.runtime/acceptance/platform-acceptance-p102-config/compose-cleanup.json`。
 - cleanup 后 scoped residue check：本次 project 的容器、network、volume 均为 `0`，`resources/` secret/credential root 已删除，启动证据和 cleanup receipt 保留。
-- 构建日志报告 npm tree 存在 `3 high severity vulnerabilities`；该项未阻塞本次构建，列入后续依赖审计风险，不作为 live Provider 成功声明。
+- 该次历史构建日志报告 npm tree 存在 `3 high severity vulnerabilities`；2026-08-10 fresh `npm run audit:prod` 已输出 `found 0 vulnerabilities`，因此不再作为当前 P2，只保留为历史审计起点。
 
 ## P1-03 Evidence
 

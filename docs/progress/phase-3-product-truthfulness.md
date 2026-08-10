@@ -23,7 +23,7 @@ P3-01 is complete. P3-02 evidence follows.
 - Commerce now returns a typed panel envelope for every source, preserving successful sections as `partial` and returning a typed empty panel on outer failure. Product, listing, item, order, account, and balance UI states no longer turn source failures into fake empty shelves or zero balances.
 - Opinion filtered views now aggregate per-topic detail dependencies. Partial detail failures preserve successful topics; all-detail failures render `DependencyState` and block the normal empty-list message. Vote controls are disabled unless the wallet dependency is `ready`.
 - Agent and Operator pages now guard the primary registry, capability, execution, callback-health, runtime, callback-history, and benefits/model sources. Failed sources render local dependency states and suppress derived zero counts or dependent write/action controls.
-- Added `getPublicSurfaceSnapshotStrict()` for formal P3-02 pages. Opinion, Agent, Project, Arbitration, and Commerce no longer treat a failed public-surface read as all surfaces enabled; legacy callers retain the compatibility wrapper until their own migration tasks.
+- Added `getPublicSurfaceSnapshotStrict()` for formal P3-02 pages. Opinion, Agent, Project, Arbitration, and Commerce no longer treat a failed public-surface read as all surfaces enabled. P6-04 review subsequently removed the compatibility wrapper entirely: all remaining formal callers now use a typed strict dependency result, render an explicit unavailable state, and keep layout navigation closed when the control-plane snapshot is unknown.
 - TDD evidence: focused RED/GREEN cycles cover filtered Opinion detail aggregation, wallet vote gating, Agent/Operator registry and source guards, and strict public-surface reads. Web full suite passed `264/264`; `npx tsc --noEmit --pretty false -p tsconfig.json` exited `0`; `npm run build` completed successfully; `git diff --check -- Platform` passed.
 
 P3-02 is complete. P3-03 evidence follows.
@@ -36,6 +36,8 @@ P3-02 is complete. P3-03 evidence follows.
 - The account shell now recognizes `/mailbox`, `/benefits`, and `/my-arbitrations` as direct workspaces and suppresses duplicate overlay launchers while those routes are active.
 - Added focused route and helper contracts for the new direct surfaces: `src/app/p3-03-workspaces.test.ts`, `src/app/arbitrations/presentation.test.ts`, `src/features/account-benefit-center/utils.test.ts`, and the mailbox deep-link/workspace regressions in `src/features/mailbox/player/utils.test.ts`.
 - Verification evidence: `npm run test --workspace @neuro/web` passed `273/273`; `npm run typecheck --workspace @neuro/web` completed successfully via `next build`; `git diff --check -- Platform` exited `0` with only Git LF/CRLF normalization warnings.
+
+P6-04 follow-up evidence: public-surface fail-open removal passed Web `310/310`; `npm run typecheck --workspace @neuro/web` completed the Next production build and generated all 69 static pages. The shared loader preserves safe correlation diagnostics, missing keys resolve hidden, and the deleted all-enabled wrapper is pinned by regression tests.
 
 P3-03 is complete. P3-04 evidence follows.
 

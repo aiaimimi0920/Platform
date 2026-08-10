@@ -22,5 +22,7 @@ Acceptance: use exactly one canonical conclusion phrase; no internal P0/P1, no u
 ## P6-04 剩余边界
 
 - 已验证的 immutable `V0.1.0` release 来源是 `3d2f653663eb4796362ffa278eafd74df308ec7d`；本轮 release Compose readiness 修复位于更晚的 revision，不能覆盖或改写现有 `V0.1.0`。
-- 最终签收仍需完成当前 revision 的新版本 release 与 artifact-only smoke、最终规格/代码质量 review、P0/P1 清零复核、P2 register 和 clean-worktree signoff。
+- 最终 review 已发现并修复两项内部 P1：release evidence filesystem-link 逃逸由 `47f2234` 修复；public-surface 控制面故障时的 all-enabled fallback 由 `bb5580b` 删除。任意分支手动触发 GHCR 发布的权限边界由 `4014b1d` 收紧，同时保留已声明的 main/tag 镜像策略。
+- [P2 register](./p2-register.md) 已建立，只保留 owner、边界、不阻塞理由和升级条件明确的 CI/release governance 项；历史依赖告警、已修复 P1 和外部 live 条件均未伪装为 P2。
+- 最终签收仍需在最终源码 revision 上复核 P0/P1 为零，完成新版本 release 与 artifact-only smoke、fresh full gates 和 clean-worktree/Git identity signoff。
 - 当前唯一 canonical 结论保持为：`Platform 产品未完成`。
