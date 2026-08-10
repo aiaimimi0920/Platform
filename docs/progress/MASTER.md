@@ -69,7 +69,7 @@ Phase 0 当前任务：
 - `P5-03` 证据：Platform-local complete release builder 强制 sibling `../release/Platform/<versionId>/`、clean/current acceptance、六镜像 immutable lock 或离线 OCI、三域 migration order、source-free Compose/K8s/Tofu、environment contract、脱敏 evidence、dependency inventory、全文件 checksum 与原子 publish。当前 `release-build` + `release-smoke` 合同 `14/14`、完整 `npm run ci` 均通过，并拒绝 symlink/junction/hard-link evidence 逃逸；未使用旧失败证据生成正式 release。
 - `P5-04` 证据：immutable `../release/Platform/V0.1.0` 来源为 clean revision `3d2f653663eb4796362ffa278eafd74df308ec7d`，包含六个 `linux/amd64` OCI layout、三域 227 个 SQL migration 与覆盖 2598 个文件的 checksum；artifact-only smoke `.runtime/acceptance/release-smoke-v0-1-0-cf8a112/release-smoke.json` 为 `passed` 且 cleanup 完成，残留容器、卷和临时镜像均为零。
 - 产品状态：`Platform 产品未完成`。当前源码已晚于 `V0.1.0`，`P6-04` 仍需新版本 release/runtime smoke、最终 P0/P1 复核与 clean signoff；P2 已登记但仍须在签收时复核。不得覆盖现有 immutable release 或提前给出产品完成结论。
-- `P6-04` review 进展：已修复 release evidence link escape、public-surface fail-open、arbitrary-dispatch GHCR 写路径与本地预览 Local Dev/清理边界；第三方 Actions 已固定到审计后的完整 commit SHA，`P2-CI-001` 已核销。active [P2 register](./p2-register.md) 仍保留无法仅靠仓库代码消除的 release governance 与 CI feedback 项。最终 P0/P1 清零结论仍需绑定后续新版本 release revision 和 fresh gates。
+- `P6-04` review 进展：已修复 release evidence link escape、public-surface fail-open、arbitrary-dispatch GHCR 写路径与本地预览 Local Dev/清理边界；预览重启失败现在按旧/新容器 ID 精确保护旧实例并恢复 `WEB_HOST_PORT`，heavy-task release 非零退出不再静默，Windows Docker-double 合同覆盖 unchanged/replacement 两种失败身份。第三方 Actions 已固定到审计后的完整 commit SHA，`P2-CI-001` 已核销。active [P2 register](./p2-register.md) 仍保留无法仅靠仓库代码消除的 release governance 与 CI feedback 项。最终 P0/P1 清零结论仍需绑定后续新版本 release revision 和 fresh gates。
 
 ## Next Steps
 

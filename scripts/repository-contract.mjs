@@ -149,6 +149,7 @@ describe("independent Platform repository", () => {
     assert(workflow.includes("test-build-platform-web-release-contract.ps1 -DryRunOnly"));
     assert(workflow.includes("test-verify-platform-web-release-package-contract.ps1"));
     assert(workflow.includes("test-smoke-platform-web-release-package-contract.ps1"));
+    assert(workflow.includes("test-preview-helper-contract.ps1"));
 
     const workflowLines = workflow.split(/\r?\n/);
     assert.strictEqual(

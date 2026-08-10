@@ -58,6 +58,23 @@ function Get-CurrentComposeWebPort {
   return $null
 }
 
+function Get-ComposeWebContainerId {
+  param(
+    [string]$ComposePath
+  )
+
+  try {
+    $output = & docker compose -f $ComposePath ps -q web 2>$null
+    if ($LASTEXITCODE -eq 0 -and $output) {
+      return ([string]($output | Select-Object -First 1)).Trim()
+    }
+  } catch {
+    return $null
+  }
+
+  return $null
+}
+
 function Get-NextWebPort {
   param(
     [int]$InitialPort,
@@ -173,11 +190,16 @@ if (-not (Test-Path -LiteralPath $runtimeDir)) {
 $allocationMutex = $null
 $upAttempted = $false
 $webReady = $false
+$previousWebContainerId = $null
+$replacementWebContainerId = $null
+$webHostPortExisted = Test-Path Env:WEB_HOST_PORT
+$originalWebHostPort = $env:WEB_HOST_PORT
 try {
   $allocationMutex = Enter-PreviewAllocationLock `
     -Name $previewAllocationMutexName `
     -TimeoutSeconds $AllocationLockTimeoutSeconds
 
+  $previousWebContainerId = Get-ComposeWebContainerId -ComposePath $composeFile
   $port = Get-NextWebPort -InitialPort $BasePort -Increment $Step -ComposePath $composeFile -StatePath $stateFile
   $env:WEB_HOST_PORT = "$port"
 
@@ -192,8 +214,13 @@ try {
   Write-Host "Recreating web service on http://127.0.0.1:$port ..."
   $upAttempted = $true
   & docker compose -f $composeFile up -d --no-deps --force-recreate web
-  if ($LASTEXITCODE -ne 0) {
+  $upExitCode = $LASTEXITCODE
+  $replacementWebContainerId = Get-ComposeWebContainerId -ComposePath $composeFile
+  if ($upExitCode -ne 0) {
     throw "Failed to recreate web service."
+  }
+  if ([string]::IsNullOrWhiteSpace($replacementWebContainerId)) {
+    throw "Compose did not expose the replacement Web container identity."
   }
 
   Wait-ForHttpOk -Name "web" -Url "http://127.0.0.1:$port/health" -TimeoutSeconds $WebReadyTimeoutSeconds
@@ -205,16 +232,32 @@ try {
   Write-Output "STATE_FILE=$stateFile"
 } catch {
   if ($upAttempted -and -not $webReady) {
-    & docker compose -f $composeFile rm -sf web | Out-Null
-    if ($LASTEXITCODE -ne 0) {
-      Write-Warning "Failed to remove the unready Compose Web service."
+    if ([string]::IsNullOrWhiteSpace($replacementWebContainerId)) {
+      $replacementWebContainerId = Get-ComposeWebContainerId -ComposePath $composeFile
+    }
+    if (
+      -not [string]::IsNullOrWhiteSpace($replacementWebContainerId) -and
+      $replacementWebContainerId -ne $previousWebContainerId
+    ) {
+      & docker rm -f $replacementWebContainerId | Out-Null
+      if ($LASTEXITCODE -ne 0) {
+        Write-Warning "Failed to remove the unready replacement Web container: $replacementWebContainerId"
+      }
     }
   }
   throw
 } finally {
-  if ($allocationMutex) {
-    $mutexToRelease = $allocationMutex
-    $allocationMutex = $null
-    Exit-PreviewAllocationLock -Mutex $mutexToRelease
+  try {
+    if ($allocationMutex) {
+      $mutexToRelease = $allocationMutex
+      $allocationMutex = $null
+      Exit-PreviewAllocationLock -Mutex $mutexToRelease
+    }
+  } finally {
+    if ($webHostPortExisted) {
+      $env:WEB_HOST_PORT = $originalWebHostPort
+    } else {
+      Remove-Item Env:\WEB_HOST_PORT -ErrorAction SilentlyContinue
+    }
   }
 }

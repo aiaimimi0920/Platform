@@ -130,3 +130,7 @@ jobs:
       - name: Validate release runtime smoke contract
         shell: powershell
         run: .\scripts\tests\test-smoke-platform-web-release-package-contract.ps1
+
+      - name: Validate preview helper failure contracts
+        shell: powershell
+        run: .\scripts\tests\test-preview-helper-contract.ps1

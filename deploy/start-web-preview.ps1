@@ -20,6 +20,7 @@ $ErrorActionPreference = "Stop"
 $composeFile = Join-Path $PSScriptRoot "docker-compose.local.yml"
 $claimHeavyScript = Join-Path $PSScriptRoot "claim-heavy-task.ps1"
 $releaseHeavyScript = Join-Path $PSScriptRoot "release-heavy-task.ps1"
+$powerShellExecutable = (Get-Process -Id $PID).Path
 $previewAllocationMutexName = "Local\NeuroPlatformWebPreviewAllocation"
 $previewDependencyServices = @(
   "postgres",
@@ -173,6 +174,7 @@ function Invoke-HeavyTaskClaimIfNeeded {
   }
 
   $args = @(
+    '-NoProfile',
     '-ExecutionPolicy', 'Bypass',
     '-File', $claimHeavyScript,
     '-DialogId', $HeavyTaskDialogId,
@@ -186,7 +188,7 @@ function Invoke-HeavyTaskClaimIfNeeded {
   if ($HeavyTaskFailIfBusy) {
     $args += '-FailIfBusy'
   }
-  $output = & powershell.exe @args
+  $output = & $powerShellExecutable @args
   $exitCode = $LASTEXITCODE
   if ($output) {
     $output | Write-Output
@@ -202,6 +204,7 @@ function Invoke-HeavyTaskReleaseIfNeeded {
   }
 
   $args = @(
+    '-NoProfile',
     '-ExecutionPolicy', 'Bypass',
     '-File', $releaseHeavyScript,
     '-DialogId', $HeavyTaskDialogId
@@ -209,9 +212,13 @@ function Invoke-HeavyTaskReleaseIfNeeded {
   if (-not [string]::IsNullOrWhiteSpace($HeavyTaskStatePath)) {
     $args += @('-StatePath', $HeavyTaskStatePath)
   }
-  $output = & powershell.exe @args
+  $output = & $powerShellExecutable @args
+  $exitCode = $LASTEXITCODE
   if ($output) {
     $output | Write-Output
+  }
+  if ($exitCode -ne 0) {
+    throw "Heavy task release failed with exit code $exitCode"
   }
 }
 
@@ -220,6 +227,7 @@ $containerName = $null
 $containerStarted = $false
 $previewReady = $false
 $allocationMutex = $null
+$operationError = $null
 
 Invoke-HeavyTaskClaimIfNeeded
 try {
@@ -301,23 +309,37 @@ ENABLE_FIGMA_CAPTURE=true
   Write-Output "URL=http://localhost:$port"
   Write-Output "CONTAINER=$containerName"
   Write-Output "CONTAINER_ID=$containerId"
+} catch {
+  $operationError = $_
+  throw
 } finally {
-  if ($allocationMutex) {
-    $mutexToRelease = $allocationMutex
-    $allocationMutex = $null
-    Exit-PreviewAllocationLock -Mutex $mutexToRelease
-  }
-  if ($envFile -and (Test-Path -LiteralPath $envFile)) {
-    Remove-Item -LiteralPath $envFile -Force -ErrorAction SilentlyContinue
-    if (Test-Path -LiteralPath $envFile) {
-      Write-Warning "Failed to remove temporary preview environment file: $envFile"
+  try {
+    if ($allocationMutex) {
+      $mutexToRelease = $allocationMutex
+      $allocationMutex = $null
+      Exit-PreviewAllocationLock -Mutex $mutexToRelease
+    }
+    if ($envFile -and (Test-Path -LiteralPath $envFile)) {
+      Remove-Item -LiteralPath $envFile -Force -ErrorAction SilentlyContinue
+      if (Test-Path -LiteralPath $envFile) {
+        Write-Warning "Failed to remove temporary preview environment file: $envFile"
+      }
+    }
+    if ($containerStarted -and -not $previewReady) {
+      & docker rm -f $containerName | Out-Null
+      if ($LASTEXITCODE -ne 0) {
+        Write-Warning "Failed to remove unhealthy preview container: $containerName"
+      }
+    }
+  } finally {
+    try {
+      Invoke-HeavyTaskReleaseIfNeeded
+    } catch {
+      if ($operationError) {
+        Write-Warning "Preview failed and heavy-task release also failed: $($_.Exception.Message)"
+      } else {
+        throw
+      }
     }
   }
-  if ($containerStarted -and -not $previewReady) {
-    & docker rm -f $containerName | Out-Null
-    if ($LASTEXITCODE -ne 0) {
-      Write-Warning "Failed to remove unhealthy preview container: $containerName"
-    }
-  }
-  Invoke-HeavyTaskReleaseIfNeeded
 }

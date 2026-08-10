@@ -586,7 +586,10 @@ test("Compose Web restart serializes port allocation and preserves atomic state"
   assert.match(restartScript, /System\.IO\.File\]::Replace/);
   assert.doesNotMatch(restartScript, /\$Path\.\$PID\.(?:tmp|bak)/);
   assert.match(restartScript, /\$upAttempted -and -not \$webReady/);
-  assert.match(restartScript, /docker compose -f \$composeFile rm -sf web/);
+  assert.match(restartScript, /\$previousWebContainerId = Get-ComposeWebContainerId/);
+  assert.match(restartScript, /docker rm -f \$replacementWebContainerId/);
+  assert.doesNotMatch(restartScript, /docker compose -f \$composeFile rm -sf web/);
+  assert.match(restartScript, /\$env:WEB_HOST_PORT = \$originalWebHostPort/);
   assert.doesNotMatch(restartScript, /Set-Content -Path \$stateFile/);
 });
 

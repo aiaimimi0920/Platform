@@ -157,7 +157,8 @@ The design system has been unified to a single visual language: industrial termi
 - 两个 helper 必须共享 `Local\NeuroPlatformWebPreviewAllocation` 端口分配锁；从候选端口选择到 Docker 绑定完成期间不得释放锁。
 - 通用预览的成功判据必须同时包含 Web `/ready` 和 `/api/auth/providers` 中的 `local-dev` provider；仅首页返回 `2xx` 不足以证明本地调试登录可用。
 - 通用预览使用的临时 env 文件必须在容器创建后立即删除；启动后未 ready 的本次容器必须清理。
-- Compose Web 重启只有在新端口健康后才能原子更新 `.runtime/local-web-port.txt`；启动或健康检查失败时必须删除未就绪的 Compose Web，并保留旧 state。
+- Compose Web 重启只有在新端口健康后才能原子更新 `.runtime/local-web-port.txt`；启动或健康检查失败时只能按容器 ID 删除本次新建的替换实例，不能按 Compose service 名误删身份未变化的旧实例，并且必须保留旧 state、恢复调用前的 `WEB_HOST_PORT`。
+- 通用预览启用 heavy-task lease 时必须使用当前 PowerShell host 的无 profile 子进程；claim 与 release 的非零退出码都必须可观测，release 失败不得把已经发生的主预览错误静默替换掉。
 - 若代码已变化，先更新 `deploy-web` 镜像，再启动新的预览端口；不要把旧端口当成“已自动同步”的事实来源。
 - 本地预览里的 `Agent Center -> 羽量` 当前默认应补出一个仅用于 Web 调试的 `测试环境调试凭证`，默认模型 `ui-test-model`；它不依赖购买状态、assignment 或 gateway provider 完整配置，不得被视为生产正式凭证。
 - 本地开发栈的硬依赖：
