@@ -2908,9 +2908,11 @@ describe("monorepo structure", () => {
       "utf8",
     );
     assert(containerWorkflow.includes("packages: write"), "Container workflow cannot publish to GHCR");
-    assert(
-      containerWorkflow.includes("github.event_name != 'pull_request'"),
-      "Container workflow must not publish pull request images",
+    const publishGuard = "if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/V')))";
+    assert.strictEqual(
+      containerWorkflow.split(/\r?\n/).filter((line) => line.trim() === publishGuard).length,
+      2,
+      "Container workflow must publish only push events or manual main/version-tag refs",
     );
     for (const dockerfile of [
       "core.Dockerfile",
