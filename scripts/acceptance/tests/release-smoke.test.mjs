@@ -199,6 +199,10 @@ test("OCI runtime override consumes temporary artifact tags without build contex
   assert.match(override, /neuro-platform-release-smoke-0123456789abcdef\/core:artifact/);
   assert.match(override, /pull_policy: never/);
   assert.match(override, /postgres:16-bookworm@sha256:[0-9a-f]{64}/);
+  assert.match(
+    override,
+    /  executor:[\s\S]*?    depends_on:\n      core-migrate:\n        condition: service_completed_successfully\n      core:\n        condition: service_healthy\n  web:/,
+  );
 });
 
 test("OCI layout URI is drive-free and relative to the smoke resources on Windows", () => {
