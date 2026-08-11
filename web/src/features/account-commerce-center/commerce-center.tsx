@@ -65,24 +65,34 @@ export function CommerceCenter({
   const open = enabled && routeMode !== null;
   const defaultRoute = productEnabled ? "/products" : "/marketplace";
   const triggerLabel = productEnabled ? "商城" : "小集市";
-  const [panel, setPanel] = useState<CommercePanelView | null>(null);
+  const [panelState, setPanelState] = useState<{ panel: CommercePanelView; userId: string } | null>(null);
   const [dependency, setDependency] = useState<DependencyResult<CommercePanelView> | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedCurrency, setSelectedCurrency] = useState<ProductCurrency>("obsidian");
   const [selectedCategory, setSelectedCategory] = useState<string>("artificial_intelligence");
-  const [pendingTransaction, setPendingTransaction] = useState<PendingCommerceTransaction | null>(null);
+  const [pendingTransactionState, setPendingTransactionState] = useState<{
+    transaction: PendingCommerceTransaction;
+    userId: string;
+  } | null>(null);
   const [confirmSubmitting, setConfirmSubmitting] = useState(false);
   const [listingComposerOpen, setListingComposerOpen] = useState(false);
   const [selectedListingItemId, setSelectedListingItemId] = useState<string | null>(null);
   const [listingPriceInput, setListingPriceInput] = useState("");
   const [listingCurrency, setListingCurrency] = useState<ProductCurrency>("obsidian");
+  const panel = panelState?.userId === userId ? panelState.panel : null;
+  const pendingTransaction = pendingTransactionState?.userId === userId ? pendingTransactionState.transaction : null;
+
+  function setPendingTransaction(transaction: PendingCommerceTransaction | null) {
+    setPendingTransactionState(transaction && userId ? { transaction, userId } : null);
+  }
 
   async function refreshPanel(options?: { silent?: boolean }) {
-    if (!enabled) {
+    if (!enabled || !userId) {
       return;
     }
 
+    const requestUserId = userId;
     commerceRequestRef.current?.controller.abort();
     const requestId = commerceRequestIdRef.current + 1;
     commerceRequestIdRef.current = requestId;
@@ -105,7 +115,7 @@ export function CommerceCenter({
       if (controller.signal.aborted || commerceRequestIdRef.current !== requestId) {
         return;
       }
-      setPanel(payload.panel);
+      setPanelState({ panel: payload.panel, userId: requestUserId });
       setDependency(payload.dependency);
       setError(null);
     } catch (fetchError) {
@@ -130,6 +140,18 @@ export function CommerceCenter({
   }
 
   useEffect(() => {
+    setPanelState(null);
+    setDependency(null);
+    setError(null);
+    setLoading(false);
+    setPendingTransactionState(null);
+    setConfirmSubmitting(false);
+    setListingComposerOpen(false);
+    setSelectedListingItemId(null);
+    setListingPriceInput("");
+  }, [userId]);
+
+  useEffect(() => {
     if (!open) {
       return;
     }
@@ -148,7 +170,7 @@ export function CommerceCenter({
       commerceRequestRef.current = null;
       commerceRequestIdRef.current += 1;
     };
-  }, [enabled, open]);
+  }, [enabled, open, userId]);
 
   useEffect(() => {
     if (!open) {

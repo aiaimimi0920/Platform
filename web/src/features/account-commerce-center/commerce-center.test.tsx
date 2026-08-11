@@ -24,3 +24,22 @@ test("P3-02: commerce UI does not render source failures as zero balances or emp
   assert.match(componentSource, /purchasedCount=\{ordersUnavailable \? null/);
   assert.doesNotMatch(componentSource, /const obsidianBalance = .*\?\? 0/);
 });
+
+test("commerce binds cached panels and pending transactions to the active identity", () => {
+  assert.match(componentSource, /panelState\?\.userId === userId \? panelState\.panel : null/);
+  assert.match(
+    componentSource,
+    /pendingTransactionState\?\.userId === userId \? pendingTransactionState\.transaction : null/,
+  );
+  assert.match(componentSource, /const requestUserId = userId/);
+  assert.match(componentSource, /setPanelState\(\{ panel: payload\.panel, userId: requestUserId \}\)/);
+  assert.match(componentSource, /setPendingTransactionState\(transaction && userId \? \{ transaction, userId \} : null\)/);
+});
+
+test("commerce resets identity-owned state and restarts polling when the identity changes", () => {
+  assert.match(
+    componentSource,
+    /useEffect\(\(\) => \{\s*setPanelState\(null\);[\s\S]*?setPendingTransactionState\(null\);[\s\S]*?\}, \[userId\]\)/,
+  );
+  assert.match(componentSource, /\}, \[enabled, open, userId\]\);/);
+});
