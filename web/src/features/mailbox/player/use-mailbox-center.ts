@@ -271,10 +271,11 @@ export function useMailboxCenter({ enabled, routeOpen, workspace = false, userId
       return;
     }
 
+    const targetMessageId = selectedMessage.id;
     const nextFavorited = !selectedMessage.favoritedAt;
     setTogglingFavorite(true);
     try {
-      const response = await fetch(`/api/account-mailbox/messages/${encodeURIComponent(selectedMessage.id)}/favorite`, {
+      const response = await fetch(`/api/account-mailbox/messages/${encodeURIComponent(targetMessageId)}/favorite`, {
         method: "POST",
         headers: {
           "content-type": "application/json",
@@ -294,15 +295,17 @@ export function useMailboxCenter({ enabled, routeOpen, workspace = false, userId
         throw new Error(payload.error || "收藏状态更新失败。");
       }
 
-      const nextMessages = messages.map((message) =>
-        message.id === selectedMessage.id
-          ? {
-              ...message,
-              favoritedAt: payload.result?.favoritedAt ?? null,
-            }
-          : message,
+      setMessages((current) =>
+        current.map((message) =>
+          message.id === targetMessageId
+            ? {
+                ...message,
+                favoritedAt: payload.result?.favoritedAt ?? null,
+              }
+            : message,
+        ),
       );
-      syncMailboxState(nextMessages);
+      void refreshMailbox();
       pushToast({
         tone: "success",
         title: "邮箱",
@@ -336,10 +339,11 @@ export function useMailboxCenter({ enabled, routeOpen, workspace = false, userId
     if (!selectedMessage || deletingSelected) {
       return;
     }
+    const targetMessageId = selectedMessage.id;
     setDeleteConfirmPending(false);
     setDeletingSelected(true);
     try {
-      const response = await fetch(`/api/account-mailbox/messages/${encodeURIComponent(selectedMessage.id)}/delete`, {
+      const response = await fetch(`/api/account-mailbox/messages/${encodeURIComponent(targetMessageId)}/delete`, {
         method: "POST",
       });
       const payload = (await response.json()) as {
@@ -353,8 +357,9 @@ export function useMailboxCenter({ enabled, routeOpen, workspace = false, userId
         throw new Error(payload.error || "邮件删除失败。");
       }
 
-      const nextMessages = messages.filter((message) => message.id !== selectedMessage.id);
-      syncMailboxState(nextMessages);
+      setMessages((current) => current.filter((message) => message.id !== targetMessageId));
+      setSelectedMessageId((current) => (current === targetMessageId ? null : current));
+      void refreshMailbox();
       pushToast({
         tone: "info",
         title: "邮箱",
