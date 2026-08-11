@@ -23,6 +23,8 @@ export type AnnouncementCenterProps = {
 export function AnnouncementCenterContainer({ userId }: AnnouncementCenterProps) {
   const closeButtonRef = useRef<HTMLButtonElement | null>(null);
   const triggerButtonRef = useRef<HTMLButtonElement | null>(null);
+  const announcementRequestIdRef = useRef(0);
+  const announcementRequestRef = useRef<{ id: number; controller: AbortController } | null>(null);
   const wasOpenRef = useRef(false);
   const initialAutoOpenCheckedRef = useRef(false);
   const latestPublishedAtRef = useRef<string | null>(accountAnnouncements[0]?.publishedAt ?? null);
@@ -108,12 +110,28 @@ export function AnnouncementCenterContainer({ userId }: AnnouncementCenterProps)
     let cancelled = false;
 
     async function refreshAnnouncements() {
+      if (cancelled || announcementRequestRef.current) {
+        return;
+      }
+
+      const requestId = announcementRequestIdRef.current + 1;
+      announcementRequestIdRef.current = requestId;
+      const controller = new AbortController();
+      announcementRequestRef.current = { id: requestId, controller };
+
       try {
         const response = await fetch("/api/account-announcements", {
           cache: "no-store",
+          signal: controller.signal,
         });
 
-        if (!response.ok) {
+        if (
+          cancelled ||
+          controller.signal.aborted ||
+          announcementRequestIdRef.current !== requestId ||
+          announcementRequestRef.current?.id !== requestId ||
+          !response.ok
+        ) {
           return;
         }
 
@@ -121,7 +139,13 @@ export function AnnouncementCenterContainer({ userId }: AnnouncementCenterProps)
           announcements?: AccountAnnouncement[];
         };
 
-        if (cancelled || !payload.announcements?.length) {
+        if (
+          cancelled ||
+          controller.signal.aborted ||
+          announcementRequestIdRef.current !== requestId ||
+          announcementRequestRef.current?.id !== requestId ||
+          !payload.announcements?.length
+        ) {
           return;
         }
 
@@ -137,6 +161,10 @@ export function AnnouncementCenterContainer({ userId }: AnnouncementCenterProps)
         }
       } catch {
         // Ignore polling errors and keep the current shell usable.
+      } finally {
+        if (announcementRequestRef.current?.id === requestId) {
+          announcementRequestRef.current = null;
+        }
       }
     }
 
@@ -146,6 +174,9 @@ export function AnnouncementCenterContainer({ userId }: AnnouncementCenterProps)
     return () => {
       cancelled = true;
       window.clearInterval(intervalId);
+      announcementRequestRef.current?.controller.abort();
+      announcementRequestRef.current = null;
+      announcementRequestIdRef.current += 1;
     };
   }, [userId]);
 
