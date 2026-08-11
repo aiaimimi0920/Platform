@@ -1,4 +1,4 @@
-import { boolean, integer, jsonb, pgTable, text, timestamp, uniqueIndex } from "drizzle-orm/pg-core";
+import { boolean, index, integer, jsonb, pgTable, text, timestamp, uniqueIndex } from "drizzle-orm/pg-core";
 
 import { users } from "@/modules/identity/schema";
 
@@ -40,6 +40,7 @@ export const agents = pgTable(
   (table) => ({
     ownerNameUnique: uniqueIndex("agents_owner_name_idx").on(table.ownerUserId, table.name),
     ownerIdUnique: uniqueIndex("agents_owner_id_idx").on(table.ownerUserId, table.id),
+    ownerCreatedIdIdx: index("agents_owner_created_id_idx").on(table.ownerUserId, table.createdAt, table.id),
   }),
 );
 
