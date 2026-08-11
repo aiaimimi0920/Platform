@@ -121,7 +121,7 @@ export function useAgentShowcaseConfig({ agentCatalog, agentShowcase }: UseAgent
         throw new Error(payload?.error || "展示智能体保存失败");
       }
 
-      setVisibleAgentShowcase(selectShowcasedAgents(agentCatalog, agentDraftIds));
+      setVisibleAgentShowcase(selectShowcasedAgents(agentCatalog, requestAgentDraftIds));
       setAgentConfigOpen(false);
     } catch (error) {
       if (!mountedRef.current || saveRequestIdRef.current !== requestId) {
@@ -180,6 +180,7 @@ export function useAgentShowcaseConfig({ agentCatalog, agentShowcase }: UseAgent
                         "app-account-honor-agent-config__option",
                         selected && "app-account-honor-agent-config__option--selected",
                       )}
+                      disabled={savingAgentShowcase}
                       key={agent.id}
                       onClick={() => toggleAgentDraft(agent.id)}
                       type="button"

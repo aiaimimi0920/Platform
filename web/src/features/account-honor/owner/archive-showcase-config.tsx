@@ -293,7 +293,7 @@ export function useArchiveShowcaseConfig({
         throw new Error(payload?.error || "展示项目保存失败");
       }
 
-      setVisibleProjectShowcase(selectShowcasedProjects(projectCatalog, projectDraftIds));
+      setVisibleProjectShowcase(selectShowcasedProjects(projectCatalog, requestProjectDraftIds));
       setProjectConfigOpen(false);
     } catch (error) {
       if (!mountedRef.current || saveRequestIdRef.current !== requestId) {
@@ -337,7 +337,7 @@ export function useArchiveShowcaseConfig({
         throw new Error(payload?.error || "议题展示保存失败");
       }
 
-      setVisibleIssueShowcase(selectShowcasedIssues(issueCatalog, issueDraftIds));
+      setVisibleIssueShowcase(selectShowcasedIssues(issueCatalog, requestIssueDraftIds));
       setIssueConfigOpen(false);
     } catch (error) {
       if (!mountedRef.current || saveRequestIdRef.current !== requestId) {
@@ -381,7 +381,9 @@ export function useArchiveShowcaseConfig({
         throw new Error(payload?.error || "投资项目展示保存失败");
       }
 
-      setVisibleSponsorshipSummary(buildLocalSponsorshipSummary(investmentProjectCatalog, investmentDraftIds));
+      setVisibleSponsorshipSummary(
+        buildLocalSponsorshipSummary(investmentProjectCatalog, requestInvestmentDraftIds),
+      );
       setInvestmentConfigOpen(false);
     } catch (error) {
       if (!mountedRef.current || saveRequestIdRef.current !== requestId) {
@@ -425,7 +427,9 @@ export function useArchiveShowcaseConfig({
         throw new Error(payload?.error || "投资议题展示保存失败");
       }
 
-      setVisibleIssueSupportSummary(buildLocalIssueSupportSummary(investmentIssueCatalog, investmentIssueDraftIds));
+      setVisibleIssueSupportSummary(
+        buildLocalIssueSupportSummary(investmentIssueCatalog, requestInvestmentIssueDraftIds),
+      );
       setInvestmentIssueConfigOpen(false);
     } catch (error) {
       if (!mountedRef.current || saveRequestIdRef.current !== requestId) {
@@ -455,6 +459,7 @@ export function useArchiveShowcaseConfig({
                 "app-account-honor-inline-config__option",
                 selected && "app-account-honor-inline-config__option--selected",
               )}
+              disabled={savingProjectShowcase}
               key={project.id}
               onClick={() => toggleProjectDraft(project.id)}
               type="button"
@@ -504,6 +509,7 @@ export function useArchiveShowcaseConfig({
                 "app-account-honor-inline-config__option",
                 selected && "app-account-honor-inline-config__option--selected",
               )}
+              disabled={savingInvestmentShowcase}
               key={project.id}
               onClick={() => toggleInvestmentDraft(project.id)}
               type="button"
@@ -553,6 +559,7 @@ export function useArchiveShowcaseConfig({
                 "app-account-honor-inline-config__option",
                 selected && "app-account-honor-inline-config__option--selected",
               )}
+              disabled={savingIssueShowcase}
               key={issue.id}
               onClick={() => toggleIssueDraft(issue.id)}
               type="button"
@@ -600,6 +607,7 @@ export function useArchiveShowcaseConfig({
                 "app-account-honor-inline-config__option",
                 selected && "app-account-honor-inline-config__option--selected",
               )}
+              disabled={savingInvestmentIssueShowcase}
               key={issue.id}
               onClick={() => toggleInvestmentIssueDraft(issue.id)}
               type="button"

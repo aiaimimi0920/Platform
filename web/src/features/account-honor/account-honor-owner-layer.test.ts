@@ -81,6 +81,11 @@ test("account honor owner saves reject stale responses and unmount updates", () 
     agentShowcaseConfigSource.match(/!mountedRef\.current \|\| saveRequestIdRef\.current !== requestId/g)?.length,
     2,
   );
+  assert.match(
+    agentShowcaseConfigSource,
+    /selectShowcasedAgents\(agentCatalog, requestAgentDraftIds\)/,
+  );
+  assert.match(agentShowcaseConfigSource, /disabled=\{savingAgentShowcase\}/);
   assert.match(archiveShowcaseConfigSource, /function invalidateSaveRequests\(\)/);
   assert.equal(
     archiveShowcaseConfigSource.match(/!mountedRef\.current \|\| saveRequestIdRef\.current !== requestId/g)
@@ -92,4 +97,13 @@ test("account honor owner saves reject stale responses and unmount updates", () 
       ?.length,
     4,
   );
+  for (const requestDraftIds of [
+    "requestProjectDraftIds",
+    "requestIssueDraftIds",
+    "requestInvestmentDraftIds",
+    "requestInvestmentIssueDraftIds",
+  ]) {
+    assert.match(archiveShowcaseConfigSource, new RegExp(`setVisible[\\s\\S]{0,160}${requestDraftIds}`));
+  }
+  assert.equal(archiveShowcaseConfigSource.match(/disabled=\{saving\w+Showcase\}/g)?.length, 8);
 });
