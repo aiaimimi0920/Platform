@@ -30,6 +30,7 @@ export function AnnouncementCenterContainer({ userId }: AnnouncementCenterProps)
   const latestPublishedAtRef = useRef<string | null>(accountAnnouncements[0]?.publishedAt ?? null);
   const [open, setOpen] = useState(false);
   const [hydrated, setHydrated] = useState(false);
+  const [stateUserId, setStateUserId] = useState<string | null>(userId);
   const [announcements, setAnnouncements] = useState<AccountAnnouncement[]>(() =>
     sortAnnouncements(accountAnnouncements),
   );
@@ -37,6 +38,8 @@ export function AnnouncementCenterContainer({ userId }: AnnouncementCenterProps)
   const [selectedId, setSelectedId] = useState(accountAnnouncements[0]?.id ?? null);
   const titleId = useId();
   const latestAnnouncement = announcements[0] ?? null;
+  const identityReady = stateUserId === userId;
+  const visibleOpen = identityReady && open;
 
   const selectedAnnouncement = useMemo(
     () => announcements.find((announcement) => announcement.id === selectedId) ?? latestAnnouncement,
@@ -45,12 +48,13 @@ export function AnnouncementCenterContainer({ userId }: AnnouncementCenterProps)
 
   const hasUnread = Boolean(
     hydrated &&
+      identityReady &&
       userId &&
       isAnnouncementNewer(latestAnnouncement?.publishedAt ?? null, lastSeenPublishedAt),
   );
 
   function markLatestSeen() {
-    if (!userId || !latestAnnouncement) {
+    if (!identityReady || !userId || !latestAnnouncement) {
       return;
     }
 
@@ -59,6 +63,10 @@ export function AnnouncementCenterContainer({ userId }: AnnouncementCenterProps)
   }
 
   function handleOpen() {
+    if (!identityReady) {
+      return;
+    }
+
     if (latestAnnouncement) {
       setSelectedId((current) => current ?? latestAnnouncement.id);
     }
@@ -69,6 +77,9 @@ export function AnnouncementCenterContainer({ userId }: AnnouncementCenterProps)
 
   useEffect(() => {
     setHydrated(true);
+    setStateUserId(userId);
+    setOpen(false);
+    wasOpenRef.current = false;
 
     const seedAnnouncements = sortAnnouncements(accountAnnouncements);
     setAnnouncements(seedAnnouncements);
@@ -87,7 +98,7 @@ export function AnnouncementCenterContainer({ userId }: AnnouncementCenterProps)
   }, [userId]);
 
   useEffect(() => {
-    if (!hydrated || !userId || !latestAnnouncement || initialAutoOpenCheckedRef.current) {
+    if (!hydrated || !identityReady || !userId || !latestAnnouncement || initialAutoOpenCheckedRef.current) {
       return;
     }
 
@@ -100,7 +111,7 @@ export function AnnouncementCenterContainer({ userId }: AnnouncementCenterProps)
     setSelectedId(latestAnnouncement.id);
     setOpen(true);
     markLatestSeen();
-  }, [hydrated, lastSeenPublishedAt, latestAnnouncement, userId]);
+  }, [hydrated, identityReady, lastSeenPublishedAt, latestAnnouncement, userId]);
 
   useEffect(() => {
     if (!userId) {
@@ -181,15 +192,15 @@ export function AnnouncementCenterContainer({ userId }: AnnouncementCenterProps)
   }, [userId]);
 
   useEffect(() => {
-    if (!open) {
+    if (!visibleOpen) {
       return;
     }
 
     return acquireBodyOverlayLock();
-  }, [open]);
+  }, [visibleOpen]);
 
   useEffect(() => {
-    if (open) {
+    if (visibleOpen) {
       wasOpenRef.current = true;
       closeButtonRef.current?.focus();
       return;
@@ -199,10 +210,10 @@ export function AnnouncementCenterContainer({ userId }: AnnouncementCenterProps)
       triggerButtonRef.current?.focus();
       wasOpenRef.current = false;
     }
-  }, [open]);
+  }, [visibleOpen]);
 
   useEffect(() => {
-    if (!open) {
+    if (!visibleOpen) {
       return;
     }
 
@@ -216,7 +227,7 @@ export function AnnouncementCenterContainer({ userId }: AnnouncementCenterProps)
     return () => {
       window.removeEventListener("keydown", handleKeyDown);
     };
-  }, [open]);
+  }, [visibleOpen]);
 
   if (!userId || !latestAnnouncement) {
     return null;
@@ -250,9 +261,9 @@ export function AnnouncementCenterContainer({ userId }: AnnouncementCenterProps)
   return (
     <>
       <button
-        aria-expanded={open}
+        aria-expanded={visibleOpen}
         aria-haspopup="dialog"
-        className={cn("app-announcement-trigger", hasUnread && !open && "app-announcement-trigger--unread")}
+        className={cn("app-announcement-trigger", hasUnread && !visibleOpen && "app-announcement-trigger--unread")}
         onClick={handleOpen}
         ref={triggerButtonRef}
         type="button"
@@ -262,13 +273,13 @@ export function AnnouncementCenterContainer({ userId }: AnnouncementCenterProps)
           <span>公告</span>
         </span>
         {hasUnread ? (
-          <span className={cn("app-announcement-trigger__badge", !open && "app-announcement-trigger__badge--unread")}>
+          <span className={cn("app-announcement-trigger__badge", !visibleOpen && "app-announcement-trigger__badge--unread")}>
             NEW
           </span>
         ) : null}
       </button>
 
-      {open && selectedAnnouncement ? (
+      {visibleOpen && selectedAnnouncement ? (
         <div aria-labelledby={titleId} aria-modal="true" className="app-announcement-overlay" role="dialog">
           <button
             aria-label="关闭公告面板"

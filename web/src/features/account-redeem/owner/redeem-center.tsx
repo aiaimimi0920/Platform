@@ -65,8 +65,12 @@ export function RedeemCenter({ enabled, routeOpen = false, userId }: RedeemCente
   const triggerButtonRef = useRef<HTMLButtonElement | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
   const wasOpenRef = useRef(false);
+  const redeemRequestIdRef = useRef(0);
+  const redeemRequestRef = useRef<{ controller: AbortController; id: number } | null>(null);
+  const activeUserIdRef = useRef(userId);
 
   const [open, setOpen] = useState(false);
+  const [stateUserId, setStateUserId] = useState<string | null>(userId);
   const [code, setCode] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [lastResult, setLastResult] = useState<{
@@ -74,6 +78,9 @@ export function RedeemCenter({ enabled, routeOpen = false, userId }: RedeemCente
     message: string;
     outcome?: "walletGrant" | "itemGrant";
   } | null>(null);
+  const identityReady = stateUserId === userId;
+  const visibleOpen = enabled && identityReady && open;
+  activeUserIdRef.current = userId;
 
   function handleClose() {
     setOpen(false);
@@ -94,7 +101,15 @@ export function RedeemCenter({ enabled, routeOpen = false, userId }: RedeemCente
       });
       return;
     }
+    if (!identityReady || !enabled || !userId || redeemRequestRef.current) {
+      return;
+    }
 
+    const requestUserId = userId;
+    const requestId = redeemRequestIdRef.current + 1;
+    redeemRequestIdRef.current = requestId;
+    const controller = new AbortController();
+    redeemRequestRef.current = { controller, id: requestId };
     setSubmitting(true);
     setLastResult(null);
     try {
@@ -104,8 +119,18 @@ export function RedeemCenter({ enabled, routeOpen = false, userId }: RedeemCente
           "content-type": "application/json",
         },
         body: JSON.stringify({ code: trimmedCode }),
+        signal: controller.signal,
       });
       const payload = (await response.json()) as RedeemResponsePayload;
+
+      if (
+        controller.signal.aborted ||
+        redeemRequestIdRef.current !== requestId ||
+        redeemRequestRef.current?.id !== requestId ||
+        activeUserIdRef.current !== requestUserId
+      ) {
+        return;
+      }
 
       if (!response.ok || !payload.result) {
         throw new Error(payload.error || "兑换失败，请稍后重试。");
@@ -123,6 +148,15 @@ export function RedeemCenter({ enabled, routeOpen = false, userId }: RedeemCente
         message: payload.result.message,
       });
     } catch (error) {
+      if (
+        controller.signal.aborted ||
+        redeemRequestIdRef.current !== requestId ||
+        redeemRequestRef.current?.id !== requestId ||
+        activeUserIdRef.current !== requestUserId
+      ) {
+        return;
+      }
+
       const message = error instanceof Error ? error.message : "兑换失败，请稍后重试。";
       setLastResult({ tone: "error", message });
       pushToast({
@@ -131,27 +165,50 @@ export function RedeemCenter({ enabled, routeOpen = false, userId }: RedeemCente
         message,
       });
     } finally {
-      setSubmitting(false);
+      if (redeemRequestRef.current?.id === requestId) {
+        redeemRequestRef.current = null;
+        if (activeUserIdRef.current === requestUserId) {
+          setSubmitting(false);
+        }
+      }
     }
   }
 
   useEffect(() => {
-    if (!routeOpen || !enabled || !userId) {
+    redeemRequestRef.current?.controller.abort();
+    redeemRequestRef.current = null;
+    redeemRequestIdRef.current += 1;
+    setStateUserId(userId);
+    setOpen(false);
+    setCode("");
+    setSubmitting(false);
+    setLastResult(null);
+    wasOpenRef.current = false;
+
+    return () => {
+      redeemRequestRef.current?.controller.abort();
+      redeemRequestRef.current = null;
+      redeemRequestIdRef.current += 1;
+    };
+  }, [enabled, userId]);
+
+  useEffect(() => {
+    if (!routeOpen || !enabled || !identityReady || !userId) {
       return;
     }
     setOpen(true);
-  }, [enabled, routeOpen, userId]);
+  }, [enabled, identityReady, routeOpen, userId]);
 
   useEffect(() => {
-    if (!open) {
+    if (!visibleOpen) {
       return;
     }
 
     return acquireBodyOverlayLock();
-  }, [open]);
+  }, [visibleOpen]);
 
   useEffect(() => {
-    if (open) {
+    if (visibleOpen) {
       wasOpenRef.current = true;
       closeButtonRef.current?.focus();
       const frameId = window.requestAnimationFrame(() => {
@@ -164,10 +221,10 @@ export function RedeemCenter({ enabled, routeOpen = false, userId }: RedeemCente
       triggerButtonRef.current?.focus();
       wasOpenRef.current = false;
     }
-  }, [open]);
+  }, [visibleOpen]);
 
   useEffect(() => {
-    if (!open) {
+    if (!visibleOpen) {
       return;
     }
 
@@ -181,7 +238,7 @@ export function RedeemCenter({ enabled, routeOpen = false, userId }: RedeemCente
     return () => {
       window.removeEventListener("keydown", handleKeyDown);
     };
-  }, [open, routeOpen]);
+  }, [routeOpen, visibleOpen]);
 
   if (!enabled || !userId) {
     return null;
@@ -190,10 +247,14 @@ export function RedeemCenter({ enabled, routeOpen = false, userId }: RedeemCente
   return (
     <>
       <button
-        aria-expanded={open}
+        aria-expanded={visibleOpen}
         aria-haspopup="dialog"
         className="app-redeem-trigger"
-        onClick={() => setOpen(true)}
+        onClick={() => {
+          if (identityReady) {
+            setOpen(true);
+          }
+        }}
         ref={triggerButtonRef}
         type="button"
       >
@@ -203,7 +264,7 @@ export function RedeemCenter({ enabled, routeOpen = false, userId }: RedeemCente
         </span>
       </button>
 
-      {open ? (
+      {visibleOpen ? (
         <div aria-label="兑换码" aria-modal="true" className="app-redeem-overlay" role="dialog">
           <button
             aria-label="关闭兑换码面板"

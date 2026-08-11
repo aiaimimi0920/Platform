@@ -20,3 +20,12 @@ test("announcement polling skips overlap and cleans up active work", () => {
   );
   assert.match(source, /announcementRequestRef\.current = null;\s*announcementRequestIdRef\.current \+= 1;/);
 });
+
+test("announcement interaction state is isolated across account changes", () => {
+  assert.match(source, /const \[stateUserId, setStateUserId\] = useState<string \| null>\(userId\);/);
+  assert.match(source, /const identityReady = stateUserId === userId;/);
+  assert.match(source, /const visibleOpen = identityReady && open;/);
+  assert.match(source, /setStateUserId\(userId\);\s*setOpen\(false\);\s*wasOpenRef\.current = false;/);
+  assert.match(source, /if \(!identityReady\) \{\s*return;\s*\}/);
+  assert.match(source, /identityReady &&\s*userId/);
+});
