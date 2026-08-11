@@ -17,7 +17,7 @@
     "@neuro/contracts": "*"
   },
   "devDependencies": {
-    "@types/node": "^20.19.27",
+    "@types/node": "^26.1.2",
     "tsx": "^4.20.6",
     "typescript": "^5.8.3"
   }
