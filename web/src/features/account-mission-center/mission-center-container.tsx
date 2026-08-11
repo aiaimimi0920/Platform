@@ -27,18 +27,24 @@ export function MissionCenterContainer({ enabled, userId }: MissionCenterProps) 
   const panelErrorToastRef = useRef<string | null>(null);
   const panelRequestRef = useRef<{ controller: AbortController; id: number } | null>(null);
   const panelRequestIdRef = useRef(0);
+  const activeUserIdRef = useRef(userId);
+  const selectedTabRef = useRef<MissionTabKey>("checkin");
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [panel, setPanel] = useState<MissionPanelView | null>(null);
+  const [panelState, setPanelState] = useState<{ panel: MissionPanelView; userId: string } | null>(null);
   const [selectedTab, setSelectedTab] = useState<MissionTabKey>("checkin");
   const [pendingMissionId, setPendingMissionId] = useState<string | null>(null);
   const [pendingWagerMissionId, setPendingWagerMissionId] = useState<string | null>(null);
+  const panel = panelState?.userId === userId ? panelState.panel : null;
+  activeUserIdRef.current = userId;
+  selectedTabRef.current = selectedTab;
 
   async function refreshPanel(preferredTab?: MissionTabKey) {
     if (!enabled || !userId) {
       return;
     }
 
+    const requestUserId = userId;
     panelRequestRef.current?.controller.abort();
     const requestId = panelRequestIdRef.current + 1;
     panelRequestIdRef.current = requestId;
@@ -59,14 +65,22 @@ export function MissionCenterContainer({ enabled, userId }: MissionCenterProps) 
         throw new Error(payload.error || "福利中心暂时不可用。");
       }
 
-      if (controller.signal.aborted || panelRequestIdRef.current !== requestId) {
+      if (
+        controller.signal.aborted ||
+        panelRequestIdRef.current !== requestId ||
+        activeUserIdRef.current !== requestUserId
+      ) {
         return;
       }
-      setPanel(payload.panel);
+      setPanelState({ panel: payload.panel, userId: requestUserId });
       setSelectedTab(preferredTab ?? (hasCheckinFollowupAction(payload.panel.checkin) ? "checkin" : payload.panel.defaultTab));
       panelErrorToastRef.current = null;
     } catch (error) {
-      if (controller.signal.aborted || panelRequestIdRef.current !== requestId) {
+      if (
+        controller.signal.aborted ||
+        panelRequestIdRef.current !== requestId ||
+        activeUserIdRef.current !== requestUserId
+      ) {
         return;
       }
       const message = error instanceof Error ? error.message : "福利中心暂时不可用。";
@@ -87,6 +101,10 @@ export function MissionCenterContainer({ enabled, userId }: MissionCenterProps) 
   }
 
   async function handleClaimMission(missionId: string) {
+    if (!userId) {
+      return;
+    }
+    const requestUserId = userId;
     setPendingMissionId(missionId);
 
     try {
@@ -105,6 +123,9 @@ export function MissionCenterContainer({ enabled, userId }: MissionCenterProps) 
       if (!response.ok) {
         throw new Error(payload.error || "任务奖励领取失败。");
       }
+      if (activeUserIdRef.current !== requestUserId) {
+        return;
+      }
 
       const rewardCurrencyLabel = payload.reward ? getCurrencyLabel(payload.reward.rewardCurrency) : "米拉";
       pushToast({
@@ -114,19 +135,28 @@ export function MissionCenterContainer({ enabled, userId }: MissionCenterProps) 
           ? `获得 ${payload.reward.rewardPreviewText} ${rewardCurrencyLabel}。可继续押注明日奖励。`
           : `已获得 ${payload.reward?.claimedAmount ?? 0} ${rewardCurrencyLabel}。`,
       });
-      await refreshPanel(selectedTab);
+      await refreshPanel(selectedTabRef.current);
     } catch (error) {
+      if (activeUserIdRef.current !== requestUserId) {
+        return;
+      }
       pushToast({
         tone: "error",
         title: "签到失败",
         message: error instanceof Error ? error.message : "任务奖励领取失败。",
       });
     } finally {
-      setPendingMissionId(null);
+      if (activeUserIdRef.current === requestUserId) {
+        setPendingMissionId(null);
+      }
     }
   }
 
   async function handleCheckinWager(missionId: string) {
+    if (!userId) {
+      return;
+    }
+    const requestUserId = userId;
     setPendingWagerMissionId(missionId);
 
     try {
@@ -146,6 +176,9 @@ export function MissionCenterContainer({ enabled, userId }: MissionCenterProps) 
       if (!response.ok || !payload.wager) {
         throw new Error(payload.error || "签到压注失败。");
       }
+      if (activeUserIdRef.current !== requestUserId) {
+        return;
+      }
 
       const rewardCurrencyLabel = getCurrencyLabel(payload.wager.rewardCurrency);
       pushToast({
@@ -153,17 +186,31 @@ export function MissionCenterContainer({ enabled, userId }: MissionCenterProps) 
         title: "已押注",
         message: `消耗 ${payload.wager.wagerAmount} ${rewardCurrencyLabel}，明日签到将额外获得 ${payload.wager.bonusAmount} ${rewardCurrencyLabel}。`,
       });
-      await refreshPanel(selectedTab);
+      await refreshPanel(selectedTabRef.current);
     } catch (error) {
+      if (activeUserIdRef.current !== requestUserId) {
+        return;
+      }
       pushToast({
         tone: "error",
         title: "押注失败",
         message: error instanceof Error ? error.message : "签到压注失败。",
       });
     } finally {
-      setPendingWagerMissionId(null);
+      if (activeUserIdRef.current === requestUserId) {
+        setPendingWagerMissionId(null);
+      }
     }
   }
+
+  useEffect(() => {
+    setPanelState(null);
+    setLoading(false);
+    setSelectedTab("checkin");
+    setPendingMissionId(null);
+    setPendingWagerMissionId(null);
+    panelErrorToastRef.current = null;
+  }, [userId]);
 
   useEffect(() => {
     if (!enabled || !userId) {

@@ -24,6 +24,13 @@ type UseMailboxCenterOptions = {
   userId: string | null;
 };
 
+type MailboxMessagesState = {
+  messages: MailboxMessageView[];
+  userId: string;
+};
+
+const EMPTY_MAILBOX_MESSAGES: MailboxMessageView[] = [];
+
 export function useMailboxCenter({ enabled, routeOpen, workspace = false, userId }: UseMailboxCenterOptions) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -37,9 +44,10 @@ export function useMailboxCenter({ enabled, routeOpen, workspace = false, userId
   const targetedMessageIdRef = useRef<string | null>(null);
   const mailboxRequestRef = useRef<{ controller: AbortController; id: number } | null>(null);
   const mailboxRequestIdRef = useRef(0);
+  const activeUserIdRef = useRef(userId);
   const titleId = useId();
 
-  const [messages, setMessages] = useState<MailboxMessageView[]>([]);
+  const [messagesState, setMessagesState] = useState<MailboxMessagesState | null>(null);
   const [loading, setLoading] = useState(false);
   const [open, setOpen] = useState(workspace);
   const [error, setError] = useState<string | null>(null);
@@ -49,6 +57,8 @@ export function useMailboxCenter({ enabled, routeOpen, workspace = false, userId
   const [archivingRead, setArchivingRead] = useState(false);
   const [togglingFavorite, setTogglingFavorite] = useState(false);
   const [deletingSelected, setDeletingSelected] = useState(false);
+  const messages = messagesState?.userId === userId ? messagesState.messages : EMPTY_MAILBOX_MESSAGES;
+  activeUserIdRef.current = userId;
 
   const targetedMessageId = searchParams?.get("messageId")?.trim() || null;
   targetedMessageIdRef.current = targetedMessageId;
@@ -78,10 +88,27 @@ export function useMailboxCenter({ enabled, routeOpen, workspace = false, userId
   const canToggleFavoriteSelected = Boolean(selectedMessage && !togglingFavorite && !deletingSelected);
   const canDeleteSelected = Boolean(selectedMessage && !deletingSelected && !togglingFavorite);
 
-  function syncMailboxState(nextMessages: MailboxMessageView[]) {
-    setMessages(nextMessages);
+  function syncMailboxState(nextMessages: MailboxMessageView[], stateUserId: string) {
+    if (activeUserIdRef.current !== stateUserId) {
+      return;
+    }
+    setMessagesState({ messages: nextMessages, userId: stateUserId });
     setSelectedMessageId((current) =>
       resolveMailboxSyncSelection(nextMessages, current, targetedMessageIdRef.current),
+    );
+  }
+
+  function updateMessagesForUser(
+    stateUserId: string,
+    update: (current: MailboxMessageView[]) => MailboxMessageView[],
+  ) {
+    if (activeUserIdRef.current !== stateUserId) {
+      return;
+    }
+    setMessagesState((current) =>
+      current?.userId === stateUserId
+        ? { messages: update(current.messages), userId: stateUserId }
+        : current,
     );
   }
 
@@ -90,6 +117,7 @@ export function useMailboxCenter({ enabled, routeOpen, workspace = false, userId
       return;
     }
 
+    const requestUserId = userId;
     mailboxRequestRef.current?.controller.abort();
     const requestId = mailboxRequestIdRef.current + 1;
     mailboxRequestIdRef.current = requestId;
@@ -110,14 +138,22 @@ export function useMailboxCenter({ enabled, routeOpen, workspace = false, userId
         throw new Error(payload.error || "邮箱暂时不可用。");
       }
 
-      if (controller.signal.aborted || mailboxRequestIdRef.current !== requestId) {
+      if (
+        controller.signal.aborted ||
+        mailboxRequestIdRef.current !== requestId ||
+        activeUserIdRef.current !== requestUserId
+      ) {
         return;
       }
-      syncMailboxState(payload.messages);
+      syncMailboxState(payload.messages, requestUserId);
       setError(null);
       panelErrorToastRef.current = null;
     } catch (error) {
-      if (controller.signal.aborted || mailboxRequestIdRef.current !== requestId) {
+      if (
+        controller.signal.aborted ||
+        mailboxRequestIdRef.current !== requestId ||
+        activeUserIdRef.current !== requestUserId
+      ) {
         return;
       }
       const message = error instanceof Error ? error.message : "邮箱暂时不可用。";
@@ -150,10 +186,11 @@ export function useMailboxCenter({ enabled, routeOpen, workspace = false, userId
   }
 
   async function handleClaimSelectedMessage() {
-    if (!selectedMessage || !canClaimSelected) {
+    if (!selectedMessage || !canClaimSelected || !userId) {
       return;
     }
 
+    const requestUserId = userId;
     setClaimingSelected(true);
     try {
       const response = await fetch(`/api/account-mailbox/messages/${encodeURIComponent(selectedMessage.id)}/claim-all`, {
@@ -169,6 +206,9 @@ export function useMailboxCenter({ enabled, routeOpen, workspace = false, userId
       if (!response.ok || !payload.result) {
         throw new Error(payload.error || "附件领取失败。");
       }
+      if (activeUserIdRef.current !== requestUserId) {
+        return;
+      }
 
       pushToast({
         tone: "success",
@@ -177,21 +217,27 @@ export function useMailboxCenter({ enabled, routeOpen, workspace = false, userId
       });
       await refreshMailbox();
     } catch (error) {
+      if (activeUserIdRef.current !== requestUserId) {
+        return;
+      }
       pushToast({
         tone: "error",
         title: "邮箱",
         message: error instanceof Error ? error.message : "附件领取失败。",
       });
     } finally {
-      setClaimingSelected(false);
+      if (activeUserIdRef.current === requestUserId) {
+        setClaimingSelected(false);
+      }
     }
   }
 
   async function handleClaimAll() {
-    if (claimingAll || totalPendingAttachmentCount <= 0) {
+    if (claimingAll || totalPendingAttachmentCount <= 0 || !userId) {
       return;
     }
 
+    const requestUserId = userId;
     setClaimingAll(true);
     try {
       const response = await fetch("/api/account-mailbox/claim-all", {
@@ -207,6 +253,9 @@ export function useMailboxCenter({ enabled, routeOpen, workspace = false, userId
       if (!response.ok || !payload.result) {
         throw new Error(payload.error || "全部收取失败。");
       }
+      if (activeUserIdRef.current !== requestUserId) {
+        return;
+      }
 
       pushToast({
         tone: "success",
@@ -215,21 +264,27 @@ export function useMailboxCenter({ enabled, routeOpen, workspace = false, userId
       });
       await refreshMailbox();
     } catch (error) {
+      if (activeUserIdRef.current !== requestUserId) {
+        return;
+      }
       pushToast({
         tone: "error",
         title: "邮箱",
         message: error instanceof Error ? error.message : "全部收取失败。",
       });
     } finally {
-      setClaimingAll(false);
+      if (activeUserIdRef.current === requestUserId) {
+        setClaimingAll(false);
+      }
     }
   }
 
   async function handleArchiveRead() {
-    if (archivingRead || readAndClearableCount <= 0) {
+    if (archivingRead || readAndClearableCount <= 0 || !userId) {
       return;
     }
 
+    const requestUserId = userId;
     setArchivingRead(true);
     try {
       const response = await fetch("/api/account-mailbox/archive-read", {
@@ -245,6 +300,9 @@ export function useMailboxCenter({ enabled, routeOpen, workspace = false, userId
       if (!response.ok || !payload.result) {
         throw new Error(payload.error || "删除已读失败。");
       }
+      if (activeUserIdRef.current !== requestUserId) {
+        return;
+      }
 
       pushToast({
         tone: "info",
@@ -256,21 +314,27 @@ export function useMailboxCenter({ enabled, routeOpen, workspace = false, userId
       });
       await refreshMailbox();
     } catch (error) {
+      if (activeUserIdRef.current !== requestUserId) {
+        return;
+      }
       pushToast({
         tone: "error",
         title: "邮箱",
         message: error instanceof Error ? error.message : "删除已读失败。",
       });
     } finally {
-      setArchivingRead(false);
+      if (activeUserIdRef.current === requestUserId) {
+        setArchivingRead(false);
+      }
     }
   }
 
   async function handleToggleSelectedFavorite() {
-    if (!selectedMessage || togglingFavorite || deletingSelected) {
+    if (!selectedMessage || togglingFavorite || deletingSelected || !userId) {
       return;
     }
 
+    const requestUserId = userId;
     const targetMessageId = selectedMessage.id;
     const nextFavorited = !selectedMessage.favoritedAt;
     setTogglingFavorite(true);
@@ -294,8 +358,11 @@ export function useMailboxCenter({ enabled, routeOpen, workspace = false, userId
       if (!response.ok || !payload.result) {
         throw new Error(payload.error || "收藏状态更新失败。");
       }
+      if (activeUserIdRef.current !== requestUserId) {
+        return;
+      }
 
-      setMessages((current) =>
+      updateMessagesForUser(requestUserId, (current) =>
         current.map((message) =>
           message.id === targetMessageId
             ? {
@@ -312,13 +379,18 @@ export function useMailboxCenter({ enabled, routeOpen, workspace = false, userId
         message: nextFavorited ? "已收藏邮件，列表会置顶且自动清理会跳过它。" : "已取消收藏邮件。",
       });
     } catch (error) {
+      if (activeUserIdRef.current !== requestUserId) {
+        return;
+      }
       pushToast({
         tone: "error",
         title: "邮箱",
         message: error instanceof Error ? error.message : "收藏状态更新失败。",
       });
     } finally {
-      setTogglingFavorite(false);
+      if (activeUserIdRef.current === requestUserId) {
+        setTogglingFavorite(false);
+      }
     }
   }
 
@@ -336,9 +408,10 @@ export function useMailboxCenter({ enabled, routeOpen, workspace = false, userId
   }
 
   async function confirmDeleteSelectedMessage() {
-    if (!selectedMessage || deletingSelected) {
+    if (!selectedMessage || deletingSelected || !userId) {
       return;
     }
+    const requestUserId = userId;
     const targetMessageId = selectedMessage.id;
     setDeleteConfirmPending(false);
     setDeletingSelected(true);
@@ -356,8 +429,13 @@ export function useMailboxCenter({ enabled, routeOpen, workspace = false, userId
       if (!response.ok || !payload.result?.deleted) {
         throw new Error(payload.error || "邮件删除失败。");
       }
+      if (activeUserIdRef.current !== requestUserId) {
+        return;
+      }
 
-      setMessages((current) => current.filter((message) => message.id !== targetMessageId));
+      updateMessagesForUser(requestUserId, (current) =>
+        current.filter((message) => message.id !== targetMessageId),
+      );
       setSelectedMessageId((current) => (current === targetMessageId ? null : current));
       void refreshMailbox();
       pushToast({
@@ -366,13 +444,18 @@ export function useMailboxCenter({ enabled, routeOpen, workspace = false, userId
         message: "已删除当前邮件。",
       });
     } catch (error) {
+      if (activeUserIdRef.current !== requestUserId) {
+        return;
+      }
       pushToast({
         tone: "error",
         title: "邮箱",
         message: error instanceof Error ? error.message : "邮件删除失败。",
       });
     } finally {
-      setDeletingSelected(false);
+      if (activeUserIdRef.current === requestUserId) {
+        setDeletingSelected(false);
+      }
     }
   }
 
@@ -380,6 +463,22 @@ export function useMailboxCenter({ enabled, routeOpen, workspace = false, userId
     setOpen(true);
     void refreshMailbox();
   }
+
+  useEffect(() => {
+    setMessagesState(null);
+    setLoading(false);
+    setError(null);
+    setSelectedMessageId(null);
+    setClaimingSelected(false);
+    setClaimingAll(false);
+    setArchivingRead(false);
+    setTogglingFavorite(false);
+    setDeletingSelected(false);
+    setDeleteConfirmPending(false);
+    pendingReadIdsRef.current.clear();
+    appliedTargetedMessageIdRef.current = null;
+    panelErrorToastRef.current = null;
+  }, [userId]);
 
   useEffect(() => {
     if (appliedTargetedMessageIdRef.current === targetedMessageId) {
@@ -470,13 +569,21 @@ export function useMailboxCenter({ enabled, routeOpen, workspace = false, userId
   }, [open, routeOpen, workspace]);
 
   useEffect(() => {
-    if (!open || !selectedMessage || selectedMessage.readAt || pendingReadIdsRef.current.has(selectedMessage.id)) {
+    if (
+      !open ||
+      !userId ||
+      !selectedMessage ||
+      selectedMessage.readAt ||
+      pendingReadIdsRef.current.has(selectedMessage.id)
+    ) {
       return;
     }
 
-    pendingReadIdsRef.current.add(selectedMessage.id);
+    const requestUserId = userId;
+    const targetMessageId = selectedMessage.id;
+    pendingReadIdsRef.current.add(targetMessageId);
 
-    void fetch(`/api/account-mailbox/messages/${encodeURIComponent(selectedMessage.id)}/read`, {
+    void fetch(`/api/account-mailbox/messages/${encodeURIComponent(targetMessageId)}/read`, {
       method: "POST",
     })
       .then(async (response) => {
@@ -489,10 +596,13 @@ export function useMailboxCenter({ enabled, routeOpen, workspace = false, userId
         if (!response.ok || !payload.message?.readAt) {
           throw new Error();
         }
+        if (activeUserIdRef.current !== requestUserId) {
+          return;
+        }
 
-        setMessages((current) =>
+        updateMessagesForUser(requestUserId, (current) =>
           current.map((message) =>
-            message.id === selectedMessage.id
+            message.id === targetMessageId
               ? {
                   ...message,
                   readAt: payload.message?.readAt ?? message.readAt,
@@ -505,9 +615,11 @@ export function useMailboxCenter({ enabled, routeOpen, workspace = false, userId
         // Keep the panel usable even if read receipt write-back fails.
       })
       .finally(() => {
-        pendingReadIdsRef.current.delete(selectedMessage.id);
+        if (activeUserIdRef.current === requestUserId) {
+          pendingReadIdsRef.current.delete(targetMessageId);
+        }
       });
-  }, [open, selectedMessage]);
+  }, [open, selectedMessage, userId]);
 
   return {
     archivingRead,

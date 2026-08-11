@@ -43,7 +43,7 @@ test("P2-05: first mailbox hydration selects a targeted stash while preserving a
 test("P2-05 RED: mailbox polling resolves selection from the latest React state", () => {
   const hookSource = readFileSync(new URL("./use-mailbox-center.ts", import.meta.url), "utf8");
   const syncFunction = hookSource.match(
-    /function syncMailboxState\(nextMessages: MailboxMessageView\[\]\) \{([\s\S]*?)\n  \}/,
+    /function syncMailboxState\(nextMessages: MailboxMessageView\[\], stateUserId: string\) \{([\s\S]*?)\n  \}/,
   )?.[1] ?? "";
 
   assert.match(syncFunction, /setSelectedMessageId\(\(current\) =>/);

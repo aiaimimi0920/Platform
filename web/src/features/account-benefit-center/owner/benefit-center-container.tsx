@@ -137,6 +137,19 @@ export type BenefitCenterProps = {
 
 type CredentialRotateIntent = "refill" | "api";
 
+type BenefitPanelState = {
+  families: SanitizedBenefitFamily[];
+  summary: BenefitPanelView["summary"];
+  userId: string;
+};
+
+type ServiceDetailState = {
+  summary: ServiceDetailSummary;
+  userId: string;
+};
+
+const EMPTY_BENEFIT_FAMILIES: SanitizedBenefitFamily[] = [];
+
 export function BenefitCenterContainer({
   enabled,
   displayMode = "overlay",
@@ -153,6 +166,10 @@ export function BenefitCenterContainer({
   const panelErrorToastRef = useRef<string | null>(null);
   const panelRequestIdRef = useRef(0);
   const panelRequestRef = useRef<{ controller: AbortController; id: number } | null>(null);
+  const serviceDetailRequestIdRef = useRef(0);
+  const serviceDetailRequestRef = useRef<{ controller: AbortController; id: number } | null>(null);
+  const activeUserIdRef = useRef(userId);
+  const selectedServiceIdRef = useRef<string | null>(null);
   const targetedFamilyKeyRef = useRef<string | null>(null);
   const targetedServiceIdRef = useRef<string | null>(null);
   const titleId = useId();
@@ -161,13 +178,16 @@ export function BenefitCenterContainer({
   const [open, setOpen] = useState(workspace);
   const [loading, setLoading] = useState(false);
   const [panelError, setPanelError] = useState<string | null>(null);
-  const [families, setFamilies] = useState<SanitizedBenefitFamily[]>([]);
+  const [panelState, setPanelState] = useState<BenefitPanelState | null>(null);
   const [selectedFamilyKey, setSelectedFamilyKey] = useState<string | null>(null);
-  const [summary, setSummary] = useState<BenefitPanelView["summary"] | null>(null);
-  const [serviceDetailSummary, setServiceDetailSummary] = useState<ServiceDetailSummary | null>(null);
+  const [serviceDetailState, setServiceDetailState] = useState<ServiceDetailState | null>(null);
   const [serviceCredentialLoading, setServiceCredentialLoading] = useState(false);
   const [serviceCredentialError, setServiceCredentialError] = useState<string | null>(null);
   const [credentialRotateIntent, setCredentialRotateIntent] = useState<CredentialRotateIntent | null>(null);
+  const families = panelState?.userId === userId ? panelState.families : EMPTY_BENEFIT_FAMILIES;
+  const summary = panelState?.userId === userId ? panelState.summary : null;
+  const serviceDetailSummary = serviceDetailState?.userId === userId ? serviceDetailState.summary : null;
+  activeUserIdRef.current = userId;
 
   const selectedFamily = useMemo(
     () => families.find((family) => family.key === selectedFamilyKey) ?? families[0] ?? null,
@@ -183,12 +203,14 @@ export function BenefitCenterContainer({
   );
   const { targetedService, refillService, apiService } = serviceSelection;
   const selectedArtificialIntelligenceService = targetedService ?? refillService ?? apiService;
+  selectedServiceIdRef.current = selectedArtificialIntelligenceService?.id ?? null;
 
   async function refreshPanel() {
     if (!enabled || !userId) {
       return;
     }
 
+    const requestUserId = userId;
     panelRequestRef.current?.controller.abort();
     const requestId = panelRequestIdRef.current + 1;
     panelRequestIdRef.current = requestId;
@@ -206,12 +228,15 @@ export function BenefitCenterContainer({
         throw new Error(payload.error || BENEFIT_CENTER_UNAVAILABLE_MESSAGE);
       }
 
-      if (controller.signal.aborted || panelRequestIdRef.current !== requestId) {
+      if (
+        controller.signal.aborted ||
+        panelRequestIdRef.current !== requestId ||
+        activeUserIdRef.current !== requestUserId
+      ) {
         return;
       }
       const normalized = sanitizeBenefitPanel(payload.panel);
-      setFamilies(normalized);
-      setSummary(payload.panel.summary);
+      setPanelState({ families: normalized, summary: payload.panel.summary, userId: requestUserId });
       setSelectedFamilyKey((current) =>
         resolveBenefitFamilySelection(
           normalized,
@@ -223,7 +248,11 @@ export function BenefitCenterContainer({
       setPanelError(null);
       panelErrorToastRef.current = null;
     } catch (error) {
-      if (controller.signal.aborted || panelRequestIdRef.current !== requestId) {
+      if (
+        controller.signal.aborted ||
+        panelRequestIdRef.current !== requestId ||
+        activeUserIdRef.current !== requestUserId
+      ) {
         return;
       }
       const message =
@@ -246,6 +275,22 @@ export function BenefitCenterContainer({
   }
 
   async function fetchServiceDetailSummary() {
+    if (!userId) {
+      return;
+    }
+    const primaryService = targetedService ?? refillService ?? apiService;
+    if (!primaryService) {
+      setServiceCredentialError(BENEFIT_SERVICE_SUMMARY_UNAVAILABLE_MESSAGE);
+      return;
+    }
+
+    const requestUserId = userId;
+    const requestServiceId = primaryService.id;
+    serviceDetailRequestRef.current?.controller.abort();
+    const requestId = serviceDetailRequestIdRef.current + 1;
+    serviceDetailRequestIdRef.current = requestId;
+    const controller = new AbortController();
+    serviceDetailRequestRef.current = { controller, id: requestId };
     setServiceCredentialError(null);
     setServiceCredentialLoading(true);
 
@@ -259,6 +304,7 @@ export function BenefitCenterContainer({
                   fetch(`/api/account-credential-pools/services/${encodeURIComponent(refillService.id)}/credential`, {
                     method: "POST",
                     cache: "no-store",
+                    signal: controller.signal,
                   }),
                 readValue: (payload) => payload.credential as CredentialResolvedPayloadView | undefined,
                 fallbackMessage: "续杯凭证暂不可用。",
@@ -270,6 +316,7 @@ export function BenefitCenterContainer({
                   fetch(`/api/account-benefits/services/${encodeURIComponent(apiService.id)}/api-access`, {
                     method: "POST",
                     cache: "no-store",
+                    signal: controller.signal,
                   }),
                 readValue: (payload) => payload.access as BenefitServiceApiAccessView | undefined,
                 fallbackMessage: "API 访问信息暂不可用。",
@@ -280,6 +327,7 @@ export function BenefitCenterContainer({
                 request: () =>
                   fetch(`/api/account-benefits/services/${encodeURIComponent(apiService.id)}/prompt-cache-summary`, {
                     cache: "no-store",
+                    signal: controller.signal,
                   }),
                 readValue: (payload) => payload.summary as BenefitServicePromptCacheSummaryView | undefined,
                 fallbackMessage: "Prompt Cache 摘要暂不可用。",
@@ -290,6 +338,7 @@ export function BenefitCenterContainer({
                 request: () =>
                   fetch(`/api/account-benefits/services/${encodeURIComponent(apiService.id)}/prompt-cache-trend-report`, {
                     cache: "no-store",
+                    signal: controller.signal,
                   }),
                 readValue: (payload) => payload.report as BenefitServicePromptCacheTrendReportView | undefined,
                 fallbackMessage: "Prompt Cache 走势暂不可用。",
@@ -304,35 +353,67 @@ export function BenefitCenterContainer({
         promptCacheTrendResult.error ? `Prompt Cache 走势：${promptCacheTrendResult.error}` : null,
       ].filter((message): message is string => Boolean(message));
 
-      const primaryService = targetedService ?? refillService ?? apiService;
-      if (!primaryService) {
-        throw new Error(BENEFIT_SERVICE_SUMMARY_UNAVAILABLE_MESSAGE);
+      if (
+        controller.signal.aborted ||
+        serviceDetailRequestIdRef.current !== requestId ||
+        activeUserIdRef.current !== requestUserId ||
+        selectedServiceIdRef.current !== requestServiceId
+      ) {
+        return;
       }
 
-      setServiceDetailSummary(buildServiceDetailSummary(
-        primaryService,
-        refillService,
-        apiService,
-        refillCredentialResult.data,
-        apiAccessResult.data,
-        promptCacheSummaryResult.data,
-        promptCacheTrendResult.data,
-      ));
+      setServiceDetailState({
+        summary: buildServiceDetailSummary(
+          primaryService,
+          refillService,
+          apiService,
+          refillCredentialResult.data,
+          apiAccessResult.data,
+          promptCacheSummaryResult.data,
+          promptCacheTrendResult.data,
+        ),
+        userId: requestUserId,
+      });
       setServiceCredentialError(dependencyErrors.length > 0 ? dependencyErrors.join("；") : null);
     } catch (error) {
-      setServiceDetailSummary(null);
+      if (
+        controller.signal.aborted ||
+        serviceDetailRequestIdRef.current !== requestId ||
+        activeUserIdRef.current !== requestUserId ||
+        selectedServiceIdRef.current !== requestServiceId
+      ) {
+        return;
+      }
+      setServiceDetailState(null);
       setServiceCredentialError(
         error instanceof Error ? error.message : BENEFIT_SERVICE_SUMMARY_UNAVAILABLE_MESSAGE,
       );
     } finally {
-      setServiceCredentialLoading(false);
+      if (serviceDetailRequestRef.current?.id === requestId) {
+        serviceDetailRequestRef.current = null;
+        setServiceCredentialLoading(false);
+      }
     }
+  }
+
+  function clearServiceDetailState() {
+    serviceDetailRequestRef.current?.controller.abort();
+    serviceDetailRequestRef.current = null;
+    serviceDetailRequestIdRef.current += 1;
+    setServiceDetailState(null);
+    setServiceCredentialError(null);
+    setServiceCredentialLoading(false);
+    setCredentialRotateIntent(null);
   }
 
   async function rotateServiceCredential(
     _unused: SanitizedBenefitService | null,
     intent: CredentialRotateIntent,
   ) {
+    if (!userId) {
+      return;
+    }
+    const requestUserId = userId;
     setServiceCredentialError(null);
     setCredentialRotateIntent(intent);
 
@@ -360,9 +441,15 @@ export function BenefitCenterContainer({
           throw new Error(payload.error || BENEFIT_SERVICE_ROTATE_UNAVAILABLE_MESSAGE);
         }
       }
+      if (activeUserIdRef.current !== requestUserId) {
+        return;
+      }
 
       await fetchServiceDetailSummary();
       await refreshPanel();
+      if (activeUserIdRef.current !== requestUserId) {
+        return;
+      }
       pushToast({
         tone: "success",
         title: "羊毛派",
@@ -372,6 +459,9 @@ export function BenefitCenterContainer({
             : "API 密钥已重置，旧 new_api 密钥已失效。",
       });
     } catch (error) {
+      if (activeUserIdRef.current !== requestUserId) {
+        return;
+      }
       const message =
         error instanceof Error ? error.message : BENEFIT_SERVICE_ROTATE_UNAVAILABLE_MESSAGE;
       setServiceCredentialError(message);
@@ -381,7 +471,9 @@ export function BenefitCenterContainer({
         message,
       });
     } finally {
-      setCredentialRotateIntent(null);
+      if (activeUserIdRef.current === requestUserId) {
+        setCredentialRotateIntent(null);
+      }
     }
   }
 
@@ -410,6 +502,15 @@ export function BenefitCenterContainer({
     const query = params.toString();
     router.replace(query ? `/benefits?${query}` : "/benefits", { scroll: false });
   }
+
+  useEffect(() => {
+    setPanelState(null);
+    setPanelError(null);
+    setLoading(false);
+    setSelectedFamilyKey(null);
+    clearServiceDetailState();
+    panelErrorToastRef.current = null;
+  }, [userId]);
 
   useEffect(() => {
     const nextFamilyKey = resolveBenefitFamilySelection(
@@ -472,17 +573,12 @@ export function BenefitCenterContainer({
 
   useEffect(() => {
     if (selectedFamily?.key !== "artificial_intelligence") {
-      setServiceDetailSummary(null);
-      setServiceCredentialError(null);
-      setServiceCredentialLoading(false);
+      clearServiceDetailState();
     }
   }, [selectedFamily?.key]);
 
   useEffect(() => {
-    setServiceDetailSummary(null);
-    setServiceCredentialError(null);
-    setServiceCredentialLoading(false);
-    setCredentialRotateIntent(null);
+    clearServiceDetailState();
   }, [selectedArtificialIntelligenceService?.id]);
 
   useEffect(() => {
@@ -500,10 +596,7 @@ export function BenefitCenterContainer({
 
   useEffect(() => {
     if (!open) {
-      setServiceDetailSummary(null);
-      setServiceCredentialError(null);
-      setServiceCredentialLoading(false);
-      setCredentialRotateIntent(null);
+      clearServiceDetailState();
     }
   }, [open]);
 
