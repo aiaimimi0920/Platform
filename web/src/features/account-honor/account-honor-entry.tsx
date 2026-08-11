@@ -16,46 +16,72 @@ type HonorPanelPayload = {
 };
 
 export function AccountHonorEntry({ userId }: AccountHonorEntryProps) {
-  const [panel, setPanel] = useState<AccountHonorCenterProps | null>(null);
+  const [panelState, setPanelState] = useState<{ userId: string; panel: AccountHonorCenterProps } | null>(null);
   const [loading, setLoading] = useState(false);
   const [openSignal, setOpenSignal] = useState(0);
   const hasPrefetchedRef = useRef(false);
+  const panelRequestRef = useRef<{ controller: AbortController; id: number } | null>(null);
+  const panelRequestIdRef = useRef(0);
+  const panel = panelState?.userId === userId ? panelState.panel : null;
 
-  useEffect(() => {
-    if (!userId) {
-      setPanel(null);
-      hasPrefetchedRef.current = false;
+  async function loadPanel(options?: { openWhenLoaded?: boolean }) {
+    if (!userId || panelRequestRef.current) {
       return;
     }
 
-    let cancelled = false;
+    const requestUserId = userId;
+    const requestId = panelRequestIdRef.current + 1;
+    panelRequestIdRef.current = requestId;
+    const controller = new AbortController();
+    panelRequestRef.current = { controller, id: requestId };
+    setLoading(true);
 
-    async function loadPanel() {
-      try {
-        setLoading(true);
-        const response = await fetch(ACCOUNT_HONOR_PANEL_API_PATH, {
-          cache: "no-store",
-        });
-        const payload = (await response.json()) as HonorPanelPayload;
+    try {
+      const response = await fetch(ACCOUNT_HONOR_PANEL_API_PATH, {
+        cache: "no-store",
+        signal: controller.signal,
+      });
+      const payload = (await response.json()) as HonorPanelPayload;
 
-        if (!response.ok || !payload.panel || cancelled) {
-          return;
-        }
-
-        setPanel(payload.panel);
-        hasPrefetchedRef.current = true;
-      } catch {
-        // Keep the rest of the shell usable when the profile panel cannot prefetch.
-      } finally {
-        if (!cancelled) {
-          setLoading(false);
-        }
+      if (
+        !response.ok ||
+        !payload.panel ||
+        controller.signal.aborted ||
+        panelRequestIdRef.current !== requestId ||
+        panelRequestRef.current?.id !== requestId
+      ) {
+        return;
       }
+
+      hasPrefetchedRef.current = true;
+      setPanelState({ panel: payload.panel, userId: requestUserId });
+      if (options?.openWhenLoaded) {
+        setOpenSignal((current) => current + 1);
+      }
+    } catch {
+      // Keep the rest of the shell usable when the profile panel cannot load.
+    } finally {
+      if (panelRequestRef.current?.id === requestId) {
+        panelRequestRef.current = null;
+        setLoading(false);
+      }
+    }
+  }
+
+  useEffect(() => {
+    setPanelState(null);
+    setLoading(false);
+    hasPrefetchedRef.current = false;
+
+    if (!userId) {
+      return;
     }
 
     void loadPanel();
     return () => {
-      cancelled = true;
+      panelRequestRef.current?.controller.abort();
+      panelRequestRef.current = null;
+      panelRequestIdRef.current += 1;
     };
   }, [userId]);
 
@@ -69,28 +95,11 @@ export function AccountHonorEntry({ userId }: AccountHonorEntryProps) {
       return;
     }
 
-    if (loading) {
+    if (panelRequestRef.current) {
       return;
     }
 
-    try {
-      setLoading(true);
-      const response = await fetch(ACCOUNT_HONOR_PANEL_API_PATH, {
-        cache: "no-store",
-      });
-      const payload = (await response.json()) as HonorPanelPayload;
-      if (!response.ok || !payload.panel) {
-        return;
-      }
-
-      hasPrefetchedRef.current = true;
-      setPanel(payload.panel);
-      setOpenSignal((current) => current + 1);
-    } catch {
-      // Keep the shell stable when the panel cannot be fetched.
-    } finally {
-      setLoading(false);
-    }
+    await loadPanel({ openWhenLoaded: true });
   }
 
   if (!userId) {
