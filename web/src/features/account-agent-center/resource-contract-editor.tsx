@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { NtInput as Input } from "@/components/nt-primitives";
 import { cn } from "@/lib/cn";
@@ -253,8 +253,37 @@ export function ResourceContractEditor({
     [initialSchema],
   );
   const [slots, setSlots] = useState(initialState);
+  const mountedRef = useRef(false);
+  const copyTimeoutsRef = useRef(new Map<(typeof resourceContractSlots)[number], number>());
+  const fileReadVersionRef = useRef(new Map<(typeof resourceContractSlots)[number], number>());
+  const fileReadersRef = useRef(new Map<(typeof resourceContractSlots)[number], FileReader>());
+
+  function invalidateSlotAsyncState(slot: (typeof resourceContractSlots)[number]) {
+    const reader = fileReadersRef.current.get(slot);
+    if (reader?.readyState === FileReader.LOADING) {
+      reader.abort();
+    }
+    fileReadersRef.current.delete(slot);
+    fileReadVersionRef.current.set(slot, (fileReadVersionRef.current.get(slot) ?? 0) + 1);
+
+    const timeoutId = copyTimeoutsRef.current.get(slot);
+    if (timeoutId !== undefined) {
+      window.clearTimeout(timeoutId);
+      copyTimeoutsRef.current.delete(slot);
+    }
+  }
 
   useEffect(() => {
+    mountedRef.current = true;
+
+    return () => {
+      mountedRef.current = false;
+      resourceContractSlots.forEach(invalidateSlotAsyncState);
+    };
+  }, []);
+
+  useEffect(() => {
+    resourceContractSlots.forEach(invalidateSlotAsyncState);
     setSlots(initialState);
   }, [initialState]);
 
@@ -293,6 +322,7 @@ export function ResourceContractEditor({
               className="app-agent-center-contract-editor__type"
               name={`${prefix}FieldType${slot}`}
               onValueChange={(nextType) => {
+                invalidateSlotAsyncState(slot);
                 const previousFileLike = isFileLikeType(state.type);
                 const previousDefault = state.type ? buildDefaultTextValue(prefix, state.type) : "";
                 updateSlot(slot, {
@@ -333,8 +363,19 @@ export function ResourceContractEditor({
                 }
                 try {
                   await navigator.clipboard.writeText(buildCopyMarker(markerId));
+                  const previousTimeoutId = copyTimeoutsRef.current.get(slot);
+                  if (previousTimeoutId !== undefined) {
+                    window.clearTimeout(previousTimeoutId);
+                  }
                   updateSlot(slot, { copied: true });
-                  window.setTimeout(() => {
+                  const timeoutId = window.setTimeout(() => {
+                    if (
+                      !mountedRef.current ||
+                      copyTimeoutsRef.current.get(slot) !== timeoutId
+                    ) {
+                      return;
+                    }
+                    copyTimeoutsRef.current.delete(slot);
                     setSlots((current) => ({
                       ...current,
                       [slot]: {
@@ -343,6 +384,7 @@ export function ResourceContractEditor({
                       },
                     }));
                   }, 1600);
+                  copyTimeoutsRef.current.set(slot, timeoutId);
                 } catch {
                   updateSlot(slot, { copied: false });
                 }
@@ -359,6 +401,8 @@ export function ResourceContractEditor({
                   accept={buildFileAccept(state.type)}
                   className="app-agent-center-file-field__input"
                   onChange={async (event) => {
+                    invalidateSlotAsyncState(slot);
+                    const readVersion = fileReadVersionRef.current.get(slot) ?? 0;
                     const file = event.target.files?.[0];
                     if (!file) {
                       updateSlot(slot, {
@@ -370,10 +414,24 @@ export function ResourceContractEditor({
                     }
                     const dataUrl = await new Promise<string>((resolve, reject) => {
                       const reader = new FileReader();
+                      fileReadersRef.current.set(slot, reader);
                       reader.onload = () => resolve(typeof reader.result === "string" ? reader.result : "");
                       reader.onerror = () => reject(reader.error);
+                      reader.onabort = () => reject(new Error("File read was cancelled"));
                       reader.readAsDataURL(file);
-                    }).catch(() => "");
+                    })
+                      .catch(() => "")
+                      .finally(() => {
+                        if (fileReadersRef.current.get(slot)?.readyState !== FileReader.LOADING) {
+                          fileReadersRef.current.delete(slot);
+                        }
+                      });
+                    if (
+                      !mountedRef.current ||
+                      fileReadVersionRef.current.get(slot) !== readVersion
+                    ) {
+                      return;
+                    }
                     updateSlot(slot, {
                       fileName: file.name,
                       fileContentType: file.type,

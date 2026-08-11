@@ -1,7 +1,9 @@
 "use client";
 
-import { cn } from "@/lib/cn";
+import { useFormStatus } from "react-dom";
+
 import { Badge } from "@/components/ui/badge";
+import { cn } from "@/lib/cn";
 
 import { joinProjectAction } from "../join-actions";
 
@@ -15,6 +17,37 @@ type ProjectJoinPanelProps = {
   membershipStatus: "none" | "pending" | "active" | "rejected";
   membershipRoleLabel: string | null;
 };
+
+function JoinSubmitButton({
+  disabled,
+  membershipStatus,
+}: {
+  disabled: boolean;
+  membershipStatus: ProjectJoinPanelProps["membershipStatus"];
+}) {
+  const { pending } = useFormStatus();
+  const isDisabled = disabled || pending;
+  const label = pending
+    ? "提交中..."
+    : membershipStatus === "active"
+      ? "已加入"
+      : membershipStatus === "pending"
+        ? "等待审批"
+        : "提交加入申请";
+
+  return (
+    <button
+      className={cn(
+        "mg-btn mg-btn--glass app-project-join-panel__submit",
+        isDisabled && "mg-btn--disabled",
+      )}
+      disabled={isDisabled}
+      type="submit"
+    >
+      {label}
+    </button>
+  );
+}
 
 export function ProjectJoinPanel({
   action = joinProjectAction,
@@ -87,13 +120,7 @@ export function ProjectJoinPanel({
           disabled={disabled}
         />
 
-        <button
-          className={cn("mg-btn mg-btn--glass app-project-join-panel__submit", disabled && "mg-btn--disabled")}
-          disabled={disabled}
-          type="submit"
-        >
-          {membershipStatus === "active" ? "已加入" : membershipStatus === "pending" ? "等待审批" : "提交加入申请"}
-        </button>
+        <JoinSubmitButton disabled={disabled} membershipStatus={membershipStatus} />
       </form>
     </section>
   );

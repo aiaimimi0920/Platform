@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
+import { useFormStatus } from "react-dom";
 
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/cn";
@@ -25,6 +26,24 @@ function resolveCurrencyToken(label: string) {
 
 function formatNumber(value: number) {
   return new Intl.NumberFormat("zh-CN").format(value);
+}
+
+function SponsorSubmitButton({ sponsorOpen }: { sponsorOpen: boolean }) {
+  const { pending } = useFormStatus();
+  const disabled = !sponsorOpen || pending;
+
+  return (
+    <button
+      className={cn(
+        "mg-btn mg-btn--glass app-project-sponsor-panel__submit",
+        disabled && "mg-btn--disabled",
+      )}
+      disabled={disabled}
+      type="submit"
+    >
+      {pending ? "提交中..." : sponsorOpen ? "确认赞助" : "暂不接收赞助"}
+    </button>
+  );
 }
 
 export function ProjectSponsorPanel({
@@ -100,13 +119,7 @@ export function ProjectSponsorPanel({
           type="number"
         />
 
-        <button
-          className={cn("mg-btn mg-btn--glass app-project-sponsor-panel__submit", !sponsorOpen && "mg-btn--disabled")}
-          disabled={!sponsorOpen}
-          type="submit"
-        >
-          {sponsorOpen ? "确认赞助" : "暂不接收赞助"}
-        </button>
+        <SponsorSubmitButton sponsorOpen={sponsorOpen} />
       </form>
     </section>
   );
