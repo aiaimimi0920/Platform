@@ -62,6 +62,8 @@ export type AccountHonorTaglineEditorProps = {
 
 export function AccountHonorTaglineEditor({ profileTagline }: AccountHonorTaglineEditorProps) {
   const taglineInputRef = useRef<HTMLInputElement | null>(null);
+  const mountedRef = useRef(false);
+  const saveRequestIdRef = useRef(0);
   const [taglineValue, setTaglineValue] = useState(profileTagline ?? "");
   const [taglineDraft, setTaglineDraft] = useState(profileTagline ?? "");
   const [editingTagline, setEditingTagline] = useState(false);
@@ -69,9 +71,22 @@ export function AccountHonorTaglineEditor({ profileTagline }: AccountHonorTaglin
   const [taglineError, setTaglineError] = useState<string | null>(null);
 
   useEffect(() => {
+    mountedRef.current = true;
+
+    return () => {
+      mountedRef.current = false;
+      saveRequestIdRef.current += 1;
+    };
+  }, []);
+
+  useEffect(() => {
+    saveRequestIdRef.current += 1;
     const nextTagline = profileTagline ?? "";
     setTaglineValue(nextTagline);
     setTaglineDraft(nextTagline);
+    setEditingTagline(false);
+    setSavingTagline(false);
+    setTaglineError(null);
   }, [profileTagline]);
 
   useEffect(() => {
@@ -88,6 +103,9 @@ export function AccountHonorTaglineEditor({ profileTagline }: AccountHonorTaglin
 
     setSavingTagline(true);
     setTaglineError(null);
+    const requestId = saveRequestIdRef.current + 1;
+    saveRequestIdRef.current = requestId;
+    const requestTagline = taglineDraft.trim() ? taglineDraft : null;
 
     try {
       const response = await fetch("/api/account-honor/profile", {
@@ -96,13 +114,17 @@ export function AccountHonorTaglineEditor({ profileTagline }: AccountHonorTaglin
           "content-type": "application/json",
         },
         body: JSON.stringify({
-          profileTagline: taglineDraft.trim() ? taglineDraft : null,
+          profileTagline: requestTagline,
         }),
       });
 
       const payload = (await response.json().catch(() => null)) as
         | { user?: { profileTagline?: string | null } | null; error?: string }
         | null;
+
+      if (!mountedRef.current || saveRequestIdRef.current !== requestId) {
+        return;
+      }
 
       if (!response.ok) {
         throw new Error(payload?.error || "保存失败");
@@ -113,9 +135,14 @@ export function AccountHonorTaglineEditor({ profileTagline }: AccountHonorTaglin
       setTaglineDraft(nextTagline);
       setEditingTagline(false);
     } catch (error) {
+      if (!mountedRef.current || saveRequestIdRef.current !== requestId) {
+        return;
+      }
       setTaglineError(error instanceof Error ? error.message : "保存失败");
     } finally {
-      setSavingTagline(false);
+      if (mountedRef.current && saveRequestIdRef.current === requestId) {
+        setSavingTagline(false);
+      }
     }
   }
 

@@ -61,3 +61,35 @@ test("account honor archive showcase editing state lives in the owner layer", ()
   assert.match(archiveShowcaseConfigSource, /honorShowcasedInvestmentIssueIds/);
   assert.match(ownerIndexSource, /useArchiveShowcaseConfig/);
 });
+
+test("account honor owner saves reject stale responses and unmount updates", () => {
+  const taglineEditorSource = readFileSync(taglineEditorUrl, "utf8");
+  const agentShowcaseConfigSource = readFileSync(agentShowcaseConfigUrl, "utf8");
+  const archiveShowcaseConfigSource = readFileSync(archiveShowcaseConfigUrl, "utf8");
+
+  for (const source of [taglineEditorSource, agentShowcaseConfigSource, archiveShowcaseConfigSource]) {
+    assert.match(source, /const mountedRef = useRef\(false\);/);
+    assert.match(source, /const saveRequestIdRef = useRef\(0\);/);
+    assert.match(source, /mountedRef\.current = false;\s*saveRequestIdRef\.current \+= 1;/);
+  }
+
+  assert.equal(
+    taglineEditorSource.match(/!mountedRef\.current \|\| saveRequestIdRef\.current !== requestId/g)?.length,
+    2,
+  );
+  assert.equal(
+    agentShowcaseConfigSource.match(/!mountedRef\.current \|\| saveRequestIdRef\.current !== requestId/g)?.length,
+    2,
+  );
+  assert.match(archiveShowcaseConfigSource, /function invalidateSaveRequests\(\)/);
+  assert.equal(
+    archiveShowcaseConfigSource.match(/!mountedRef\.current \|\| saveRequestIdRef\.current !== requestId/g)
+      ?.length,
+    8,
+  );
+  assert.equal(
+    archiveShowcaseConfigSource.match(/mountedRef\.current && saveRequestIdRef\.current === requestId/g)
+      ?.length,
+    4,
+  );
+});

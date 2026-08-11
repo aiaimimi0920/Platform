@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { formatAccountNumber } from "@/lib/account-center";
 import { cn } from "@/lib/cn";
@@ -35,6 +35,8 @@ export function useArchiveShowcaseConfig({
   projectShowcase,
   sponsorshipSummary,
 }: UseArchiveShowcaseConfigProps) {
+  const mountedRef = useRef(false);
+  const saveRequestIdRef = useRef(0);
   const [issueConfigOpen, setIssueConfigOpen] = useState(false);
   const [investmentIssueConfigOpen, setInvestmentIssueConfigOpen] = useState(false);
   const [projectConfigOpen, setProjectConfigOpen] = useState(false);
@@ -60,25 +62,54 @@ export function useArchiveShowcaseConfig({
   const [projectShowcaseError, setProjectShowcaseError] = useState<string | null>(null);
   const [investmentShowcaseError, setInvestmentShowcaseError] = useState<string | null>(null);
 
+  function invalidateSaveRequests() {
+    saveRequestIdRef.current += 1;
+    setSavingIssueShowcase(false);
+    setSavingInvestmentIssueShowcase(false);
+    setSavingProjectShowcase(false);
+    setSavingInvestmentShowcase(false);
+  }
+
   useEffect(() => {
+    invalidateSaveRequests();
     setVisibleIssueShowcase(issueShowcase);
     setIssueDraftIds(issueShowcase.map((issue) => issue.id));
+    setIssueConfigOpen(false);
+    setIssueShowcaseError(null);
   }, [issueShowcase]);
 
   useEffect(() => {
+    invalidateSaveRequests();
     setVisibleIssueSupportSummary(issueSupportSummary);
     setInvestmentIssueDraftIds(issueSupportSummary.supportedIssues.map((issue) => issue.id));
+    setInvestmentIssueConfigOpen(false);
+    setInvestmentIssueShowcaseError(null);
   }, [issueSupportSummary]);
 
   useEffect(() => {
+    invalidateSaveRequests();
     setVisibleProjectShowcase(projectShowcase);
     setProjectDraftIds(projectShowcase.map((project) => project.id));
+    setProjectConfigOpen(false);
+    setProjectShowcaseError(null);
   }, [projectShowcase]);
 
   useEffect(() => {
+    invalidateSaveRequests();
     setVisibleSponsorshipSummary(sponsorshipSummary);
     setInvestmentDraftIds(sponsorshipSummary.sponsoredProjects.map((project) => project.id));
+    setInvestmentConfigOpen(false);
+    setInvestmentShowcaseError(null);
   }, [sponsorshipSummary]);
+
+  useEffect(() => {
+    mountedRef.current = true;
+
+    return () => {
+      mountedRef.current = false;
+      saveRequestIdRef.current += 1;
+    };
+  }, []);
 
   useEffect(() => {
     if (!projectConfigOpen && !investmentConfigOpen && !issueConfigOpen && !investmentIssueConfigOpen) {
@@ -237,8 +268,11 @@ export function useArchiveShowcaseConfig({
       return;
     }
 
+    invalidateSaveRequests();
     setSavingProjectShowcase(true);
     setProjectShowcaseError(null);
+    const requestId = saveRequestIdRef.current;
+    const requestProjectDraftIds = [...projectDraftIds];
 
     try {
       const response = await fetch("/api/account-honor/profile", {
@@ -247,11 +281,14 @@ export function useArchiveShowcaseConfig({
           "content-type": "application/json",
         },
         body: JSON.stringify({
-          honorShowcasedProjectIds: projectDraftIds,
+          honorShowcasedProjectIds: requestProjectDraftIds,
         }),
       });
 
       const payload = (await response.json().catch(() => null)) as { error?: string } | null;
+      if (!mountedRef.current || saveRequestIdRef.current !== requestId) {
+        return;
+      }
       if (!response.ok) {
         throw new Error(payload?.error || "展示项目保存失败");
       }
@@ -259,9 +296,14 @@ export function useArchiveShowcaseConfig({
       setVisibleProjectShowcase(selectShowcasedProjects(projectCatalog, projectDraftIds));
       setProjectConfigOpen(false);
     } catch (error) {
+      if (!mountedRef.current || saveRequestIdRef.current !== requestId) {
+        return;
+      }
       setProjectShowcaseError(error instanceof Error ? error.message : "展示项目保存失败");
     } finally {
-      setSavingProjectShowcase(false);
+      if (mountedRef.current && saveRequestIdRef.current === requestId) {
+        setSavingProjectShowcase(false);
+      }
     }
   }
 
@@ -270,8 +312,11 @@ export function useArchiveShowcaseConfig({
       return;
     }
 
+    invalidateSaveRequests();
     setSavingIssueShowcase(true);
     setIssueShowcaseError(null);
+    const requestId = saveRequestIdRef.current;
+    const requestIssueDraftIds = [...issueDraftIds];
 
     try {
       const response = await fetch("/api/account-honor/profile", {
@@ -280,11 +325,14 @@ export function useArchiveShowcaseConfig({
           "content-type": "application/json",
         },
         body: JSON.stringify({
-          honorShowcasedIssueIds: issueDraftIds,
+          honorShowcasedIssueIds: requestIssueDraftIds,
         }),
       });
 
       const payload = (await response.json().catch(() => null)) as { error?: string } | null;
+      if (!mountedRef.current || saveRequestIdRef.current !== requestId) {
+        return;
+      }
       if (!response.ok) {
         throw new Error(payload?.error || "议题展示保存失败");
       }
@@ -292,9 +340,14 @@ export function useArchiveShowcaseConfig({
       setVisibleIssueShowcase(selectShowcasedIssues(issueCatalog, issueDraftIds));
       setIssueConfigOpen(false);
     } catch (error) {
+      if (!mountedRef.current || saveRequestIdRef.current !== requestId) {
+        return;
+      }
       setIssueShowcaseError(error instanceof Error ? error.message : "议题展示保存失败");
     } finally {
-      setSavingIssueShowcase(false);
+      if (mountedRef.current && saveRequestIdRef.current === requestId) {
+        setSavingIssueShowcase(false);
+      }
     }
   }
 
@@ -303,8 +356,11 @@ export function useArchiveShowcaseConfig({
       return;
     }
 
+    invalidateSaveRequests();
     setSavingInvestmentShowcase(true);
     setInvestmentShowcaseError(null);
+    const requestId = saveRequestIdRef.current;
+    const requestInvestmentDraftIds = [...investmentDraftIds];
 
     try {
       const response = await fetch("/api/account-honor/profile", {
@@ -313,11 +369,14 @@ export function useArchiveShowcaseConfig({
           "content-type": "application/json",
         },
         body: JSON.stringify({
-          honorShowcasedInvestmentProjectIds: investmentDraftIds,
+          honorShowcasedInvestmentProjectIds: requestInvestmentDraftIds,
         }),
       });
 
       const payload = (await response.json().catch(() => null)) as { error?: string } | null;
+      if (!mountedRef.current || saveRequestIdRef.current !== requestId) {
+        return;
+      }
       if (!response.ok) {
         throw new Error(payload?.error || "投资项目展示保存失败");
       }
@@ -325,9 +384,14 @@ export function useArchiveShowcaseConfig({
       setVisibleSponsorshipSummary(buildLocalSponsorshipSummary(investmentProjectCatalog, investmentDraftIds));
       setInvestmentConfigOpen(false);
     } catch (error) {
+      if (!mountedRef.current || saveRequestIdRef.current !== requestId) {
+        return;
+      }
       setInvestmentShowcaseError(error instanceof Error ? error.message : "投资项目展示保存失败");
     } finally {
-      setSavingInvestmentShowcase(false);
+      if (mountedRef.current && saveRequestIdRef.current === requestId) {
+        setSavingInvestmentShowcase(false);
+      }
     }
   }
 
@@ -336,8 +400,11 @@ export function useArchiveShowcaseConfig({
       return;
     }
 
+    invalidateSaveRequests();
     setSavingInvestmentIssueShowcase(true);
     setInvestmentIssueShowcaseError(null);
+    const requestId = saveRequestIdRef.current;
+    const requestInvestmentIssueDraftIds = [...investmentIssueDraftIds];
 
     try {
       const response = await fetch("/api/account-honor/profile", {
@@ -346,11 +413,14 @@ export function useArchiveShowcaseConfig({
           "content-type": "application/json",
         },
         body: JSON.stringify({
-          honorShowcasedInvestmentIssueIds: investmentIssueDraftIds,
+          honorShowcasedInvestmentIssueIds: requestInvestmentIssueDraftIds,
         }),
       });
 
       const payload = (await response.json().catch(() => null)) as { error?: string } | null;
+      if (!mountedRef.current || saveRequestIdRef.current !== requestId) {
+        return;
+      }
       if (!response.ok) {
         throw new Error(payload?.error || "投资议题展示保存失败");
       }
@@ -358,9 +428,14 @@ export function useArchiveShowcaseConfig({
       setVisibleIssueSupportSummary(buildLocalIssueSupportSummary(investmentIssueCatalog, investmentIssueDraftIds));
       setInvestmentIssueConfigOpen(false);
     } catch (error) {
+      if (!mountedRef.current || saveRequestIdRef.current !== requestId) {
+        return;
+      }
       setInvestmentIssueShowcaseError(error instanceof Error ? error.message : "投资议题展示保存失败");
     } finally {
-      setSavingInvestmentIssueShowcase(false);
+      if (mountedRef.current && saveRequestIdRef.current === requestId) {
+        setSavingInvestmentIssueShowcase(false);
+      }
     }
   }
 

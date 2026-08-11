@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
 import { cn } from "@/lib/cn";
@@ -26,6 +26,8 @@ function InlineDialogCloseIcon() {
 export type UseAgentShowcaseConfigProps = Pick<AccountHonorPanelData, "agentCatalog" | "agentShowcase">;
 
 export function useAgentShowcaseConfig({ agentCatalog, agentShowcase }: UseAgentShowcaseConfigProps) {
+  const mountedRef = useRef(false);
+  const saveRequestIdRef = useRef(0);
   const [agentConfigOpen, setAgentConfigOpen] = useState(false);
   const [visibleAgentShowcase, setVisibleAgentShowcase] = useState(agentShowcase);
   const [agentDraftIds, setAgentDraftIds] = useState(agentShowcase.map((agent) => agent.id));
@@ -33,9 +35,22 @@ export function useAgentShowcaseConfig({ agentCatalog, agentShowcase }: UseAgent
   const [agentShowcaseError, setAgentShowcaseError] = useState<string | null>(null);
 
   useEffect(() => {
+    saveRequestIdRef.current += 1;
     setVisibleAgentShowcase(agentShowcase);
     setAgentDraftIds(agentShowcase.map((agent) => agent.id));
+    setAgentConfigOpen(false);
+    setSavingAgentShowcase(false);
+    setAgentShowcaseError(null);
   }, [agentShowcase]);
+
+  useEffect(() => {
+    mountedRef.current = true;
+
+    return () => {
+      mountedRef.current = false;
+      saveRequestIdRef.current += 1;
+    };
+  }, []);
 
   useEffect(() => {
     if (!agentConfigOpen) {
@@ -83,6 +98,9 @@ export function useAgentShowcaseConfig({ agentCatalog, agentShowcase }: UseAgent
 
     setSavingAgentShowcase(true);
     setAgentShowcaseError(null);
+    const requestId = saveRequestIdRef.current + 1;
+    saveRequestIdRef.current = requestId;
+    const requestAgentDraftIds = [...agentDraftIds];
 
     try {
       const response = await fetch("/api/account-honor/profile", {
@@ -91,11 +109,14 @@ export function useAgentShowcaseConfig({ agentCatalog, agentShowcase }: UseAgent
           "content-type": "application/json",
         },
         body: JSON.stringify({
-          honorShowcasedAgentIds: agentDraftIds,
+          honorShowcasedAgentIds: requestAgentDraftIds,
         }),
       });
 
       const payload = (await response.json().catch(() => null)) as { error?: string } | null;
+      if (!mountedRef.current || saveRequestIdRef.current !== requestId) {
+        return;
+      }
       if (!response.ok) {
         throw new Error(payload?.error || "展示智能体保存失败");
       }
@@ -103,9 +124,14 @@ export function useAgentShowcaseConfig({ agentCatalog, agentShowcase }: UseAgent
       setVisibleAgentShowcase(selectShowcasedAgents(agentCatalog, agentDraftIds));
       setAgentConfigOpen(false);
     } catch (error) {
+      if (!mountedRef.current || saveRequestIdRef.current !== requestId) {
+        return;
+      }
       setAgentShowcaseError(error instanceof Error ? error.message : "展示智能体保存失败");
     } finally {
-      setSavingAgentShowcase(false);
+      if (mountedRef.current && saveRequestIdRef.current === requestId) {
+        setSavingAgentShowcase(false);
+      }
     }
   }
 
