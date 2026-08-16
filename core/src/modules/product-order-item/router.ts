@@ -140,6 +140,11 @@ const productIdParamsSchema = z.object({
   productId: z.string().trim().min(1),
 });
 
+const listOperatorProductsQuerySchema = z.object({
+  cursor: z.string().trim().min(1).optional(),
+  limit: z.coerce.number().int().min(1).max(100).optional(),
+});
+
 const itemIdParamsSchema = z.object({
   itemId: z.string().trim().min(1),
 });
@@ -332,14 +337,16 @@ export const productOrderItemRouter: FastifyPluginAsync = async (app) => {
     },
   );
 
-  app.get("/v1/internal/products", { preHandler: withInternalRequest }, async (request) => {
-    await requireModuleEnabled("product");
-    const { userId, providerUserId } = assertUserContext(request);
-    assertPlatformOperator(userId, providerUserId);
-    return {
-      products: await listProductsForOperator(),
-    };
-  });
+  app.get<{ Querystring: z.infer<typeof listOperatorProductsQuerySchema> }>(
+    "/v1/internal/products",
+    { preHandler: withInternalRequest },
+    async (request) => {
+      await requireModuleEnabled("product");
+      const { userId, providerUserId } = assertUserContext(request);
+      assertPlatformOperator(userId, providerUserId);
+      return listProductsForOperator(listOperatorProductsQuerySchema.parse(request.query));
+    },
+  );
 
   app.post<{
     Params: z.infer<typeof productIdParamsSchema>;

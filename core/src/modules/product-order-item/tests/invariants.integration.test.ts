@@ -63,6 +63,7 @@ if (!databaseUrl) {
       ensureDefaultProducts,
       getUserItems,
       getUserOrders,
+      listProductsForOperator,
       rollbackOrderAsOperator,
       upsertProductDefinitionAsOperator,
     } = await import("../service");
@@ -121,6 +122,27 @@ if (!databaseUrl) {
       gatewayAccessGrantMode: null,
       gatewayAccessGrantQuantity: null,
     });
+
+    const firstProductPage = await listProductsForOperator({ limit: 1 });
+    const productCountRows = await pool.query<{ count: string }>("select count(*)::text as count from products");
+    assert.equal(firstProductPage.products.length, 1);
+    assert.equal(firstProductPage.pageInfo.limit, 1);
+    assert.equal(firstProductPage.pageInfo.totalCount, Number(productCountRows.rows[0]?.count ?? 0));
+    assert.equal(firstProductPage.pageInfo.hasMore, true);
+    assert.ok(firstProductPage.pageInfo.nextCursor);
+
+    const secondProductPage = await listProductsForOperator({
+      limit: 1,
+      cursor: firstProductPage.pageInfo.nextCursor,
+    });
+    assert.equal(secondProductPage.products.length, 1);
+    assert.notEqual(secondProductPage.products[0]?.id, firstProductPage.products[0]?.id);
+    assert.equal(secondProductPage.pageInfo.hasMore, true);
+    assert.notEqual(secondProductPage.pageInfo.nextCursor, firstProductPage.pageInfo.nextCursor);
+    await assert.rejects(
+      () => listProductsForOperator({ cursor: "not-a-valid-cursor", limit: 1 }),
+      /Invalid operator product cursor/i,
+    );
 
     const durationOrder = await createOrder(buyerUserId, "product_codex_refill_1d");
     assert.equal(durationOrder.order.status, "fulfilled");

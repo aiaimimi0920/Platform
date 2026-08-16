@@ -119,6 +119,8 @@ export const arbitrationEvidenceAttachments = pgTable(
     lastCleanupAttemptAt: timestamp("last_cleanup_attempt_at", { withTimezone: true }),
     lastCleanupError: text("last_cleanup_error"),
     nextCleanupAttemptAt: timestamp("next_cleanup_attempt_at", { withTimezone: true }),
+    cleanupLeaseToken: text("cleanup_lease_token"),
+    cleanupLeaseExpiresAt: timestamp("cleanup_lease_expires_at", { withTimezone: true }),
     archivedAt: timestamp("archived_at", { withTimezone: true }),
     archiveReason: text("archive_reason"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull(),

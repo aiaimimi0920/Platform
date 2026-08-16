@@ -8,7 +8,7 @@ import {
 } from "@/components/products/operator-product-editor";
 import { auth } from "@/auth";
 import { DependencyState } from "@/components/dependency-state";
-import { getFeatureSnapshot, listOperatorProducts } from "@/lib/core-client";
+import { getFeatureSnapshot, listOperatorProductPage } from "@/lib/core-client";
 import { getGatewayAccessCatalog } from "@/lib/account-client";
 import {
   createDependencyFailureResult,
@@ -20,6 +20,7 @@ type ProductOpsPageProps = {
   searchParams?: Promise<{
     status?: string;
     message?: string;
+    cursor?: string;
   }>;
 };
 
@@ -37,6 +38,7 @@ export default async function ProductOpsPage({ searchParams }: ProductOpsPagePro
   const params = searchParams ? await searchParams : {};
   const status = params.status || "";
   const message = params.message || "";
+  const cursor = params.cursor?.trim() || null;
 
   const isOperator = isPlatformOperatorUserId(session.user.id, session.user.providerUserId);
   const features = await getFeatureSnapshot();
@@ -62,8 +64,8 @@ export default async function ProductOpsPage({ searchParams }: ProductOpsPagePro
   }
 
   const userContext = { userId: session.user.id, providerUserId: session.user.providerUserId ?? undefined };
-  const [operatorProducts, bundleCatalogResult] = await Promise.all([
-    listOperatorProducts(userContext),
+  const [productPage, bundleCatalogResult] = await Promise.all([
+    listOperatorProductPage(userContext, { cursor, limit: 30 }),
     getGatewayAccessCatalog(userContext)
       .then((catalog) => ({
         bundles: catalog.bundles.map<OperatorProductBundleOption>((bundle) => ({
@@ -86,10 +88,11 @@ export default async function ProductOpsPage({ searchParams }: ProductOpsPagePro
         }),
       }) satisfies BundleCatalogResult),
   ]);
+  const operatorProducts = productPage.products;
   const redirectTo = "/ops/products";
 
-  const activeCount = operatorProducts.filter((p) => p.active).length;
-  const inactiveCount = operatorProducts.filter((p) => !p.active).length;
+  const activeCount = productPage.pageInfo.activeCount;
+  const inactiveCount = productPage.pageInfo.inactiveCount;
 
   return (
     <main className="ops-main">
@@ -127,7 +130,7 @@ export default async function ProductOpsPage({ searchParams }: ProductOpsPagePro
               </thead>
               <tbody>
                 <tr>
-                  <td>{operatorProducts.length}</td>
+                  <td>{productPage.pageInfo.totalCount}</td>
                   <td>
                     <span className="ops-status-dot ops-status-dot--active">{activeCount}</span>
                   </td>
@@ -159,6 +162,21 @@ export default async function ProductOpsPage({ searchParams }: ProductOpsPagePro
               />
             ))
           )}
+          <div className="app-inline-actions" style={{ marginTop: 16 }}>
+            {cursor ? (
+              <Link className="ops-form__submit" href="/ops/products">
+                返回第一页
+              </Link>
+            ) : null}
+            {productPage.pageInfo.nextCursor ? (
+              <Link
+                className="ops-form__submit"
+                href={`/ops/products?${new URLSearchParams({ cursor: productPage.pageInfo.nextCursor }).toString()}`}
+              >
+                下一页
+              </Link>
+            ) : null}
+          </div>
         </div>
 
         {features.discountCode.enabled ? (

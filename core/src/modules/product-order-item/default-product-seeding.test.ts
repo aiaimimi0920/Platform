@@ -3,7 +3,10 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import test from "node:test";
 
-const source = readFileSync(path.resolve(process.cwd(), "src/modules/product-order-item/service.ts"), "utf8");
+const source = readFileSync(
+  path.resolve(process.cwd(), "src/modules/product-order-item/service/product-catalog.ts"),
+  "utf8",
+);
 
 test("default product seeding is safe across concurrent callers and replicas", () => {
   assert.match(source, /_defaultProductsEnsurePromise/);

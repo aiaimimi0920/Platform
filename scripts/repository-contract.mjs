@@ -207,13 +207,15 @@ describe("independent Platform repository", () => {
   });
 
   it("keeps Arbitration summary and workload on compact metric projections", () => {
-    const service = read("core/src/modules/arbitration/service.ts");
-    const summaryBlock = service
+    const serviceFacade = read("core/src/modules/arbitration/service.ts");
+    const metricsService = read("core/src/modules/arbitration/service/metrics-summary.ts");
+    assert(serviceFacade.includes("getVisibleArbitrationCaseSummary"));
+    assert(serviceFacade.includes("getArbitrationCaseWorkload"));
+    const summaryBlock = metricsService
       .split("export async function getVisibleArbitrationCaseSummary")[1]
       ?.split("export async function getArbitrationCaseWorkload")[0] ?? "";
-    const workloadBlock = service
-      .split("export async function getArbitrationCaseWorkload")[1]
-      ?.split("export async function createArbitrationCase")[0] ?? "";
+    const workloadBlock = metricsService
+      .split("export async function getArbitrationCaseWorkload")[1] ?? "";
     assert(summaryBlock.includes("listArbitrationCaseMetricRowsVisibleToUser"));
     assert(summaryBlock.includes("listTaskParticipantRowsByIds"));
     assert(summaryBlock.includes("listArbitrationEvidenceMetricsByCaseIds"));

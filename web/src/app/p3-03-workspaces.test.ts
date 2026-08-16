@@ -42,7 +42,18 @@ test("P3-03: benefits is a direct workspace and applies family/service deep link
 
 test("P3-03: my-arbitrations renders owner-scoped evidence without operator workload", () => {
   const pageSource = read("./my-arbitrations/page.tsx");
-  const arbitrationSource = read("./arbitrations/page.tsx");
+  const arbitrationPageSource = read("./arbitrations/page.tsx");
+  const arbitrationSectionSources = [
+    "../features/arbitration-center/shared/arbitration-follow-up-fields.tsx",
+    "../features/arbitration-center/shared/arbitration-summary-cards.tsx",
+    "../features/arbitration-center/shared/arbitration-case-filters-card.tsx",
+    "../features/arbitration-center/owner/arbitration-intake-section.tsx",
+    "../features/arbitration-center/owner/arbitration-case-list-section.tsx",
+    "../features/arbitration-center/owner/arbitration-case-card.tsx",
+    "../features/arbitration-center/ops/arbitration-workload-card.tsx",
+    "../features/arbitration-center/ops/arbitration-cleanup-queue-card.tsx",
+  ].map(read);
+  const arbitrationSource = [arbitrationPageSource, ...arbitrationSectionSources].join("\n");
   const shellSource = read("../components/app-shell.tsx");
   const benefitSource = read("../features/account-benefit-center/owner/benefit-center-container.tsx");
 

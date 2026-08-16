@@ -4,6 +4,9 @@ import test from "node:test";
 import { Pool } from "pg";
 
 const databaseUrl = process.env.DATABASE_URL?.trim() || null;
+process.env.ARBITRATION_EVIDENCE_STORAGE_POLICIES_JSON = JSON.stringify({
+  default: { cleanupMode: "bucket_lifecycle" },
+});
 
 function resolveModuleExports<T extends object>(loadedModule: T) {
   if ("default" in loadedModule && typeof loadedModule.default === "object" && loadedModule.default !== null) {
@@ -97,12 +100,16 @@ if (!databaseUrl) {
         advanceArbitrationReviewRound,
         claimArbitrationCase,
         claimNextArbitrationCase,
+        cleanupResolvedRemoteArbitrationAttachments,
         createArbitrationCase,
         getArbitrationCaseWorkload,
         getVisibleArbitrationCaseSummary,
         releaseArbitrationCase,
         updateArbitrationCaseStatus,
       } = arbitrationService as typeof import("../service");
+      const { claimUploadedAttachmentCleanup } = resolveModuleExports(
+        await import("../service/attachments"),
+      ) as typeof import("../service/attachments");
       const coreDbClient = resolveModuleExports(await import("../../../db/client")) as typeof import("../../../db/client");
       const coreRedisClient = resolveModuleExports(await import("../../../db/redis")) as typeof import("../../../db/redis");
       const accountDbClient = resolveModuleExports(
@@ -342,6 +349,43 @@ if (!databaseUrl) {
         { key: "unfavorable", count: 1 },
       ]);
 
+      const leaseReferenceTime = new Date();
+      const cleanupClaims = await Promise.all([
+        claimUploadedAttachmentCleanup("arb-stale-attachment-cleanup", leaseReferenceTime, 5),
+        claimUploadedAttachmentCleanup("arb-stale-attachment-cleanup", leaseReferenceTime, 5),
+      ]);
+      assert.equal(cleanupClaims.filter(Boolean).length, 1);
+      await pool.query(`
+        update arbitration_evidence_attachments
+        set cleanup_lease_token = null,
+            cleanup_lease_expires_at = null
+        where id = 'arb-stale-attachment-cleanup'
+      `);
+
+      const cleanupRuns = await Promise.all([
+        cleanupResolvedRemoteArbitrationAttachments({ limit: 10 }),
+        cleanupResolvedRemoteArbitrationAttachments({ limit: 10 }),
+      ]);
+      assert.equal(cleanupRuns.reduce((total, result) => total + result.archivedCount, 0), 1);
+      assert.equal(cleanupRuns.reduce((total, result) => total + result.failedCount, 0), 0);
+      const cleanupState = await pool.query<{
+        upload_state: string;
+        cleanup_attempt_count: number;
+        cleanup_lease_token: string | null;
+        cleanup_lease_expires_at: Date | null;
+      }>(`
+        select upload_state,
+               cleanup_attempt_count,
+               cleanup_lease_token,
+               cleanup_lease_expires_at
+        from arbitration_evidence_attachments
+        where id = 'arb-stale-attachment-cleanup'
+      `);
+      assert.equal(cleanupState.rows[0]?.upload_state, "archived");
+      assert.equal(cleanupState.rows[0]?.cleanup_attempt_count, 1);
+      assert.equal(cleanupState.rows[0]?.cleanup_lease_token, null);
+      assert.equal(cleanupState.rows[0]?.cleanup_lease_expires_at, null);
+
       const workload = await getArbitrationCaseWorkload("operator-1");
       assert.equal(workload.claimedCount, 0);
       assert.equal(workload.unclaimedCount, 3);
@@ -354,6 +398,49 @@ if (!databaseUrl) {
       const nextClaimed = await claimNextArbitrationCase("operator-1");
       assert.equal(nextClaimed?.id, "arb-stale-candidate");
       assert.equal(nextClaimed?.evidences.length, 1);
+
+      await pool.query(
+        `update arbitration_cases
+            set status = 'rejected', resolved_at = now(), updated_at = now()
+          where id in ($1, $2)`,
+        [arbitrationCase.id, "arb-stale-candidate"],
+      );
+      await pool.query(`
+        insert into arbitration_cases (
+          id, entity_type, entity_id, requester_user_id, respondent_user_id,
+          assigned_operator_user_id, status, reason, created_at, updated_at
+        ) values (
+          'arb-atomic-claim', 'task', 'arb-atomic-task', 'arb-creator', 'arb-worker',
+          null, 'open', 'Concurrent claim-next must have exactly one winner.', now(), now()
+        );
+        insert into arbitration_case_review_rounds (
+          id, case_id, round_number, status, started_at
+        ) values (
+          'arb-atomic-round', 'arb-atomic-claim', 1, 'open', now()
+        );
+      `);
+
+      const concurrentClaims = await Promise.all([
+        claimNextArbitrationCase("operator-1"),
+        claimNextArbitrationCase("operator-2"),
+      ]);
+      const claimWinners = concurrentClaims.filter((value) => value?.id === "arb-atomic-claim");
+      assert.equal(claimWinners.length, 1);
+      assert.equal(concurrentClaims.filter((value) => value === null).length, 1);
+      const atomicClaimState = await pool.query<{
+        assigned_operator_user_id: string | null;
+        round_assignee_user_id: string | null;
+      }>(`
+        select ac.assigned_operator_user_id, rr.assigned_operator_user_id as round_assignee_user_id
+        from arbitration_cases ac
+        inner join arbitration_case_review_rounds rr on rr.case_id = ac.id and rr.status = 'open'
+        where ac.id = 'arb-atomic-claim'
+      `);
+      assert.ok(["operator-1", "operator-2"].includes(atomicClaimState.rows[0]?.assigned_operator_user_id ?? ""));
+      assert.equal(
+        atomicClaimState.rows[0]?.round_assignee_user_id,
+        atomicClaimState.rows[0]?.assigned_operator_user_id,
+      );
     } finally {
       coreRedis?.disconnect();
       accountRedis?.disconnect();

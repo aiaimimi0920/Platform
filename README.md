@@ -9,6 +9,10 @@ It owns the official web surface, account flows, product/benefit surfaces,
 operator pages, account-domain services, quota and entitlement policy, and the
 website-side integration points used to call Neuro Gateway.
 
+## Current engineering priority
+
+- [Platform code optimization plan (2026-08-15)](docs/40-engineering/code-optimization-plan-20260815.md)
+
 ## Repository
 
 The canonical source repository is:

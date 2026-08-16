@@ -3006,6 +3006,25 @@ export type ProductOperatorView = UpsertProductInput & {
   updatedAt: string;
 };
 
+export type ListOperatorProductsInput = {
+  cursor?: string | null;
+  limit?: number | null;
+};
+
+export type ProductOperatorPageInfo = {
+  limit: number;
+  hasMore: boolean;
+  nextCursor: string | null;
+  totalCount: number;
+  activeCount: number;
+  inactiveCount: number;
+};
+
+export type ProductOperatorPage = {
+  products: ProductOperatorView[];
+  pageInfo: ProductOperatorPageInfo;
+};
+
 export type ProductOperatorMutationResult = {
   product: ProductOperatorView;
   created: boolean;
@@ -3382,6 +3401,12 @@ export type ManualReviewSlaTemplateView = {
 };
 
 export type ManualReviewWorkloadView = {
+  scan: {
+    limit: number;
+    scannedCount: number;
+    totalOpenCount: number;
+    hasMore: boolean;
+  };
   byAssignee: ManualReviewWorkloadAssigneeBucket[];
   bySlaBucket: ItemManualReviewSummaryBucket[];
   byPolicy: ItemManualReviewSummaryBucket[];

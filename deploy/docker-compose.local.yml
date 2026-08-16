@@ -312,6 +312,7 @@ services:
       LOOM_DAEMON_HOST: 0.0.0.0
       LOOM_DAEMON_PORT: 8765
       LOOM_DAEMON_TOKEN: ${TEA_LOOM_AUTH_TOKEN:-local-internal-token}
+      LOOM_TLS_TERMINATED: "1"
     ports:
       - "127.0.0.1:${LOOM_HOST_PORT:-48766}:8765"
     healthcheck:

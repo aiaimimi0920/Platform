@@ -32,6 +32,31 @@ function collectMarkdownFiles(baseDir) {
   return files;
 }
 
+function collectTypeScriptSources(baseDir) {
+  const files = [];
+  for (const entry of readdirSync(baseDir, { withFileTypes: true })) {
+    const fullPath = join(baseDir, entry.name);
+    if (entry.isDirectory()) {
+      files.push(...collectTypeScriptSources(fullPath));
+    } else if (
+      entry.isFile() &&
+      /\.tsx?$/.test(entry.name) &&
+      !/\.(?:test|spec)\.tsx?$/.test(entry.name)
+    ) {
+      files.push(fullPath);
+    }
+  }
+  return files;
+}
+
+function readSourceBundle({ files = [], directories = [] }) {
+  const sourceFiles = [
+    ...files.map((relativePath) => join(rootDir, relativePath)),
+    ...directories.flatMap((relativePath) => collectTypeScriptSources(join(rootDir, relativePath))),
+  ];
+  return sourceFiles.map((filePath) => readFileSync(filePath, "utf8")).join("\n");
+}
+
 describe("monorepo structure", () => {
   it("keeps core module directories", () => {
     const modulesPath = join(rootDir, "core/src/modules");
@@ -153,7 +178,13 @@ describe("monorepo structure", () => {
   });
 
   it("does not leak core-client implementation wording on the arbitration surface", () => {
-    const contents = readFileSync(join(rootDir, "web/src/app/arbitrations/page.tsx"), "utf8");
+    const contents = readSourceBundle({
+      files: [
+        "web/src/app/arbitrations/page.tsx",
+        "web/src/lib/arbitration-presentation.ts",
+      ],
+      directories: ["web/src/features/arbitration-center"],
+    });
     const forbiddenPhrases = ["暂未接入 core-client", "在 `core-client` 暴露", "当前环境暂未开放"];
     const matchedPhrases = forbiddenPhrases.filter((phrase) => contents.includes(phrase));
 
@@ -169,7 +200,13 @@ describe("monorepo structure", () => {
   });
 
   it("keeps arbitration status labels localized instead of exposing raw enum copy", () => {
-    const contents = readFileSync(join(rootDir, "web/src/app/arbitrations/page.tsx"), "utf8");
+    const contents = readSourceBundle({
+      files: [
+        "web/src/app/arbitrations/page.tsx",
+        "web/src/lib/arbitration-presentation.ts",
+      ],
+      directories: ["web/src/features/arbitration-center"],
+    });
     const forbiddenPhrases = [
       'open: "Open"',
       'under_review: "Under Review"',
@@ -200,7 +237,13 @@ describe("monorepo structure", () => {
   });
 
   it("keeps arbitration operator and cleanup copy localized instead of exposing internal queue keys", () => {
-    const contents = readFileSync(join(rootDir, "web/src/app/arbitrations/page.tsx"), "utf8");
+    const contents = readSourceBundle({
+      files: [
+        "web/src/app/arbitrations/page.tsx",
+        "web/src/lib/arbitration-presentation.ts",
+      ],
+      directories: ["web/src/features/arbitration-center"],
+    });
     const forbiddenPhrases = [
       '<p className="mg-subtitle">Create Case</p>',
       '<p className="mg-subtitle">Rules</p>',
@@ -270,8 +313,17 @@ describe("monorepo structure", () => {
   it("keeps heavy-agent creation copy pointed at the dedicated heavy-agent entry", () => {
     const heavyEntryFiles = [
       "web/src/app/my-agents/page.tsx",
-      "web/src/app/ops/account/agents/page.tsx",
+      "web/src/features/account-agent-center/ops/agents-ops-sidebar.tsx",
     ];
+
+    const opsAgentsPage = readFileSync(
+      join(rootDir, "web/src/app/ops/account/agents/page.tsx"),
+      "utf8",
+    );
+    assert(
+      opsAgentsPage.includes("AgentsOpsSidebar"),
+      "the ops agent page must keep rendering the sidebar that owns the heavy-agent entry",
+    );
 
     const staleFiles = heavyEntryFiles.filter((surfaceFile) => {
       const contents = readFileSync(join(rootDir, surfaceFile), "utf8");
@@ -1754,6 +1806,14 @@ describe("monorepo structure", () => {
   });
 
   it("keeps ops agent console copy localized and free of raw callback/runtime labels", () => {
+    const opsAgentConsoleContents = readSourceBundle({
+      files: [
+        "web/src/app/ops/account/agents/page.tsx",
+        "web/src/lib/agent-ops-playbooks.ts",
+        "web/src/lib/agent-ops-presentation.ts",
+      ],
+      directories: ["web/src/features/account-agent-center/ops"],
+    });
     const pageExpectations = [
       {
         file: "web/src/components/ops-shell.tsx",
@@ -1761,7 +1821,7 @@ describe("monorepo structure", () => {
         required: ['label: "智能体管理"'],
       },
       {
-        file: "web/src/app/ops/account/agents/sections.tsx",
+        file: "web/src/features/account-agent-center/ops/sections.tsx",
         forbidden: [
           "Agent Detail",
           "External Callback Governance",
@@ -1790,6 +1850,7 @@ describe("monorepo structure", () => {
       },
       {
         file: "web/src/app/ops/account/agents/page.tsx",
+        contents: opsAgentConsoleContents,
         forbidden: [
           "只有平台管理员可以访问 Agent 模块运维台。",
           "当前无法从 core 读取 Agent 模块快照",
@@ -1885,7 +1946,7 @@ describe("monorepo structure", () => {
         ],
       },
       {
-        file: "web/src/app/ops/account/agents/item-builders.tsx",
+        file: "web/src/features/account-agent-center/ops/item-builders.tsx",
         forbidden: [
           "最近 external callback",
           "Phase Age / Timeout",
@@ -1936,7 +1997,7 @@ describe("monorepo structure", () => {
     const staleMatches = [];
     const missingMatches = [];
     for (const expectation of pageExpectations) {
-      const contents = readFileSync(join(rootDir, expectation.file), "utf8");
+      const contents = expectation.contents ?? readFileSync(join(rootDir, expectation.file), "utf8");
       for (const phrase of expectation.forbidden) {
         if (contents.includes(phrase)) {
           staleMatches.push(`${expectation.file}: ${phrase}`);
@@ -2136,6 +2197,13 @@ describe("monorepo structure", () => {
   });
 
   it("keeps remaining account and ops surfaces free of raw English/internal product labels", () => {
+    const arbitrationSurfaceContents = readSourceBundle({
+      files: [
+        "web/src/app/arbitrations/page.tsx",
+        "web/src/lib/arbitration-presentation.ts",
+      ],
+      directories: ["web/src/features/arbitration-center"],
+    });
     const pageExpectations = [
       {
         file: "web/src/app/growth/page.tsx",
@@ -2150,6 +2218,7 @@ describe("monorepo structure", () => {
       },
       {
         file: "web/src/app/arbitrations/page.tsx",
+        contents: arbitrationSurfaceContents,
         forbidden: [
           "Case Timeline",
           "下一轮 operator 用户 ID",
@@ -2171,7 +2240,7 @@ describe("monorepo structure", () => {
         ],
       },
       {
-        file: "web/src/app/ops/account/agents/sections.tsx",
+        file: "web/src/features/account-agent-center/ops/sections.tsx",
         forbidden: [
           "Oldest Open",
           "Oldest Stale",
@@ -2226,7 +2295,7 @@ describe("monorepo structure", () => {
     const staleMatches = [];
     const missingMatches = [];
     for (const expectation of pageExpectations) {
-      const contents = readFileSync(join(rootDir, expectation.file), "utf8");
+      const contents = expectation.contents ?? readFileSync(join(rootDir, expectation.file), "utf8");
       for (const phrase of expectation.forbidden) {
         if (contents.includes(phrase)) {
           staleMatches.push(`${expectation.file}: ${phrase}`);
@@ -2252,9 +2321,18 @@ describe("monorepo structure", () => {
   });
 
   it("keeps agent ops detail metrics, history, and execution policy copy localized", () => {
+    const opsAgentConsoleContents = readSourceBundle({
+      files: [
+        "web/src/app/ops/account/agents/page.tsx",
+        "web/src/lib/agent-ops-playbooks.ts",
+        "web/src/lib/agent-ops-presentation.ts",
+      ],
+      directories: ["web/src/features/account-agent-center/ops"],
+    });
     const pageExpectations = [
       {
         file: "web/src/app/ops/account/agents/page.tsx",
+        contents: opsAgentConsoleContents,
         forbidden: [
           'label: "Capabilities"',
           'label: "Executions"',
@@ -2303,7 +2381,7 @@ describe("monorepo structure", () => {
         ],
       },
       {
-        file: "web/src/app/ops/account/agents/item-builders.tsx",
+        file: "web/src/features/account-agent-center/ops/item-builders.tsx",
         forbidden: [
           "Failure Watch",
           "Settlement Watch",
@@ -2338,7 +2416,7 @@ describe("monorepo structure", () => {
     const staleMatches = [];
     const missingMatches = [];
     for (const expectation of pageExpectations) {
-      const contents = readFileSync(join(rootDir, expectation.file), "utf8");
+      const contents = expectation.contents ?? readFileSync(join(rootDir, expectation.file), "utf8");
       for (const phrase of expectation.forbidden) {
         if (contents.includes(phrase)) {
           staleMatches.push(`${expectation.file}: ${phrase}`);

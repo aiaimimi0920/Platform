@@ -4,6 +4,10 @@ import path from "node:path";
 import test from "node:test";
 
 const source = readFileSync(path.resolve(process.cwd(), "src/modules/task-hub/repository.ts"), "utf8");
+const dispatchSource = readFileSync(
+  path.resolve(process.cwd(), "src/modules/task-hub/service/dispatch.ts"),
+  "utf8",
+);
 const globalListSource = source.slice(
   source.indexOf("export async function listTasksWithCounts()"),
   source.indexOf("export async function listTasksWithCountsByUser"),
@@ -28,4 +32,16 @@ test("task list ordering is deterministic for equal timestamps", () => {
   const stableOrder = /orderBy\(desc\(tasks\.createdAt\), desc\(tasks\.id\)\)/;
   assert.match(globalListSource, stableOrder);
   assert.match(ownerListSource, stableOrder);
+});
+
+test("task dispatch filters pending applications and proposals in PostgreSQL", () => {
+  assert.match(
+    dispatchSource,
+    /where\(and\(eq\(taskApplications\.taskId, taskId\), eq\(taskApplications\.status, "pending"\)\)\)/,
+  );
+  assert.match(
+    dispatchSource,
+    /where\(and\(eq\(taskAgentProposals\.taskId, taskId\), eq\(taskAgentProposals\.status, "pending"\)\)\)/,
+  );
+  assert.doesNotMatch(dispatchSource, /\.filter\(\((?:application|proposal)\) => (?:application|proposal)\.status === "pending"\)/);
 });

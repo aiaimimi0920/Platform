@@ -1,10 +1,10 @@
 import type { GatewayAccessGrantMode } from "@neuro/contracts";
-import { requestInternalText } from "@neuro/backend-foundation/platform/internal-request";
 import { and, asc, eq, inArray, isNull } from "drizzle-orm";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 
 import { env } from "@/env";
 import { BadRequestError, ConflictError } from "@/platform/errors";
+import { requestInternalJson } from "@/platform/internal-json-request";
 import { db } from "@/db/client";
 import * as schema from "@/db/schema";
 import { productGatewayAccessGrants } from "@/modules/product-order-item/schema";
@@ -73,17 +73,21 @@ function resolveGatewayManagementToken() {
   return value;
 }
 
-function parseGatewayError(status: number, raw: string) {
-  if (!raw) {
+function parseGatewayError(status: number, payload: Record<string, unknown> | null) {
+  if (!payload) {
     return `Gateway request failed with ${status}`;
   }
-
-  try {
-    const parsed = JSON.parse(raw) as { error?: { message?: string }; message?: string };
-    return parsed.error?.message || parsed.message || `Gateway request failed with ${status}`;
-  } catch {
-    return raw;
-  }
+  const error = payload.error;
+  const nestedMessage =
+    error && typeof error === "object" && !Array.isArray(error)
+      ? (error as Record<string, unknown>).message
+      : null;
+  return (
+    (typeof nestedMessage === "string" && nestedMessage.trim() ? nestedMessage : null) ||
+    (typeof payload.message === "string" && payload.message.trim() ? payload.message : null) ||
+    (typeof payload.rawText === "string" && payload.rawText.trim() ? payload.rawText : null) ||
+    `Gateway request failed with ${status}`
+  );
 }
 
 async function gatewayManagementRequest<T>(
@@ -95,7 +99,7 @@ async function gatewayManagementRequest<T>(
 ): Promise<T> {
   const baseUrl = resolveGatewayInternalBaseUrl();
   const managementToken = resolveGatewayManagementToken();
-  const { response, text } = await requestInternalText(
+  const { response, payload } = await requestInternalJson(
     `${baseUrl}${pathname}`,
     {
       method: init?.method ?? "GET",
@@ -112,10 +116,10 @@ async function gatewayManagementRequest<T>(
   );
 
   if (!response.ok) {
-    throw new Error(parseGatewayError(response.status, text));
+    throw new Error(parseGatewayError(response.status, payload));
   }
 
-  return JSON.parse(text) as T;
+  return payload as T;
 }
 
 async function ensureGatewayBundleUserAccessKey(args: { bundleId: string; userId: string }) {
