@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import type {
+  AgentCapabilityView,
   AgentExecutionView,
   AgentMarketplaceListingView,
   AgentView,
@@ -27,6 +28,9 @@ import {
   formatAccountNumber,
 } from "@/lib/account-center";
 import {
+  groupAgentCapabilitiesByAgentId,
+} from "@/lib/agent-capability-catalog";
+import {
   combineDependencyResults,
   createDependencyFailureResult,
   createDependencyResult,
@@ -36,7 +40,7 @@ import {
   getFeatureSnapshot,
   getPublicSurfaceSnapshotStrict,
   isFeatureSnapshotUnavailable,
-  listAgentCapabilities,
+  listAgentCapabilityCatalog,
   listAgentMarketplaceListings,
   listSuppliedAgentMarketplaceExecutions,
   listAgents,
@@ -97,7 +101,7 @@ const lightAgentTaskCategoryOptions = [
 const LOCAL_DEBUG_MANAGED_LIGHT_SERVICE_ID = "__local_debug_managed_light_service__";
 const LOCAL_DEBUG_MANAGED_LIGHT_MODEL_ID = "ui-test-model";
 const MANAGED_LIGHT_SUMMARY_EXECUTION_LIMIT = 200;
-const AGENT_CAPABILITY_FETCH_CONCURRENCY = 6;
+const TASK_PROPOSAL_FETCH_CONCURRENCY = 6;
 
 function buildLocalDebugManagedLightServiceOption() {
   return {
@@ -627,7 +631,7 @@ export default async function AgentCenterPage({ searchParams }: AgentCenterPageP
     return result?.state === "unavailable" || result?.state === "unauthorized";
   };
 
-  const [agents, ownedListings, publicListings, supplierExecutions, tasks, benefitPanel] = await Promise.all([
+  const [agents, ownedListings, publicListings, supplierExecutions, tasks, benefitPanel, capabilityCatalog] = await Promise.all([
     loadDependency(listAgents(userContext), {
       fallback: [],
       message: "智能体目录暂不可用。",
@@ -668,6 +672,12 @@ export default async function AgentCenterPage({ searchParams }: AgentCenterPageP
           source: "benefits",
         })
       : Promise.resolve(null),
+    loadDependency(listAgentCapabilityCatalog(userContext), {
+      fallback: [] as AgentCapabilityView[],
+      message: "智能体能力目录暂不可用。",
+      unauthorizedMessage: "当前账户无权读取智能体能力目录。",
+      source: "agent-capabilities",
+    }),
   ]);
 
   const agentRegistryUnavailable = sourceFailed("agent-registry");
@@ -682,36 +692,21 @@ export default async function AgentCenterPage({ searchParams }: AgentCenterPageP
     );
   }
 
-  const capabilityPairs = await mapWithConcurrency(
-    agents,
-    AGENT_CAPABILITY_FETCH_CONCURRENCY,
-    async (agent) => [
-      agent.id,
-      await loadDependency(listAgentCapabilities(userContext, agent.id), {
-        fallback: [],
-        message: "智能体能力目录暂不可用。",
-        unauthorizedMessage: "当前账户无权读取智能体能力目录。",
-        source: `agent-capabilities:${agent.id}`,
-      }),
-    ] as const,
-  );
-
-  const agentCapabilityDependencyFailure = [...dependencyResultsBySource.entries()].find(
-    ([source, result]) =>
-      source.startsWith("agent-capabilities:") &&
-      (result.state === "unavailable" || result.state === "unauthorized"),
-  );
-  if (agentCapabilityDependencyFailure) {
+  const agentCapabilityDependency = dependencyResultsBySource.get("agent-capabilities");
+  if (sourceFailed("agent-capabilities") && agentCapabilityDependency) {
     return (
       <main className="app-page">
         <div className="nt-shell" style={{ paddingBlock: 32 }}>
-          <DependencyState label="智能体能力目录" result={agentCapabilityDependencyFailure[1]} />
+          <DependencyState label="智能体能力目录" result={agentCapabilityDependency} />
         </div>
       </main>
     );
   }
 
-  const capabilitiesByAgentId = new Map(capabilityPairs);
+  const capabilitiesByAgentId = groupAgentCapabilitiesByAgentId(
+    agents.map((agent) => agent.id),
+    capabilityCatalog,
+  );
   const listingByCapabilityId = new Map(ownedListings.map((listing) => [listing.capabilityId, listing]));
   const publishedOwnedListings = ownedListings.filter((listing) => listing.status === "published");
   const autoTakeListings = ownedListings.filter((listing) => listing.autoTakeEnabled);
@@ -778,8 +773,10 @@ export default async function AgentCenterPage({ searchParams }: AgentCenterPageP
   );
   const ownedAgentIds = new Set(agents.map((agent) => agent.id));
   const taskProposalPairs = tasksVisible
-    ? await Promise.all(
-        tasks.map(async (task) => [
+    ? await mapWithConcurrency(
+        tasks,
+        TASK_PROPOSAL_FETCH_CONCURRENCY,
+        async (task) => [
           task.id,
           await loadDependency(listTaskAgentProposals(userContext, task.id), {
             fallback: [],
@@ -787,7 +784,7 @@ export default async function AgentCenterPage({ searchParams }: AgentCenterPageP
             unauthorizedMessage: "当前账户无权读取任务提案目录。",
             source: `task-proposals:${task.id}`,
           }),
-        ] as const),
+        ] as const,
       )
     : [];
   const taskProposalsByTaskId = new Map(taskProposalPairs);

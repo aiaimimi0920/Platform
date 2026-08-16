@@ -18,6 +18,7 @@ import {
   listOwnedAgentCallbackHealthSummaries,
   listOwnedAgentRecentCallbacks,
   listOwnedAgentCapabilities,
+  listOwnedAgentCapabilityCatalog,
   listOperatorAgentCallbackHistory,
   listOwnedAgents,
   listPublicAgentMarketplaceListings,
@@ -446,6 +447,18 @@ export const agentRegistryRouter: FastifyPluginAsync = async (app) => {
       const query = callbackHistoryQuerySchema.parse(request.query);
       return {
         callbacks: await listOwnedAgentRecentCallbacks(userId, request.params.agentId, query.limit),
+      };
+    },
+  );
+
+  app.get(
+    "/v1/agents/capabilities",
+    { preHandler: withInternalRequest },
+    async (request) => {
+      await requireModuleEnabled("agentRegistry");
+      const { userId } = assertUserContext(request);
+      return {
+        capabilities: await listOwnedAgentCapabilityCatalog(userId),
       };
     },
   );

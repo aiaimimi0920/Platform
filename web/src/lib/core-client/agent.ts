@@ -176,6 +176,13 @@ export async function listAgentCapabilities(userContext: InternalUserContext, ag
   return response.capabilities;
 }
 
+export async function listAgentCapabilityCatalog(userContext: InternalUserContext) {
+  const response = await coreRequest<{ capabilities: AgentCapabilityView[] }>("/v1/agents/capabilities", {
+    userContext,
+  });
+  return response.capabilities;
+}
+
 export async function addAgentCapability(
   userContext: InternalUserContext,
   agentId: string,

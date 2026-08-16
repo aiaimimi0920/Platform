@@ -20,6 +20,7 @@ const RELEASE_SCHEMA_VERSION = "neuro-platform-release/v1";
 const IMAGE_INVENTORY_SCHEMA_VERSION = "neuro-platform-release-images/v1";
 const DIGEST_PATTERN = /^sha256:[0-9a-f]{64}$/;
 const CHECKSUM_PATTERN = /^([0-9a-f]{64})  ([^\r\n]+)$/;
+const BUILDX_BUILDER_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$/;
 const PLATFORM_SERVICE_IMAGES = new Map([
   ["core-migrate", "core"],
   ["gateway-domain-migrate", "account-api"],
@@ -53,6 +54,18 @@ function isContainedPath(root, candidate) {
 function requireObject(value, label) {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     throw new TypeError(`${label} must be an object`);
+  }
+  return value;
+}
+
+export function validateBuildxBuilderName(value) {
+  if (value === undefined || value === null) {
+    return null;
+  }
+  if (typeof value !== "string" || !BUILDX_BUILDER_PATTERN.test(value)) {
+    throw new Error(
+      "Buildx builder name must be 1-128 characters and contain only letters, numbers, dots, underscores, or dashes",
+    );
   }
   return value;
 }
@@ -656,6 +669,7 @@ async function removeOwnedResources(resourcesDir, evidencePath) {
 
 export async function runArtifactOnlyReleaseSmoke(options, dependencies = {}) {
   const safeRunId = validateAcceptanceRunId(options?.runId);
+  const buildxBuilder = validateBuildxBuilderName(options?.buildxBuilder);
   const evidencePath = path.resolve(options.evidencePath);
   if (path.extname(evidencePath).toLowerCase() !== ".json") {
     throw new Error("Release smoke evidencePath must be a JSON file");
@@ -686,6 +700,7 @@ export async function runArtifactOnlyReleaseSmoke(options, dependencies = {}) {
     minio: `${projectName}-minio`,
   };
   const environment = createRuntimeEnvironment({ projectName, runtimeEnvPath, ports, volumeNames });
+  const secretCanaries = releaseSecretCanaries(environment);
   const override = createReleaseRuntimeOverride({
     runId: safeRunId,
     runKey,
@@ -752,11 +767,12 @@ export async function runArtifactOnlyReleaseSmoke(options, dependencies = {}) {
       await writeFile(dockerfilePath, "FROM artifact\n", "ascii");
       for (const image of release.imageInventory.images) {
         const importedImage = temporaryImageReference(runKey, image.image);
-        const result = await requireCommand(executeCommand, {
+        const result = await executeCommand({
           command: "docker",
           args: [
             "buildx",
             "build",
+            ...(buildxBuilder ? ["--builder", buildxBuilder] : []),
             "--build-context",
             `artifact=${createOciLayoutUri(
               path.join(release.packageDir, image.layoutPath),
@@ -773,9 +789,17 @@ export async function runArtifactOnlyReleaseSmoke(options, dependencies = {}) {
           cwd: resourcesDir,
           env: process.env,
           timeoutMs: 15 * 60 * 1000,
-        }, `OCI import for ${image.image}`);
+        });
+        const importEvidence = {
+          image: image.image,
+          ...commandSummary(result),
+          output: redactedCommandOutput(result, secretCanaries) || null,
+        };
+        evidence.commands.imports.push(importEvidence);
+        if (!result || result.exitCode !== 0) {
+          throw new Error(`OCI import for ${image.image} failed (${result?.exitCode ?? "unknown"})`);
+        }
         importedImages.push(importedImage);
-        evidence.commands.imports.push({ image: image.image, ...commandSummary(result) });
       }
     }
 
@@ -884,6 +908,7 @@ async function runCli() {
     packageDir: cli["package-dir"],
     runId: cli["run-id"],
     evidencePath: cli["evidence-path"],
+    buildxBuilder: cli["buildx-builder"],
   });
   process.stdout.write(`${JSON.stringify({
     schemaVersion: "neuro-platform-release-smoke/v1",

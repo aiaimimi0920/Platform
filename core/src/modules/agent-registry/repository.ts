@@ -37,6 +37,19 @@ export async function listCapabilitiesByAgent(agentId: string) {
     .orderBy(asc(agentCapabilities.createdAt));
 }
 
+export async function listCapabilitiesByOwner(ownerUserId: string) {
+  return db
+    .select({ capability: agentCapabilities })
+    .from(agentCapabilities)
+    .innerJoin(agents, eq(agentCapabilities.agentId, agents.id))
+    .where(eq(agents.ownerUserId, ownerUserId))
+    .orderBy(
+      asc(agentCapabilities.agentId),
+      asc(agentCapabilities.createdAt),
+      asc(agentCapabilities.id),
+    );
+}
+
 export async function listCallbackHistoryByAgent(agentId: string, limit = 20) {
   return db
     .select()

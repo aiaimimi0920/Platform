@@ -20,6 +20,7 @@ import {
   getMarketplaceListingById,
   listAgentsByOwner,
   listCapabilitiesByAgent,
+  listCapabilitiesByOwner,
   listCallbackHistoryByAgent,
   listMarketplaceListingsByAgentIds,
 } from "@/modules/agent-registry/repository";
@@ -1002,6 +1003,13 @@ export async function listOwnedAgentCapabilities(
   await assertOwnedAgent(ownerUserId, agentId);
   const rows = await listCapabilitiesByAgent(agentId);
   return rows.map(toCapabilityView);
+}
+
+export async function listOwnedAgentCapabilityCatalog(
+  ownerUserId: string,
+): Promise<AgentCapabilityView[]> {
+  const rows = await listCapabilitiesByOwner(ownerUserId);
+  return rows.map(({ capability }) => toCapabilityView(capability));
 }
 
 export async function addCapabilityToOwnedAgent(

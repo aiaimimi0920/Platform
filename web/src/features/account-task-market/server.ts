@@ -9,13 +9,17 @@ import type {
 
 import {
   getFeatureSnapshot,
-  listAgentCapabilities,
+  listAgentCapabilityCatalog,
   listAgentMarketplaceListings,
   listAgents,
   listArbitrationCases,
   listTaskAgentProposals,
   listTasks,
 } from "@/lib/core-client";
+import { groupAgentCapabilitiesByAgentId } from "@/lib/agent-capability-catalog";
+import { mapWithConcurrency } from "@/lib/map-with-concurrency";
+
+const TASK_PROPOSAL_FETCH_CONCURRENCY = 6;
 
 export type TaskMarketServerContext = {
   userId: string;
@@ -34,11 +38,29 @@ export type TaskMarketServerState = {
   proposalReadWarning: string | null;
 };
 
+export function groupArbitrationCasesByTaskId<
+  T extends { entityType: string; entityId: string },
+>(
+  taskIds: readonly string[],
+  arbitrationCases: readonly T[],
+) {
+  const grouped = new Map<string, T[]>(
+    taskIds.map((taskId) => [taskId, []]),
+  );
+  for (const arbitrationCase of arbitrationCases) {
+    if (arbitrationCase.entityType !== "task") continue;
+    grouped.get(arbitrationCase.entityId)?.push(arbitrationCase);
+  }
+  return grouped;
+}
+
 export async function loadTaskMarketServerState(
   userContext: TaskMarketServerContext,
 ): Promise<TaskMarketServerState> {
-  const features = await getFeatureSnapshot();
-  const tasks = (await listTasks(userContext)) as TaskView[];
+  const [features, tasks] = await Promise.all([
+    getFeatureSnapshot(),
+    listTasks(userContext) as Promise<TaskView[]>,
+  ]);
 
   const canUseAgentRegistry = features.agentRegistry.enabled;
 
@@ -52,26 +74,24 @@ export async function loadTaskMarketServerState(
 
   if (canUseAgentRegistry) {
     try {
-      ownedAgents = (await listAgents(userContext)).filter((agent) => agent.enabled);
-      const [ownedListingRows, publicListingRows, capabilityPairs, proposalPairs] = await Promise.all([
+      const [ownedAgentRows, ownedListingRows, publicListingRows, capabilityCatalog] = await Promise.all([
+        listAgents(userContext),
         listAgentMarketplaceListings(userContext, "owner"),
         listAgentMarketplaceListings(userContext, "public", 24),
-        Promise.all(
-          ownedAgents.map(async (agent) => {
-            const capabilities = await listAgentCapabilities(userContext, agent.id);
-            return [agent.id, capabilities] as const;
-          }),
-        ),
-        Promise.all(
-          tasks.map(async (task) => {
-            const proposals = await listTaskAgentProposals(userContext, task.id);
-            return [task.id, proposals] as const;
-          }),
-        ),
+        listAgentCapabilityCatalog(userContext),
       ]);
+      ownedAgents = ownedAgentRows.filter((agent) => agent.enabled);
+      const proposalPairs = await mapWithConcurrency(
+        tasks,
+        TASK_PROPOSAL_FETCH_CONCURRENCY,
+        async (task) => [task.id, await listTaskAgentProposals(userContext, task.id)] as const,
+      );
       ownedListings = ownedListingRows;
       publicListings = publicListingRows;
-      capabilitiesByAgentId = new Map(capabilityPairs);
+      capabilitiesByAgentId = groupAgentCapabilitiesByAgentId(
+        ownedAgents.map((agent) => agent.id),
+        capabilityCatalog,
+      );
       taskProposalsMap = new Map(proposalPairs);
     } catch {
       proposalReadWarning = "智能体提案数据暂不可用，请稍后重试。";
@@ -81,11 +101,9 @@ export async function loadTaskMarketServerState(
   if (features.arbitration.enabled) {
     try {
       const arbitrationCases = await listArbitrationCases(userContext);
-      arbitrationCasesByTaskId = new Map(
-        tasks.map((task) => [
-          task.id,
-          arbitrationCases.filter((arbitrationCase) => arbitrationCase.entityType === "task" && arbitrationCase.entityId === task.id),
-        ]),
+      arbitrationCasesByTaskId = groupArbitrationCasesByTaskId(
+        tasks.map((task) => task.id),
+        arbitrationCases,
       );
     } catch {
       // Keep the task market available even if arbitration API is temporarily unavailable.

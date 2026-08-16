@@ -30,19 +30,25 @@ test("P3-02: agent center does not turn formal source failures into normal empty
   assert.match(pageSource, /if \(agentRegistryUnavailable && agentRegistryDependency\)/);
   assert.match(pageSource, /label="智能体目录"/);
   assert.match(pageSource, /agent-marketplace-owner/);
-  assert.match(pageSource, /agentCapabilityDependencyFailure/);
+  assert.match(pageSource, /agentCapabilityDependency/);
   assert.match(pageSource, /label="智能体能力目录"/);
   assert.match(pageSource, /benefitDependencyUnavailable/);
   assert.match(pageSource, /benefitModelDependencyUnavailable/);
 });
 
-test("agent capability discovery uses bounded ordered concurrency", () => {
-  assert.match(pageSource, /const AGENT_CAPABILITY_FETCH_CONCURRENCY = 6/);
+test("agent capability discovery uses one owner-scoped catalog request", () => {
+  assert.match(pageSource, /listAgentCapabilityCatalog\(userContext\)/);
+  assert.match(pageSource, /groupAgentCapabilitiesByAgentId/);
+  assert.doesNotMatch(pageSource, /listAgentCapabilities\(userContext, agent\.id\)/);
+});
+
+test("task proposal discovery uses bounded ordered concurrency", () => {
+  assert.match(pageSource, /const TASK_PROPOSAL_FETCH_CONCURRENCY = 6/);
   assert.match(
     pageSource,
-    /mapWithConcurrency\(\s*agents,\s*AGENT_CAPABILITY_FETCH_CONCURRENCY,/,
+    /mapWithConcurrency\(\s*tasks,\s*TASK_PROPOSAL_FETCH_CONCURRENCY,/,
   );
-  assert.doesNotMatch(pageSource, /Promise\.all\(\s*agents\.map/);
+  assert.doesNotMatch(pageSource, /Promise\.all\(\s*tasks\.map/);
 });
 
 test("narrow agent center keeps the beginning of overflowing content reachable", () => {

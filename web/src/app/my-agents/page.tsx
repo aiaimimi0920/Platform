@@ -24,6 +24,7 @@ import {
   formatAgentCallbackPolicyLabel,
   mergeAgentCallbackPolicyCatalog,
 } from "@/lib/agent-callback-policies";
+import { groupAgentCapabilitiesByAgentId } from "@/lib/agent-capability-catalog";
 import {
   buildAccountCenterNavItems,
   buildAccountHudItems,
@@ -36,7 +37,7 @@ import {
   isFeatureSnapshotUnavailable,
   listAgentCallbackHealthSummaries,
   listAgentCallbackRemediationPolicies,
-  listAgentCapabilities,
+  listAgentCapabilityCatalog,
   listAgents,
 } from "@/lib/platform-client";
 import { hasPublicSurfaceSnapshot, loadPublicSurfaceDependency } from "@/lib/public-surface-dependency";
@@ -223,20 +224,19 @@ export default async function MyAgentsPage({ searchParams }: MyAgentsPageProps) 
     );
   }
 
-  const agents = await listAgents(userContext);
-  const enabledAgents = agents.filter((agent) => agent.enabled);
-  const [healthSummaries, remediationPolicies, capabilityPairs] = await Promise.all([
+  const [agents, healthSummaries, remediationPolicies, capabilityCatalog] = await Promise.all([
+    listAgents(userContext),
     listAgentCallbackHealthSummaries(userContext).catch(() => []),
     listAgentCallbackRemediationPolicies(userContext).catch(() => []),
-    Promise.all(
-      agents.map(async (agent) => {
-        const capabilities = await listAgentCapabilities(userContext, agent.id).catch(() => []);
-        return [agent.id, capabilities] as const;
-      }),
-    ),
+    listAgentCapabilityCatalog(userContext).catch(() => []),
   ]);
+  const enabledAgents = agents.filter((agent) => agent.enabled);
+  const capabilitiesByAgentId = groupAgentCapabilitiesByAgentId(
+    agents.map((agent) => agent.id),
+    capabilityCatalog,
+  );
+  const capabilityPairs = [...capabilitiesByAgentId.entries()];
   const healthByAgentId = new Map(healthSummaries.map((summary) => [summary.agentId, summary]));
-  const capabilitiesByAgentId = new Map(capabilityPairs);
   const policyCatalog = mergeAgentCallbackPolicyCatalog(
     remediationPolicies,
     agents.map((agent) => agent.externalCallbackRemediationPolicy),

@@ -3,7 +3,7 @@ import test from "node:test";
 
 import type { InternalUserContext } from "@neuro/contracts";
 
-import { listSuppliedAgentMarketplaceExecutions } from "./core-client";
+import { listAgentCapabilityCatalog, listSuppliedAgentMarketplaceExecutions } from "./core-client";
 
 const userContext: InternalUserContext = {
   userId: "user-1",
@@ -23,6 +23,23 @@ test("supplier execution requests clamp their limit to the Core contract maximum
     assert.deepEqual(await listSuppliedAgentMarketplaceExecutions(userContext, 200), []);
     assert.equal(requests.length, 1);
     assert.match(requests[0] ?? "", /\/v1\/agents\/marketplace\/supplier-executions\?limit=100$/);
+  } finally {
+    globalThis.fetch = previousFetch;
+  }
+});
+
+test("agent capability catalog loads every owned capability through one owner-scoped request", async () => {
+  const previousFetch = globalThis.fetch;
+  const requests: string[] = [];
+  globalThis.fetch = (async (input: RequestInfo | URL) => {
+    requests.push(String(input));
+    return Response.json({ capabilities: [] });
+  }) as typeof fetch;
+
+  try {
+    assert.deepEqual(await listAgentCapabilityCatalog(userContext), []);
+    assert.equal(requests.length, 1);
+    assert.match(requests[0] ?? "", /\/v1\/agents\/capabilities$/);
   } finally {
     globalThis.fetch = previousFetch;
   }

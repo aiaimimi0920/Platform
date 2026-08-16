@@ -11,6 +11,7 @@ import {
   createReleaseRuntimeOverride,
   inspectCompleteRelease,
   runArtifactOnlyReleaseSmoke,
+  validateBuildxBuilderName,
   validateArtifactOnlyCompose,
 } from "../release-smoke.mjs";
 
@@ -221,6 +222,14 @@ test("OCI layout URI is drive-free and relative to the smoke resources on Window
   );
 });
 
+test("Buildx builder names are portable and safely validated", () => {
+  assert.equal(validateBuildxBuilderName(undefined), null);
+  assert.equal(validateBuildxBuilderName("codex-ghcr-builder"), "codex-ghcr-builder");
+  assert.throws(() => validateBuildxBuilderName("../foreign-builder"), /Buildx builder name/);
+  assert.throws(() => validateBuildxBuilderName("builder name"), /Buildx builder name/);
+  assert.throws(() => validateBuildxBuilderName(""), /Buildx builder name/);
+});
+
 test("failed OCI import cleans the project without removing images that were not imported", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "platform-release-smoke-oci-failure-"));
   const evidencePath = path.join(root, "evidence", "release-smoke.json");
@@ -233,12 +242,13 @@ test("failed OCI import cleans the project without removing images that were not
         packageDir,
         runId: "release-smoke-oci-failure",
         evidencePath,
+        buildxBuilder: "codex-ghcr-builder",
       }, {
         allocatePorts: async () => [45301, 45302, 45303],
         executeCommand: async (input) => {
           calls.push(input);
           if (input.args[0] === "buildx") {
-            return { exitCode: 1, durationMs: 1, timedOut: false, stdout: "", stderr: "import failed" };
+            return { exitCode: 1, durationMs: 1, timedOut: false, stdout: "", stderr: "Authorization: Bearer import-secret" };
           }
           return { exitCode: 0, durationMs: 1, timedOut: false, stdout: "", stderr: "" };
         },
@@ -251,10 +261,15 @@ test("failed OCI import cleans the project without removing images that were not
     assert.equal(evidence.cleanup.completed, true);
     assert.equal(calls.length, 2);
     assert.equal(calls[0].args[0], "buildx");
+    assert.deepEqual(calls[0].args.slice(0, 4), ["buildx", "build", "--builder", "codex-ghcr-builder"]);
     assert.deepEqual(calls[1].args.slice(-3), ["down", "--volumes", "--remove-orphans"]);
     const context = calls[0].args[calls[0].args.indexOf("--build-context") + 1];
     assert.match(context, /^artifact=oci-layout:\/\//);
     if (process.platform === "win32") assert.doesNotMatch(context, /oci-layout:\/\/[A-Za-z]:\//);
+    assert.equal(evidence.commands.imports.length, 1);
+    assert.equal(evidence.commands.imports[0].exitCode, 1);
+    assert.match(evidence.commands.imports[0].output, /Authorization[=:]\[REDACTED\]/);
+    assert.doesNotMatch(evidence.commands.imports[0].output, /import-secret/);
     await assert.rejects(readFile(path.join(resourcesDir, "owner.json")), /ENOENT/);
   } finally {
     await rm(root, { recursive: true, force: true });

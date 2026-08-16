@@ -134,6 +134,26 @@ npm run acceptance:release -- `
   --evidence-path .runtime/acceptance/release-smoke-<versionId>/release-smoke.json
 ```
 
+For offline OCI releases, the smoke imports each layout with Docker Buildx. The
+default Docker Desktop builder is used when no builder is supplied. If that
+builder uses the Docker driver and rejects `oci-layout://` build contexts, select
+a Docker-container or otherwise OCI-capable builder explicitly:
+
+```powershell
+npm run acceptance:release -- `
+  --package-dir ../release/Platform/<versionId> `
+  --run-id release-smoke-<versionId> `
+  --evidence-path .runtime/acceptance/release-smoke-<versionId>/release-smoke.json `
+  --buildx-builder <builder-name>
+```
+
+The builder name is validated as a portable Buildx identifier and is passed only
+to the OCI import commands. It is not a product-level default; use the builder
+available on the local Docker host. Import command exit status, duration,
+timeout state, and bounded redacted output are recorded in
+`commands.imports` before a failure is raised, so an unsupported builder leaves
+actionable evidence while the normal Compose cleanup still runs.
+
 The smoke rejects incomplete checksum coverage, modified files, inconsistent
 release/image manifests, mutable or missing Platform image references, extra
 services, source build contexts, bind mounts, Compose includes/extends, and

@@ -43,6 +43,7 @@ if (!databaseUrl) {
       const {
         addCapabilityToOwnedAgent,
         createOwnedAgent,
+        listOwnedAgentCapabilityCatalog,
         listOwnedAgentCapabilities,
         rotateOwnedAgentCallbackSecret,
         updateOwnedAgentCallbackProtocolVersion,
@@ -101,6 +102,10 @@ if (!databaseUrl) {
       const listedCapabilities = await listOwnedAgentCapabilities("operator-1", platformAgent.id);
       assert.equal(listedCapabilities.length, 1);
       assert.equal(listedCapabilities[0]?.id, capability.id);
+
+      const capabilityCatalog = await listOwnedAgentCapabilityCatalog("operator-1");
+      assert.deepEqual(capabilityCatalog.map((entry) => entry.id), [capability.id]);
+      assert.deepEqual(await listOwnedAgentCapabilityCatalog("owner-b"), []);
 
       await assert.rejects(
         () =>
