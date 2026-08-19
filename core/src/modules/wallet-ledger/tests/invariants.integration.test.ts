@@ -14,12 +14,12 @@ if (!databaseUrl) {
     "wallet ledger preserves balance invariants across grant, deduct, freeze, and unfreeze",
     { timeout: 120_000 },
     async () => {
-    const pool = new Pool({
+      const pool = new Pool({
         connectionString: databaseUrl,
-      max: 1,
-    });
-    pool.on("error", () => undefined);
-    let accountPool: { end: () => Promise<void> } | null = null;
+        max: 12,
+      });
+      pool.on("error", () => undefined);
+      let accountPool: { end: () => Promise<void> } | null = null;
 
     try {
       const {
@@ -39,7 +39,13 @@ if (!databaseUrl) {
 
       const userId = "wallet-owner";
 
-      await ensureUserWallet(userId);
+      await Promise.all(Array.from({ length: 8 }, () => ensureUserWallet(userId)));
+
+      const accountCount = await pool.query<{ count: string }>(
+        "select count(*)::text as count from ledger_accounts where user_id = $1",
+        [userId],
+      );
+      assert.equal(accountCount.rows[0]?.count, "3", "concurrent wallet initialization must create one account per currency");
 
       const initialSummary = await getWalletSummary(userId);
       assert.deepEqual(initialSummary.balances, {
@@ -50,19 +56,29 @@ if (!databaseUrl) {
       assert.equal(initialSummary.recentEntries.length, 0);
 
       await grantBalance(userId, "obsidian", 120, "integration grant");
+      await Promise.all(
+        Array.from({ length: 12 }, (_, index) =>
+          grantBalance(userId, "obsidian", 5, `concurrent integration grant ${index}`),
+        ),
+      );
       await deductBalance(userId, "obsidian", 30, "integration deduct");
       await freezeBalance(userId, "obsidian", 40, "integration freeze");
       await unfreezeBalance(userId, "obsidian", 10, "integration unfreeze");
 
       const summary = await getWalletSummary(userId);
       assert.deepEqual(summary.balances.obsidian, {
-        available: 60,
+        available: 120,
         frozen: 30,
       });
-      assert.deepEqual(
-        summary.recentEntries.map((entry) => entry.entryType),
-        ["unfreeze", "freeze", "deduct", "grant"],
+      const grantEntryCount = await pool.query<{ count: string }>(
+        `select count(*)::text as count
+           from ledger_entries
+          where user_id = $1
+            and currency = 'obsidian'
+            and entry_type = 'grant'`,
+        [userId],
       );
+      assert.equal(grantEntryCount.rows[0]?.count, "13");
 
       await assert.rejects(
         () => deductBalance(userId, "obsidian", -5, "negative deduct must fail"),
@@ -76,7 +92,7 @@ if (!databaseUrl) {
 
       const unchangedSummary = await getWalletSummary(userId);
       assert.deepEqual(unchangedSummary.balances.obsidian, {
-        available: 60,
+        available: 120,
         frozen: 30,
       });
 
@@ -90,7 +106,7 @@ if (!databaseUrl) {
       assert.deepEqual(outboxCounts.rows, [
         {
           event_name: "wallet.changed",
-          count: "4",
+          count: "16",
         },
       ]);
     } finally {

@@ -660,7 +660,8 @@ export async function settleExecutionById(executionId: string) {
       .select()
       .from(agentExecutionSettlements)
       .where(eq(agentExecutionSettlements.executionId, executionId))
-      .limit(1);
+      .limit(1)
+      .for("update");
     if (!settlement) {
       return;
     }

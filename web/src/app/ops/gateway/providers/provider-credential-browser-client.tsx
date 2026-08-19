@@ -231,23 +231,6 @@ function sortCredentials(list: GatewayProviderCredentialView[], sortKey: Credent
   });
 }
 
-function sanitizeFilename(value: string) {
-  return value.replace(/[<>:\"/\\\\|?*\\x00-\\x1F]/g, "-").trim();
-}
-
-function resolveCredentialFilename(credential: GatewayProviderCredentialView) {
-  const sourcePath = credential.sourcePath?.trim() ?? "";
-  if (sourcePath) {
-    const segments = sourcePath.split(/[\\\\/]/).filter(Boolean);
-    const candidate = segments[segments.length - 1];
-    if (candidate) {
-      return candidate.endsWith(".json") ? candidate : `${candidate}.json`;
-    }
-  }
-  const fallback = sanitizeFilename(credential.label || credential.id);
-  return `${fallback || credential.id}.json`;
-}
-
 function buildInfoPreview(credential: GatewayProviderCredentialView) {
   return {
     id: credential.id,
@@ -485,18 +468,6 @@ function CredentialDetailDialog(props: {
   const lumalabsConfigured = readConfiguredLumalabsContract(credential.credential);
   const lumalabsResolved = resolveLumalabsContract(credential.credential);
 
-  function handleDownload() {
-    const blob = new Blob([prettyJson(credential.credential)], { type: "application/json;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const anchor = document.createElement("a");
-    anchor.href = url;
-    anchor.download = resolveCredentialFilename(credential);
-    document.body.appendChild(anchor);
-    anchor.click();
-    anchor.remove();
-    URL.revokeObjectURL(url);
-  }
-
   return (
     <div
       aria-modal="true"
@@ -569,9 +540,6 @@ function CredentialDetailDialog(props: {
             onClick={() => props.onChangeTab("models")}
           >
             查看凭证模型
-          </button>
-          <button className="nt-btn nt-btn--secondary" type="button" onClick={handleDownload}>
-            下载凭证
           </button>
           <form action={refreshGatewayProviderCredentialQuotaAction}>
             <input name="providerAccountId" type="hidden" value={props.providerAccountId} />
@@ -751,7 +719,7 @@ function CredentialDetailDialog(props: {
               </NtPanel>
 
               <NtPanel style={{ display: "grid", gap: 8 }}>
-                <span className="nt-kicker">认证文件 JSON (预览)</span>
+                <span className="nt-kicker">认证文件 JSON (脱敏预览)</span>
                 <NtTextarea
                   readOnly
                   rows={18}
@@ -800,16 +768,6 @@ function CredentialDetailDialog(props: {
                   <NtInput defaultValue={credential.sourcePath ?? ""} name="sourcePath" />
                 </label>
               </div>
-
-              <label style={{ display: "grid", gap: 6 }}>
-                <span className="nt-kicker">凭证 JSON</span>
-                <NtTextarea
-                  defaultValue={prettyJson(credential.credential)}
-                  name="credentialJson"
-                  rows={18}
-                  style={{ fontFamily: "monospace", resize: "vertical" }}
-                />
-              </label>
 
               {isLumalabs ? (
                 <NtPanel style={{ display: "grid", gap: 10 }}>

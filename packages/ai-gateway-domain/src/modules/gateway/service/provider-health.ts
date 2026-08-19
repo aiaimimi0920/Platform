@@ -82,6 +82,10 @@ export function buildGatewayProviderProbeLockKey(providerAccountId: string) {
   return `ai-gateway:provider:${providerAccountId}:probe-lock`;
 }
 
+export function getGatewayProviderProbeLockTtlMs() {
+  return Math.max(30_000, env.providerFetchTimeoutMs * 2 + 10_000);
+}
+
 export function applySessionBackedHeaders(headers: Headers, payload: GatewaySessionBackedProviderRuntime & { apiKey: string }) {
   const sessionAuth = payload.sessionAuth;
   const transport = normalizeSessionAuthTransport(sessionAuth?.transport);
@@ -425,17 +429,43 @@ export async function probeGatewayProviderAccount(row: GatewayProviderAccountRow
 export async function withProviderProbeLock<T>(providerAccountId: string, callback: () => Promise<T>): Promise<T | null> {
   const lockKey = buildGatewayProviderProbeLockKey(providerAccountId);
   const token = randomUUID();
-  const acquired = await redis.set(lockKey, token, "PX", 15_000, "NX");
+  const ttlMs = getGatewayProviderProbeLockTtlMs();
+  const acquired = await redis.set(lockKey, token, "PX", ttlMs, "NX");
   if (acquired !== "OK") {
     return null;
   }
+  const renewal = setInterval(() => {
+    void redis
+      .eval(
+        `
+          if redis.call("get", KEYS[1]) == ARGV[1] then
+            return redis.call("pexpire", KEYS[1], ARGV[2])
+          end
+          return 0
+        `,
+        1,
+        lockKey,
+        token,
+        ttlMs,
+      )
+      .catch(() => undefined);
+  }, Math.max(1_000, Math.floor(ttlMs / 3)));
+  renewal.unref();
   try {
     return await callback();
   } finally {
-    const current = await redis.get(lockKey);
-    if (current === token) {
-      await redis.del(lockKey);
-    }
+    clearInterval(renewal);
+    await redis.eval(
+      `
+        if redis.call("get", KEYS[1]) == ARGV[1] then
+          return redis.call("del", KEYS[1])
+        end
+        return 0
+      `,
+      1,
+      lockKey,
+      token,
+    );
   }
 }
 

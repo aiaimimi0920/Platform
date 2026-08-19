@@ -10,6 +10,7 @@ import type {
   AgentExecutionRuntimeProfileKey,
   AgentSourceType,
 } from "@neuro/contracts";
+import { createHash } from "node:crypto";
 import { and, desc, eq, inArray, lt, max, or, sql, type SQL } from "drizzle-orm";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 
@@ -19,6 +20,7 @@ import {
   classifyExternalCallbackRejection,
   getRejectionCategoriesForRetryability,
   resolveExternalCallbackCompatibility,
+  stableStringify,
   type StoredExternalCallbackReplayEnvelope,
 } from "@/modules/agent-execution/callback-governance";
 import {
@@ -71,6 +73,7 @@ export async function recordExternalCallbackAudit(args: {
   callbackTimestamp: Date | null;
   rejectionCategory?: AgentExecutionCallbackRejectionCategory | null;
   payloadSummary: string | null;
+  payloadHash?: string | null;
   replayPayload?: StoredExternalCallbackReplayEnvelope | null;
 }) {
   await args.tx.insert(agentExecutionCallbacks).values({
@@ -88,9 +91,16 @@ export async function recordExternalCallbackAudit(args: {
     callbackTimestamp: args.callbackTimestamp,
     rejectionCategory: args.rejectionCategory ?? null,
     payloadSummary: args.payloadSummary,
+    payloadHash:
+      args.payloadHash ??
+      (args.replayPayload ? buildExternalCallbackPayloadHash(args.replayPayload) : null),
     replayPayload: args.replayPayload ?? null,
     receivedAt: now(),
   });
+}
+
+export function buildExternalCallbackPayloadHash(payload: StoredExternalCallbackReplayEnvelope) {
+  return createHash("sha256").update(stableStringify(payload)).digest("hex");
 }
 
 export function getExecutionCallbackRemediationPolicyKey(args: {

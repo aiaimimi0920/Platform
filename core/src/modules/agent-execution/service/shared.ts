@@ -186,6 +186,30 @@ export async function releaseEphemeralLock(lockKey: string, token: string) {
   );
 }
 
+export async function renewEphemeralLock(lockKey: string, token: string, ttlSeconds: number) {
+  const renewed = await redis.eval(
+    `
+      if redis.call("get", KEYS[1]) == ARGV[1] then
+        return redis.call("expire", KEYS[1], ARGV[2])
+      end
+      return 0
+    `,
+    1,
+    lockKey,
+    token,
+    ttlSeconds,
+  );
+  return Number(renewed) === 1;
+}
+
+export function startEphemeralLockRenewal(lockKey: string, token: string, ttlSeconds: number) {
+  const interval = setInterval(() => {
+    void renewEphemeralLock(lockKey, token, ttlSeconds).catch(() => undefined);
+  }, Math.max(1_000, Math.floor((ttlSeconds * 1_000) / 3)));
+  interval.unref();
+  return () => clearInterval(interval);
+}
+
 export function toWhereClause(conditions: SQL[]) {
   return conditions.length > 0 ? and(...conditions) : undefined;
 }

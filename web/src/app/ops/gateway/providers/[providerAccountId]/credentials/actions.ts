@@ -4,6 +4,7 @@ import {
   createOperatorGatewayProviderCredential,
   deleteOperatorGatewayProviderCredential,
   exportOperatorGatewayProviderCredentialsToFolder,
+  getOperatorGatewayProviderCredential,
   getOperatorGatewayProviderAccount,
   importOperatorGatewayProviderCredentialsFromFolder,
   patchOperatorGatewayProviderCredential,
@@ -555,17 +556,24 @@ export async function patchGatewayProviderCredentialAction(formData: FormData) {
   try {
     const credentialJson = readOptionalText(formData.get("credentialJson"));
     const providerAccount = await resolveProviderAccountForCredentialMutation(userContext, providerAccountId);
-    const parsedCredential =
-      credentialJson != null ? parseJsonObject(credentialJson, "凭证 JSON") : null;
-    const credentialPayload =
-      parsedCredential && isLumalabsCompatibleAdapter(providerAccount.adapter)
-        ? mergeLumalabsContractIntoPayload(parsedCredential, readLumalabsContractFromFormData(formData))
-        : parsedCredential;
+    const parsedCredential = credentialJson != null ? parseJsonObject(credentialJson, "凭证 JSON") : undefined;
+    const isLumalabs = isLumalabsCompatibleAdapter(providerAccount.adapter);
+    const credentialPayload = isLumalabs
+      ? mergeLumalabsContractIntoPayload(
+          parsedCredential ??
+            (
+              await getOperatorGatewayProviderCredential(userContext, providerCredentialId, {
+                maskSecrets: false,
+              })
+            ).credential,
+          readLumalabsContractFromFormData(formData),
+        )
+      : parsedCredential;
     const credential = await patchOperatorGatewayProviderCredential(userContext, providerCredentialId, {
       providerAccountId,
       label: readOptionalText(formData.get("label")),
       status: readOptionalText(formData.get("status")),
-      credential: credentialPayload,
+      ...(credentialPayload ? { credential: credentialPayload } : {}),
       sourceKind: readOptionalText(formData.get("sourceKind")),
       sourcePath: readOptionalText(formData.get("sourcePath")),
       syncMode: readOptionalText(formData.get("syncMode")),

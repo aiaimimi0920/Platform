@@ -54,7 +54,7 @@ export default async function GatewayProviderDetailPage({
   const userContext = await requirePlatformOperatorUserContext();
   const [inventory, { credentials }, folderSyncStatus, providerModelTieringResult] = await Promise.all([
     getOperatorGatewayProviderInventory(userContext),
-    listOperatorGatewayProviderCredentials(userContext, providerAccountId, { maskSecrets: false }),
+    listOperatorGatewayProviderCredentials(userContext, providerAccountId, { maskSecrets: true }),
     getOperatorGatewayProviderCredentialFolderSyncStatus(userContext),
     getOperatorGatewayProviderModelTiering(userContext, providerAccountId)
       .then((tiering) => ({

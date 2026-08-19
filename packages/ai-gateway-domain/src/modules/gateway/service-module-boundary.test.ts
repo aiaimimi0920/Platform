@@ -13,6 +13,7 @@ const subrouterSource = readdirSync(routerDir)
 const alertSource = readFileSync(new URL("anomaly-alerts.ts", serviceDir), "utf8");
 const incidentSource = readFileSync(new URL("anomaly-incidents.ts", serviceDir), "utf8");
 const policySource = readFileSync(new URL("anomaly-policies.ts", serviceDir), "utf8");
+const providerHealthSource = readFileSync(new URL("provider-health.ts", serviceDir), "utf8");
 
 test("anomaly normalizers do not create an alerts-incidents static cycle", () => {
   assert.match(alertSource, /from "\.\/anomaly-normalizers"/);
@@ -46,4 +47,11 @@ test("gateway facade mounts every split router and preserves its 87 routes", () 
   assert.equal(new Set(registrations).size, registrations.length);
   const routeRegistrations = subrouterSource.match(/\bapp\.(?:get|post|put|delete|patch)\b/g) ?? [];
   assert.equal(routeRegistrations.length, 87);
+});
+
+test("provider probe lock renews and releases only for the owning token", () => {
+  assert.match(providerHealthSource, /env\.providerFetchTimeoutMs \* 2 \+ 10_000/);
+  assert.match(providerHealthSource, /redis\.call\("pexpire", KEYS\[1\], ARGV\[2\]\)/);
+  assert.match(providerHealthSource, /redis\.call\("del", KEYS\[1\]\)/);
+  assert.doesNotMatch(providerHealthSource, /const current = await redis\.get\(lockKey\)/);
 });

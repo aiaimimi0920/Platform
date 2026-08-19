@@ -157,6 +157,7 @@ export const agentExecutionCallbacks = pgTable(
     callbackTimestamp: timestamp("callback_timestamp", { withTimezone: true }),
     rejectionCategory: text("rejection_category"),
     payloadSummary: text("payload_summary"),
+    payloadHash: text("payload_hash"),
     replayPayload: jsonb("replay_payload"),
     autoRemediationAttempts: integer("auto_remediation_attempts").notNull().default(0),
     lastAutoRemediationAt: timestamp("last_auto_remediation_at", { withTimezone: true }),

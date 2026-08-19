@@ -80,6 +80,7 @@ import {
   platformRuntimeLoopLockKey,
   platformRuntimeLoopLockTtlSeconds,
   releaseEphemeralLock,
+  startEphemeralLockRenewal,
   toWhereClause,
 } from "./shared";
 import { toStoredExecutionOutputEnvelope } from "./views";
@@ -91,7 +92,13 @@ export async function getActiveExecutionRunId(
   const [run] = await connection
     .select({ id: agentExecutionRuns.id })
     .from(agentExecutionRuns)
-    .where(and(eq(agentExecutionRuns.executionId, executionId), eq(agentExecutionRuns.status, "running")))
+    .where(
+      and(
+        eq(agentExecutionRuns.executionId, executionId),
+        eq(agentExecutionRuns.runKind, "platform_executor"),
+        eq(agentExecutionRuns.status, "running"),
+      ),
+    )
     .orderBy(desc(agentExecutionRuns.createdAt))
     .limit(1);
 
@@ -109,9 +116,19 @@ export async function ensureActivePlatformRun(args: {
   }
 
   const created = await db.transaction(async (tx) => {
-    const [execution] = await tx.select().from(agentExecutions).where(eq(agentExecutions.id, args.executionId)).limit(1);
+    const [execution] = await tx
+      .select()
+      .from(agentExecutions)
+      .where(eq(agentExecutions.id, args.executionId))
+      .limit(1)
+      .for("update");
     if (!execution) {
       throw new NotFoundError("Agent execution not found");
+    }
+
+    const activeRunId = await getActiveExecutionRunId(args.executionId, tx);
+    if (activeRunId) {
+      return activeRunId;
     }
 
     const run = await createExecutionRunInTx(tx, {
@@ -962,6 +979,12 @@ export async function runPlatformExecutor(args?: { limit?: number; agentId?: str
     };
   }
 
+  const stopLockRenewal = startEphemeralLockRenewal(
+    platformRuntimeLoopLockKey,
+    lockToken,
+    platformRuntimeLoopLockTtlSeconds,
+  );
+
   try {
   const limit = Math.max(1, Math.min(args?.limit ?? 3, 20));
   const claimedRows = await db.transaction(async (tx) => {
@@ -1214,6 +1237,7 @@ export async function runPlatformExecutor(args?: { limit?: number; agentId?: str
     failures,
   };
   } finally {
+    stopLockRenewal();
     await releaseEphemeralLock(platformRuntimeLoopLockKey, lockToken);
   }
 }
@@ -1234,6 +1258,13 @@ export async function recoverStalePlatformExecutions(args?: {
       results: [],
     };
   }
+
+
+  const stopLockRenewal = startEphemeralLockRenewal(
+    platformRuntimeLoopLockKey,
+    lockToken,
+    platformRuntimeLoopLockTtlSeconds,
+  );
 
   try {
   const limit = Math.max(1, Math.min(args?.limit ?? 10, 50));
@@ -1494,6 +1525,7 @@ export async function recoverStalePlatformExecutions(args?: {
     results: actionResults,
   };
   } finally {
+    stopLockRenewal();
     await releaseEphemeralLock(platformRuntimeLoopLockKey, lockToken);
   }
 }

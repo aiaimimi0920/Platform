@@ -1,11 +1,12 @@
 import type {
   AddAgentExecutionArtifactInput,
+  AgentExecutionCallbackType,
   AgentExecutionStatus,
   AgentExecutionView,
   ExternalAgentCallbackInput,
   UpdateAgentExecutionStatusInput,
 } from "@neuro/contracts";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 
 import { db } from "@/db/client";
@@ -13,6 +14,7 @@ import { redis } from "@/db/redis";
 import * as schema from "@/db/schema";
 import {
   buildStoredExternalCallbackReplayEnvelope,
+  normalizeStoredExternalCallbackReplayEnvelope,
   resolveExternalCallbackMatch,
   summarizeExternalCallbackPayload,
 } from "@/modules/agent-execution/callback-governance";
@@ -21,10 +23,12 @@ import {
 } from "@/modules/agent-execution/repository";
 import {
   agentExecutions,
+  agentExecutionCallbacks,
 } from "@/modules/agent-execution/schema";
 import { ConflictError, NotFoundError } from "@/platform/errors";
 
 import {
+  buildExternalCallbackPayloadHash,
   getExecutionCallbackRemediationPolicyKey,
   getExternalCallbackIdempotencyKey,
   recordExternalCallbackAudit,
@@ -38,6 +42,7 @@ import {
   externalCallbackPendingTtlSeconds,
   externalCallbackProcessedTtlSeconds,
   now,
+  startEphemeralLockRenewal,
   terminalExecutionStatuses,
 } from "./shared";
 import { getAgentExecutionViewById } from "./views";
@@ -45,26 +50,130 @@ import { getAgentExecutionViewById } from "./views";
 export async function runExternalCallbackWithIdempotency<T>(
   executionId: string,
   callbackId: string,
+  fingerprint: {
+    callbackType: AgentExecutionCallbackType;
+    payloadHash: string;
+  },
   operation: () => Promise<T>,
   onDuplicate: () => Promise<T>,
 ) {
+  const findAcceptedCallback = async () => {
+    const [accepted] = await db
+      .select({
+        callbackType: agentExecutionCallbacks.callbackType,
+        payloadHash: agentExecutionCallbacks.payloadHash,
+        replayPayload: agentExecutionCallbacks.replayPayload,
+      })
+      .from(agentExecutionCallbacks)
+      .where(
+        and(
+          eq(agentExecutionCallbacks.executionId, executionId),
+          eq(agentExecutionCallbacks.callbackId, callbackId),
+          eq(agentExecutionCallbacks.status, "accepted"),
+        ),
+      )
+      .limit(1);
+    return accepted ?? null;
+  };
+  const assertMatchingFingerprint = (accepted: Awaited<ReturnType<typeof findAcceptedCallback>>) => {
+    const replayPayload = normalizeStoredExternalCallbackReplayEnvelope(accepted?.replayPayload);
+    const persistedPayloadHash = accepted?.payloadHash
+      ?? (replayPayload ? buildExternalCallbackPayloadHash(replayPayload) : null);
+    if (
+      !accepted ||
+      accepted.callbackType !== fingerprint.callbackType ||
+      (persistedPayloadHash !== null && persistedPayloadHash !== fingerprint.payloadHash)
+    ) {
+      throw new ConflictError("External callback id was reused with a different type or payload");
+    }
+  };
+
+  const persisted = await findAcceptedCallback();
+  if (persisted) {
+    assertMatchingFingerprint(persisted);
+    return onDuplicate();
+  }
+
   const key = getExternalCallbackIdempotencyKey(executionId, callbackId);
-  const claimed = await redis.set(key, "pending", "EX", externalCallbackPendingTtlSeconds, "NX");
+  const claimToken = crypto.randomUUID();
+  const pendingValue = JSON.stringify({ state: "pending", claimToken, ...fingerprint });
+  const processedValue = JSON.stringify({ state: "processed", ...fingerprint });
+  const claimed = await redis.set(key, pendingValue, "EX", externalCallbackPendingTtlSeconds, "NX");
   if (claimed !== "OK") {
-    const status = await redis.get(key);
-    if (status === "pending") {
+    const accepted = await findAcceptedCallback();
+    if (accepted) {
+      assertMatchingFingerprint(accepted);
+      return onDuplicate();
+    }
+    const rawState = await redis.get(key);
+    let state: { state?: unknown; callbackType?: unknown; payloadHash?: unknown } | null = null;
+    try {
+      state = rawState
+        ? JSON.parse(rawState) as { state?: unknown; callbackType?: unknown; payloadHash?: unknown }
+        : null;
+    } catch {
+      state = null;
+    }
+    if (
+      state?.callbackType !== fingerprint.callbackType ||
+      state?.payloadHash !== fingerprint.payloadHash
+    ) {
+      throw new ConflictError("External callback id was reused with a different type or payload");
+    }
+    if (state?.state === "pending") {
       throw new ConflictError("External callback is already being processed");
     }
     return onDuplicate();
   }
 
+  const stopClaimRenewal = startEphemeralLockRenewal(
+    key,
+    pendingValue,
+    externalCallbackPendingTtlSeconds,
+  );
   try {
-    const result = await operation();
-    await redis.set(key, "processed", "EX", externalCallbackProcessedTtlSeconds);
+    let result: T;
+    try {
+      result = await operation();
+    } catch (error) {
+      await redis
+        .eval(
+          `
+            if redis.call("get", KEYS[1]) == ARGV[1] then
+              return redis.call("del", KEYS[1])
+            end
+            return 0
+          `,
+          1,
+          key,
+          pendingValue,
+        )
+        .catch(() => undefined);
+      const accepted = await findAcceptedCallback();
+      if (accepted) {
+        assertMatchingFingerprint(accepted);
+        return onDuplicate();
+      }
+      throw error;
+    }
+    await redis
+      .eval(
+        `
+          if redis.call("get", KEYS[1]) == ARGV[1] then
+            return redis.call("set", KEYS[1], ARGV[2], "EX", ARGV[3])
+          end
+          return nil
+        `,
+        1,
+        key,
+        pendingValue,
+        processedValue,
+        externalCallbackProcessedTtlSeconds,
+      )
+      .catch(() => undefined);
     return result;
-  } catch (error) {
-    await redis.del(key);
-    throw error;
+  } finally {
+    stopClaimRenewal();
   }
 }
 
@@ -141,9 +250,14 @@ export async function updateExternalAgentExecutionStatus(
     statusNote: input.statusNote,
     resultSummary: input.resultSummary,
   });
+  if (!replayPayload) {
+    throw new Error("Status callback replay payload could not be normalized");
+  }
+  const payloadHash = buildExternalCallbackPayloadHash(replayPayload);
   return runExternalCallbackWithIdempotency(
     execution.id,
     callbackId,
+    { callbackType: "status", payloadHash },
     async () => {
       await db.transaction(async (tx) => {
         await updateOwnedAgentExecutionStatusInTx(tx, execution, input);
@@ -207,9 +321,14 @@ export async function addExternalAgentExecutionArtifact(
   const effectiveRemediationPolicyKey = getExecutionCallbackRemediationPolicyKey(access);
   const payloadSummary = summarizeExternalCallbackPayload(input);
   const replayPayload = buildStoredExternalCallbackReplayEnvelope(input);
+  if (!replayPayload) {
+    throw new Error("Artifact callback replay payload could not be normalized");
+  }
+  const payloadHash = buildExternalCallbackPayloadHash(replayPayload);
   return runExternalCallbackWithIdempotency(
     execution.id,
     callbackId,
+    { callbackType: "artifact", payloadHash },
     async () => {
       await db.transaction(async (tx) => {
         await addOwnedAgentExecutionArtifactInTx(tx, execution, input);
@@ -273,9 +392,14 @@ export async function recordExternalAgentExecutionHeartbeat(
     type: "heartbeat",
     statusNote,
   });
+  if (!replayPayload) {
+    throw new Error("Heartbeat callback replay payload could not be normalized");
+  }
+  const payloadHash = buildExternalCallbackPayloadHash(replayPayload);
   return runExternalCallbackWithIdempotency(
     execution.id,
     callbackId,
+    { callbackType: "heartbeat", payloadHash },
     async () => {
       const latestExecution = await db.transaction(async (tx) => {
         const [currentExecution] = await tx

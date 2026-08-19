@@ -1023,7 +1023,8 @@ export async function claimMission(userId: string, missionId: string): Promise<M
     throw new ConflictError("该任务当前不在可领取窗口内。");
   }
 
-  return db.transaction(async (tx) => {
+  try {
+    return await db.transaction(async (tx) => {
     await ensureInternalUser(userId, tx);
     const window = resolveMissionWindow(mission, referenceTime);
     const existingClaim = await getMissionClaimByMissionAndPeriod(tx, userId, mission.id, window.periodKey);
@@ -1142,7 +1143,18 @@ export async function claimMission(userId: string, missionId: string): Promise<M
       periodKey: window.periodKey,
       streakDays,
     };
-  });
+    });
+  } catch (error) {
+    if (
+      typeof error === "object" &&
+      error !== null &&
+      "code" in error &&
+      (error as { code?: unknown }).code === "23505"
+    ) {
+      throw new ConflictError("该任务奖励已经领取过了。");
+    }
+    throw error;
+  }
 }
 
 export async function listOperatorMissionDefinitions(

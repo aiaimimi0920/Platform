@@ -340,6 +340,9 @@ export function validateArtifactInput(input: AddAgentExecutionArtifactInput) {
   }
 }
 
+export const maxArtifactsPerExecution = 100;
+export const maxArtifactMetadataBytesPerExecution = 512 * 1024;
+
 export async function addOwnedAgentExecutionArtifactInTx(
   tx: NodePgDatabase<typeof schema>,
   execution: typeof agentExecutions.$inferSelect,
@@ -353,6 +356,30 @@ export async function addOwnedAgentExecutionArtifactInTx(
     })
     .where(eq(agentExecutions.id, execution.id))
     .returning();
+  const normalizedUrl = input.url?.trim() || null;
+  const normalizedSummary = input.summary?.trim() || null;
+  const [artifactUsage] = await tx
+    .select({
+      count: sql<number>`count(*)::int`,
+      metadataBytes: sql<number>`coalesce(sum(
+        octet_length(${agentExecutionArtifacts.title}) +
+        octet_length(coalesce(${agentExecutionArtifacts.url}, '')) +
+        octet_length(coalesce(${agentExecutionArtifacts.summary}, ''))
+      ), 0)::int`,
+    })
+    .from(agentExecutionArtifacts)
+    .where(eq(agentExecutionArtifacts.executionId, execution.id));
+  const nextMetadataBytes =
+    Number(artifactUsage?.metadataBytes ?? 0) +
+    Buffer.byteLength(input.title, "utf8") +
+    Buffer.byteLength(normalizedUrl ?? "", "utf8") +
+    Buffer.byteLength(normalizedSummary ?? "", "utf8");
+  if (Number(artifactUsage?.count ?? 0) >= maxArtifactsPerExecution) {
+    throw new ConflictError(`Agent execution cannot contain more than ${maxArtifactsPerExecution} artifacts`);
+  }
+  if (nextMetadataBytes > maxArtifactMetadataBytesPerExecution) {
+    throw new ConflictError("Agent execution artifact metadata exceeds the 512 KiB limit");
+  }
   const [artifact] = await tx
     .insert(agentExecutionArtifacts)
     .values({
@@ -360,8 +387,8 @@ export async function addOwnedAgentExecutionArtifactInTx(
       executionId: execution.id,
       kind: input.kind,
       title: input.title,
-      url: input.url?.trim() || null,
-      summary: input.summary?.trim() || null,
+      url: normalizedUrl,
+      summary: normalizedSummary,
       createdAt,
     })
     .returning();

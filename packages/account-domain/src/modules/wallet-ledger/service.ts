@@ -69,22 +69,23 @@ async function ensureWalletAccounts(
   userId: string,
   tx: DbTx = db,
 ) {
-  const current = await tx.select().from(ledgerAccounts).where(eq(ledgerAccounts.userId, userId));
-  const existing = new Set(current.map((item) => item.currency));
   const createdAt = now();
-
-  for (const currency of currencyKeys) {
-    if (existing.has(currency)) continue;
-    await tx.insert(ledgerAccounts).values({
-      id: crypto.randomUUID(),
-      userId,
-      currency,
-      availableBalance: 0,
-      frozenBalance: 0,
-      createdAt,
-      updatedAt: createdAt,
+  await tx
+    .insert(ledgerAccounts)
+    .values(
+      currencyKeys.map((currency) => ({
+        id: crypto.randomUUID(),
+        userId,
+        currency,
+        availableBalance: 0,
+        frozenBalance: 0,
+        createdAt,
+        updatedAt: createdAt,
+      })),
+    )
+    .onConflictDoNothing({
+      target: [ledgerAccounts.userId, ledgerAccounts.currency],
     });
-  }
 }
 
 async function appendLedgerEntry(args: {
@@ -125,19 +126,24 @@ async function mutateAccount(args: {
   note?: string | null;
   referenceType?: string | null;
   referenceId?: string | null;
-}) {
+}): Promise<typeof ledgerAccounts.$inferSelect> {
   if (!Number.isFinite(args.amount) || args.amount <= 0) {
     throw new BadRequestError("Wallet mutation amount must be greater than 0");
   }
 
-  const tx = args.tx ?? db;
+  if (!args.tx) {
+    return db.transaction((tx) => mutateAccount({ ...args, tx }));
+  }
+
+  const tx = args.tx;
   await ensureWalletAccounts(args.userId, tx);
 
   const [account] = await tx
     .select()
     .from(ledgerAccounts)
     .where(and(eq(ledgerAccounts.userId, args.userId), eq(ledgerAccounts.currency, args.currency)))
-    .limit(1);
+    .limit(1)
+    .for("update");
 
   if (!account) {
     throw new Error(`Ledger account missing for ${args.userId}/${args.currency}`);
@@ -159,6 +165,9 @@ async function mutateAccount(args: {
     })
     .where(eq(ledgerAccounts.id, account.id))
     .returning();
+  if (!updatedAccount) {
+    throw new Error(`Failed to update ledger account for ${args.userId}/${args.currency}`);
+  }
 
   await appendLedgerEntry({
     tx,
