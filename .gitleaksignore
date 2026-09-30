@@ -1,0 +1,21 @@
+# Exact reviewed historical false positives only. No path/rule wildcard exclusions.
+# Deterministic release-smoke run key used only by the test fixture.
+13ca3c772c161379a85ec57db480071c42b74ab7:scripts/acceptance/tests/release-smoke.test.mjs:generic-api-key:171
+# Synthetic redaction canary asserted by the command-output sanitization tests.
+6c5bad558c3446cfa10542b2b69864f041870841:scripts/acceptance/tests/run-command.test.mjs:generic-api-key:95
+# Synthetic redaction canary asserted by the command-output sanitization tests.
+6c5bad558c3446cfa10542b2b69864f041870841:scripts/acceptance/tests/run-command.test.mjs:generic-api-key:100
+# Synthetic redaction canary asserted by the command-output sanitization tests.
+6c5bad558c3446cfa10542b2b69864f041870841:scripts/acceptance/tests/run-command.test.mjs:generic-api-key:101
+# Synthetic redaction canary asserted by the command-output sanitization tests.
+6c5bad558c3446cfa10542b2b69864f041870841:scripts/acceptance/tests/run-command.test.mjs:generic-api-key:103
+# Public product benefit identifier (discount percentage), not an authentication key.
+4274093b81da2afc345e79aff2f345b841792e7a:core/src/modules/user-progression/model.ts:generic-api-key:208
+# Public product benefit identifier (discount percentage), not an authentication key.
+4274093b81da2afc345e79aff2f345b841792e7a:core/src/modules/user-progression/model.ts:generic-api-key:228
+# Short deterministic password-hash placeholder in credential-format documentation.
+4274093b81da2afc345e79aff2f345b841792e7a:docs/20-ai-gateway/Qwen平台凭证模板与字段说明.md:generic-api-key:501
+# Short deterministic password-hash placeholder in credential-format documentation.
+4274093b81da2afc345e79aff2f345b841792e7a:docs/20-ai-gateway/Qwen平台凭证模板与字段说明.md:generic-api-key:537
+# Public OAuth client identifier field, not the adjacent OAuth client-secret field.
+4274093b81da2afc345e79aff2f345b841792e7a:web/.env.example:generic-api-key:14

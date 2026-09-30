@@ -20,6 +20,14 @@ Scope: this repository root and all subdirectories, excluding the external `AIRe
 - Platform OpenTofu work must follow `docs/40-engineering/OpenTofu环境契约基线.md`: pin the CLI in `.opentofu-version`, declare child-module provider sources, commit separate staging/production multi-platform lock files, and keep backend bucket selection and credentials outside Git.
 - The OpenTofu portion of regular CI may run only `fmt`, `init -backend=false -lockfile=readonly`, and provider-schema `validate`; real `plan` / `apply` requires an explicitly authorized environment workflow and must never be inferred from validation success.
 
+## Repository Security and Quality Gates
+
+- Follow `docs/40-engineering/repository-security-quality-baseline.md` for changes to repository automation or dependency controls.
+- Keep the existing workspace CI, production audit, OpenTofu validation and release contracts intact.
+- New workflow checks lint all Actions, scan committed history with redacted Gitleaks output, run CodeQL for JavaScript/TypeScript and Actions, and scan the committed npm workspace lock with OSV.
+- Do not add broad scanner exclusions, silently ignore findings, renew exceptions, or treat a green scan as proof of deployment safety.
+- CI must not run real infrastructure plan/apply, publish a release, deploy, or receive real credentials merely to validate this baseline.
+
 ## UI Default
 
 All future UI work in this repository must use the **NeuroTerminal** (`nt-*`) industrial-terminal design system.

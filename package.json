@@ -73,10 +73,10 @@
   },
   "overrides": {
     "@auth/core": {
-      "nodemailer": "9.0.5"
+      "nodemailer": "10.0.13"
     },
     "next-auth": {
-      "nodemailer": "9.0.5"
+      "nodemailer": "10.0.13"
     },
     "postcss": "8.5.23"
   }
