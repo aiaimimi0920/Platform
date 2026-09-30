@@ -6,6 +6,9 @@ import { describe, it } from "node:test";
 
 const rootDir = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const ACTION_PINS = Object.freeze({
+  "github/codeql-action/init": ["v4", "db488ddef3bf6cb639b32c2e9a7c0a7ea8271d28"],
+  "github/codeql-action/analyze": ["v4", "db488ddef3bf6cb639b32c2e9a7c0a7ea8271d28"],
+  "google/osv-scanner-action/.github/workflows/osv-scanner-reusable.yml": ["v2.5.1", "ffa0a5f39214d80778c9b494822d94d0d9668458"],
   "actions/checkout": ["v5", "fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09"],
   "actions/download-artifact": ["v8", "3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c"],
   "actions/setup-node": ["v6", "249970729cb0ef3589644e2896645e5dc5ba9c38"],

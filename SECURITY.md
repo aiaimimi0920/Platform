@@ -24,5 +24,13 @@ private contact channel without including sensitive technical details.
   root CI command.
 - Auth.js `0.41.3` declares Nodemailer as an optional peer with an 8.x-only
   range, although Platform does not configure an Auth.js email provider. The
-  root override keeps that optional peer on the patched `9.0.5` release used by
-  the account worker. Remove the override after Auth.js accepts Nodemailer 9.x.
+  root override keeps that optional peer on patched `10.0.13`, also used by
+  the account worker. Its Node.js >=20 requirement is satisfied by the Node 22
+  baseline. Remove the override after Auth.js accepts Nodemailer 10.x.
+
+## Repository Scanning
+
+See [repository security and quality baseline](docs/40-engineering/repository-security-quality-baseline.md)
+for scheduled/PR CodeQL, whole-workspace OSV, workflow lint, redacted committed-history
+secret scanning, and dependency-update coverage. Findings must not be hidden by
+broad exclusions. These checks do not guarantee that code or deployments are safe.
