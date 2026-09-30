@@ -23,7 +23,7 @@ publication, container publication, infrastructure backends, or credentials.
   vulnerability exception was introduced. OSV does not cover OpenTofu provider
   binaries, OS packages, or deployment images through this npm-only scan.
 - Existing npm/Actions Dependabot coverage gains bounded grouped routine npm
-  proposals, plus Docker base images and the two OpenTofu environment roots.
+  proposals, plus Docker base images.
   Version PRs are not automatically merged. Security updates are not deferred
   by the routine version-update cooldown.
 
@@ -85,3 +85,17 @@ The final lock uses exact Nodemailer 10.0.13 in the worker and both overrides.
 A follow-up scan caught GHSA-g57g-f23g-4646 in the initially evaluated 10.0.6;
 the upstream patch requires >=10.0.9, so the candidate was updated and rescanned
 rather than suppressing this finding.
+
+## OpenTofu updater compatibility
+
+The first attempted Terraform Dependabot update failed because its bundled
+Terraform 1.16.4 does not satisfy this repository's intentional OpenTofu
+`>=1.12.0, <1.13.0` contract. See [the observed updater run](https://github.com/aiaimimi0920/Platform/actions/runs/36699317653).
+That unsupported updater entry has been removed. Do not widen the infrastructure
+version constraint, replace OpenTofu, or enable real plan/apply to make a bot pass.
+
+OpenTofu formatting, backend-disabled/read-only initialization and provider-schema
+validation remain mandatory in the existing CI. Provider lock upgrades require
+explicit compatible-tool evaluation and reviewed lock regeneration until an
+updater supports this pinned toolchain. npm, Actions and Docker Dependabot jobs
+remain enabled. This is a documented automation gap, not vulnerability suppression.

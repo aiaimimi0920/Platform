@@ -62,3 +62,12 @@ test("secret exclusions are exact independently reviewable historical fingerprin
     assert.ok(item.reason.length > 30);
   }
 });
+
+
+test("Dependabot only configures supported updaters for the pinned toolchains", () => {
+  const ecosystems = [...read(".github/dependabot.yml").matchAll(/package-ecosystem: ([a-z-]+)/g)].map((match) => match[1]);
+  assert.deepEqual(ecosystems.sort(), ["docker", "github-actions", "npm"]);
+  assert.match(read("package.json"), /npm run infra:tofu:validate/);
+  assert.match(read("scripts/validate-tofu.mjs"), /-backend=false/);
+  assert.match(read("scripts/validate-tofu.mjs"), /-lockfile=readonly/);
+});
