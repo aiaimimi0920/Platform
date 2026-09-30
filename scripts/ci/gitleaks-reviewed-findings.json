@@ -1,0 +1,42 @@
+[
+  {
+    "fingerprint": "13ca3c772c161379a85ec57db480071c42b74ab7:scripts/acceptance/tests/release-smoke.test.mjs:generic-api-key:171",
+    "reason": "Deterministic release-smoke run key used only by the test fixture."
+  },
+  {
+    "fingerprint": "6c5bad558c3446cfa10542b2b69864f041870841:scripts/acceptance/tests/run-command.test.mjs:generic-api-key:95",
+    "reason": "Synthetic redaction canary asserted by the command-output sanitization tests."
+  },
+  {
+    "fingerprint": "6c5bad558c3446cfa10542b2b69864f041870841:scripts/acceptance/tests/run-command.test.mjs:generic-api-key:100",
+    "reason": "Synthetic redaction canary asserted by the command-output sanitization tests."
+  },
+  {
+    "fingerprint": "6c5bad558c3446cfa10542b2b69864f041870841:scripts/acceptance/tests/run-command.test.mjs:generic-api-key:101",
+    "reason": "Synthetic redaction canary asserted by the command-output sanitization tests."
+  },
+  {
+    "fingerprint": "6c5bad558c3446cfa10542b2b69864f041870841:scripts/acceptance/tests/run-command.test.mjs:generic-api-key:103",
+    "reason": "Synthetic redaction canary asserted by the command-output sanitization tests."
+  },
+  {
+    "fingerprint": "4274093b81da2afc345e79aff2f345b841792e7a:core/src/modules/user-progression/model.ts:generic-api-key:208",
+    "reason": "Public product benefit identifier (discount percentage), not an authentication key."
+  },
+  {
+    "fingerprint": "4274093b81da2afc345e79aff2f345b841792e7a:core/src/modules/user-progression/model.ts:generic-api-key:228",
+    "reason": "Public product benefit identifier (discount percentage), not an authentication key."
+  },
+  {
+    "fingerprint": "4274093b81da2afc345e79aff2f345b841792e7a:docs/20-ai-gateway/Qwen平台凭证模板与字段说明.md:generic-api-key:501",
+    "reason": "Short deterministic password-hash placeholder in credential-format documentation."
+  },
+  {
+    "fingerprint": "4274093b81da2afc345e79aff2f345b841792e7a:docs/20-ai-gateway/Qwen平台凭证模板与字段说明.md:generic-api-key:537",
+    "reason": "Short deterministic password-hash placeholder in credential-format documentation."
+  },
+  {
+    "fingerprint": "4274093b81da2afc345e79aff2f345b841792e7a:web/.env.example:generic-api-key:14",
+    "reason": "Public OAuth client identifier field, not the adjacent OAuth client-secret field."
+  }
+]
