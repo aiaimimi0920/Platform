@@ -5101,6 +5101,345 @@ a {
   min-width: 0;
 }
 
+/*
+ * Five-column trace summary row. The tracks live here rather than in an inline style
+ * because the traces page renders this row once per request — 60+ per response — and each
+ * inline `style` attribute is serialized twice (HTML plus RSC flight payload).
+ */
+.nt-gateway-request-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.3fr) minmax(0, 1.1fr) minmax(0, 0.9fr) minmax(0, 0.8fr) minmax(0, 0.8fr);
+  gap: 12px;
+  align-items: start;
+}
+
+.nt-gateway-request-grid > * {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.nt-provider-surface-chip {
+  max-width: 100%;
+  min-height: 32px;
+  height: auto;
+  padding-block: 7px;
+  line-height: 1.25;
+  letter-spacing: 0.02em;
+  text-align: left;
+  text-transform: none;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.nt-provider-badge-row {
+  align-items: flex-start;
+  align-self: start;
+  height: fit-content;
+}
+
+.nt-provider-detail-link {
+  min-width: 0;
+  height: auto;
+  min-height: 46px;
+  padding-block: 10px;
+  line-height: 1.25;
+  text-align: left;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+/*
+ * Gateway ops utilities.
+ *
+ * theme.css owns the base scale (.nt-flex/.nt-stack/.nt-gap-1..6/.nt-text-xs/.nt-text-sm/
+ * .nt-text-muted). These fill the gaps the gateway pages needed, and every color resolves
+ * through a neuro token so the ops surfaces stay on the theme instead of drifting into
+ * one-off literals. This block is appended after the `@import "./theme.css"` above, so
+ * single-class variants here intentionally override their theme.css base rule.
+ */
+
+/* Half-steps on theme.css's 4px gap scale. */
+.nt-gap-1_5 {
+  gap: 6px;
+}
+
+.nt-gap-2_5 {
+  gap: 10px;
+}
+
+.nt-gap-3_5 {
+  gap: 14px;
+}
+
+.nt-wrap {
+  flex-wrap: wrap;
+}
+
+.nt-inline-flex {
+  display: inline-flex;
+}
+
+.nt-flush {
+  margin: 0;
+}
+
+.nt-text-2xs {
+  font-size: 0.72rem;
+}
+
+.nt-text-md {
+  font-size: 0.92rem;
+}
+
+.nt-text-metric {
+  font-size: 2rem;
+  line-height: 1.1;
+}
+
+.nt-mono {
+  font-family: ui-monospace, "SFMono-Regular", "Menlo", monospace;
+}
+
+.nt-break-word {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.nt-nowrap {
+  white-space: nowrap;
+}
+
+.nt-resize-y {
+  resize: vertical;
+}
+
+.nt-clamp-2 {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* Inset tile for gateway metric read-outs; pairs with .nt-card .nt-panel. */
+.nt-metric-tile {
+  padding: 10px 12px;
+  background: var(--neuro-control);
+  box-shadow: none;
+}
+
+.nt-credential-title {
+  font-size: 1rem;
+  line-height: 1.4;
+}
+
+.nt-dialog-title {
+  font-size: 1.42rem;
+  line-height: 1.15;
+}
+
+/* Auto-fit metric/summary grid — the most repeated gateway layout. */
+.nt-autofit {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(var(--nt-autofit-min, 220px), 1fr));
+}
+
+/*
+ * Data tables. `.nt-table` and `.nt-table__cell` were already referenced by the gateway
+ * cost pages but had no rule anywhere, so those cells rendered with browser defaults.
+ */
+.nt-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.86rem;
+}
+
+.nt-table__cell {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--neuro-line);
+  color: var(--neuro-text);
+  text-align: left;
+  vertical-align: top;
+}
+
+.nt-table thead .nt-table__cell {
+  color: var(--neuro-text-muted);
+  font-size: 0.74rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.nt-table tbody tr:last-child .nt-table__cell {
+  border-bottom: none;
+}
+
+.nt-table__cell--numeric {
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+/* Variants referenced by gateway pages but never defined. */
+.nt-btn--ghost {
+  border-color: transparent;
+  background: transparent;
+  color: var(--neuro-text-muted);
+}
+
+.nt-btn--ghost:hover {
+  border-color: var(--neuro-line);
+  background: var(--neuro-control);
+  color: var(--neuro-text);
+}
+
+.nt-card--outlined {
+  background: var(--neuro-surface);
+  box-shadow: none;
+}
+
+/*
+ * Outage-notice tints for the gateway dependency card. Combine with .nt-card; the text
+ * inside carries its own tone utility, so these only own the border and the fill.
+ */
+.nt-notice--danger {
+  border-color: var(--neuro-danger-red);
+  background: var(--neuro-danger-soft);
+}
+
+.nt-notice--warn {
+  border-color: var(--neuro-yellow-line);
+  background: var(--neuro-yellow-soft);
+}
+
+/*
+ * Geometry repeaters. These exist purely to keep hot markup small: the costs and access
+ * pages render the same handful of geometry declarations hundreds of times per response,
+ * and every inline `style` attribute is serialized twice — once into the HTML and again
+ * into the RSC flight payload. A class name is shorter and dedupes across rows.
+ */
+.nt-col-160 {
+  min-width: 160px;
+}
+
+.nt-col-180 {
+  min-width: 180px;
+}
+
+.nt-col-220 {
+  min-width: 220px;
+}
+
+.nt-indent-8 {
+  padding-left: 32px;
+}
+
+.nt-min-0 {
+  min-width: 0;
+}
+
+.nt-flex-none {
+  flex: 0 0 auto;
+}
+
+.nt-overflow-auto {
+  overflow: auto;
+}
+
+/* Horizontal scroller for a row of chips/buttons that must not wrap. */
+.nt-scroll-x {
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  padding-bottom: 2px;
+}
+
+/* Clears the sticky ops header when a card is reached via #fragment. */
+.nt-scroll-anchor {
+  scroll-margin-top: 104px;
+}
+
+/* Dashed placeholder tile for an empty collection. */
+.nt-dashed-tile {
+  padding: 16px 18px;
+  border: 1px dashed var(--neuro-line);
+  border-radius: 18px;
+  background: var(--neuro-surface);
+}
+
+/* Padding steps for cards that render once per row in a long list. */
+.nt-pad-3 {
+  padding: 12px;
+}
+
+.nt-pad-4 {
+  padding: 16px;
+}
+
+.nt-pad-4_5 {
+  padding: 18px;
+}
+
+/* Title sizes for repeated list-item and section headings. */
+.nt-text-lg {
+  font-size: 1.02rem;
+}
+
+.nt-text-xl {
+  font-size: 1.1rem;
+}
+
+/*
+ * Bordered row tile, repeated once per trace/list entry. Same rationale as
+ * .nt-gateway-request-grid: keep the repeated declarations out of the markup.
+ */
+.nt-row-tile {
+  padding: 14px;
+  border: 1px solid var(--neuro-line);
+  border-radius: 18px;
+  background: var(--neuro-surface);
+}
+
+/* Fixed-width flex column that shrinks to the viewport on narrow screens. */
+.nt-col-360 {
+  flex: 0 1 360px;
+  width: min(360px, 100%);
+  min-width: min(320px, 100%);
+  max-width: 360px;
+}
+
+/*
+ * Text tones, brightest to dimmest. These sit last in the file on purpose: a tone is a
+ * single-property override, so it has to win against the component classes above it
+ * (`.nt-btn--ghost`, `.nt-table__cell`) which also set `color` at the same specificity.
+ */
+.nt-text-strong {
+  color: var(--neuro-text);
+}
+
+.nt-text-hint {
+  color: var(--neuro-hint-text);
+}
+
+.nt-text-soft {
+  color: var(--neuro-text-soft);
+}
+
+.nt-text-danger {
+  color: var(--neuro-danger-text);
+}
+
+.nt-text-success {
+  color: var(--neuro-green-text);
+}
+
+.nt-text-warn {
+  color: var(--neuro-signal-yellow);
+}
+
+.nt-text-info {
+  color: var(--neuro-info-text);
+}
+
 @media (max-width: 760px) {
   .ops-header {
     height: auto;
@@ -5360,6 +5699,10 @@ a {
   align-items: center;
   gap: 12px;
   flex-wrap: wrap;
+}
+
+.ops-form__actions--start {
+  justify-content: flex-start;
 }
 
 .ops-empty {
@@ -5862,6 +6205,20 @@ a {
   .ops-form__input,
   .ops-form__select {
     min-width: 0;
+  }
+
+  .ops-batch-item__head {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+
+  .ops-batch-item__head > span {
+    min-width: 0;
+  }
+
+  .ops-batch-item__head strong,
+  .ops-batch-item__head span {
+    overflow-wrap: anywhere;
   }
 
   .ops-benefit-sidebar {

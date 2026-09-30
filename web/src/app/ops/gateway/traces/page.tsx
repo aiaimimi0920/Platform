@@ -12,10 +12,12 @@ import {
   listOperatorGatewayRequestAudits,
 } from "@/lib/account-client";
 import { buildGatewayDependencyUnavailableNotice } from "@/lib/gateway-catalog-notice";
+import { formatPlatformDateTime } from "@/lib/platform-date-time";
 import { isPlatformOperatorUserId, requirePlatformOperatorUserContext } from "@/lib/platform-session";
 import { NtBadge, NtCard, NtPanel } from "@/components/nt-primitives";
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import type { CSSProperties } from "react";
 
 type TracePageQuery = {
   requestId?: string;
@@ -32,6 +34,55 @@ const STATUS_OPTIONS = [
   { value: "cancelled", label: "已取消" },
 ] as const;
 
+/*
+ * Layout and color now run through the shared `nt-` utility layer, so these constants keep
+ * only what the vocabulary has no class for: the fixed request-row tracks, the filter form's
+ * three-column form grid, the auto-fit minimums, and the token-colored row/candidate
+ * surfaces. Module scope means one allocation per process instead of one per render.
+ */
+const PAGE_SHELL_STYLE: CSSProperties = { padding: "24px 0 40px" };
+
+const SUMMARY_GRID_STYLE = { "--nt-autofit-min": "180px" } as CSSProperties;
+
+const SUMMARY_VALUE_STYLE: CSSProperties = { fontSize: "1.9rem" };
+
+const FILTER_FORM_STYLE: CSSProperties = {
+  gridTemplateColumns: "minmax(0, 1fr) auto auto",
+  alignItems: "end",
+};
+
+/*
+ * The padding, radius, border and surface of a request row come from `nt-row-tile`; only the
+ * link reset and the selected-row overrides stay inline. The row renders 60 times per response
+ * and each inline `style` attribute is serialized twice (HTML plus RSC flight payload), so the
+ * fewer properties left here the smaller the payload.
+ */
+const REQUEST_ROW_STYLE: CSSProperties = {
+  textDecoration: "none",
+};
+
+const REQUEST_ROW_SELECTED_STYLE: CSSProperties = {
+  ...REQUEST_ROW_STYLE,
+  border: "1px solid var(--neuro-info-blue)",
+  background: "var(--neuro-control)",
+};
+
+const REQUEST_ID_STYLE: CSSProperties = { fontWeight: 600 };
+
+const REQUEST_DETAIL_GRID_STYLE = { "--nt-autofit-min": "160px" } as CSSProperties;
+
+const CANDIDATE_META_GRID_STYLE = { "--nt-autofit-min": "140px" } as CSSProperties;
+
+const CANDIDATE_PANEL_STYLE: CSSProperties = {
+  borderColor: "transparent",
+  background: "var(--neuro-surface)",
+};
+
+const CANDIDATE_PANEL_SELECTED_STYLE: CSSProperties = {
+  borderColor: "var(--neuro-info-blue)",
+  background: "var(--neuro-control)",
+};
+
 function buildTraceQuery(params: TracePageQuery) {
   const search = new URLSearchParams();
   if (params.requestId) search.set("requestId", params.requestId);
@@ -42,15 +93,7 @@ function buildTraceQuery(params: TracePageQuery) {
 }
 
 function formatDate(value: string | null) {
-  if (!value) return "—";
-  return new Intl.DateTimeFormat("zh-CN", {
-    timeZone: "Asia/Shanghai",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-  }).format(new Date(value));
+  return formatPlatformDateTime(value, "—");
 }
 
 function formatDurationMs(value: number | null) {
@@ -93,7 +136,7 @@ function getPipelineLabel(mode: string | null | undefined) {
 }
 
 function getRequestProviderLabel(request: GatewayRequestAuditView) {
-  return request.routeTrace?.selectedCandidate.providerLabel ?? request.providerAccountId ?? "—";
+  return request.routeTrace?.selectedCandidate?.providerLabel ?? request.providerAccountId ?? "—";
 }
 
 function getRequestSearchText(request: GatewayRequestAuditView) {
@@ -107,8 +150,8 @@ function getRequestSearchText(request: GatewayRequestAuditView) {
     getRequestProviderLabel(request),
     request.errorSummary ?? "",
     request.routeTrace?.selectedPipelineMode ?? "",
-    request.routeTrace?.selectedCandidate.realCredentialRef ?? "",
-    request.routeTrace?.selectedCandidate.platformAccessId ?? request.routeTrace?.platformAccessId ?? "",
+    request.routeTrace?.selectedCandidate?.realCredentialRef ?? "",
+    request.routeTrace?.selectedCandidate?.platformAccessId ?? request.routeTrace?.platformAccessId ?? "",
   ]
     .join(" ")
     .toLowerCase();
@@ -117,25 +160,29 @@ function getRequestSearchText(request: GatewayRequestAuditView) {
 function buildRouteDecisionReasons(request: GatewayRequestAuditView) {
   const routeTrace = request.routeTrace;
   if (!routeTrace) return [] as string[];
-  const selected = routeTrace.selectedCandidate;
-  const alternatives = routeTrace.candidateQueue.filter(
-    (candidate) => candidate.providerAccountId !== selected.providerAccountId,
-  );
+  const selected = routeTrace.selectedCandidate ?? null;
+  const candidateQueue = Array.isArray(routeTrace.candidateQueue) ? routeTrace.candidateQueue : [];
+  const alternatives = selected
+    ? candidateQueue.filter((candidate) => candidate.providerAccountId !== selected.providerAccountId)
+    : candidateQueue;
   const reasons: string[] = [];
 
-  if (routeTrace.stickyProviderAccountId && routeTrace.stickyProviderAccountId === selected.providerAccountId) {
+  if (!selected) {
+    reasons.push("当前请求未记录已选路由候选。");
+  }
+  if (selected && routeTrace.stickyProviderAccountId === selected.providerAccountId) {
     reasons.push("命中了粘性服务商策略。");
   }
   if (routeTrace.selectedPipelineMode === "same_protocol_fast_path") {
     reasons.push("当前请求走同协议直连快路径。");
-  } else if (routeTrace.requestedProtocolFamily && routeTrace.requestedProtocolFamily !== selected.protocolFamily) {
+  } else if (selected && routeTrace.requestedProtocolFamily && routeTrace.requestedProtocolFamily !== selected.protocolFamily) {
     reasons.push(`入口协议 ${routeTrace.requestedProtocolFamily} 与上游协议 ${selected.protocolFamily} 不同，已走统一桥接链。`);
   }
   const nextBest = alternatives[0];
-  if (selected.routingScore != null && nextBest?.routingScore != null && selected.routingScore !== nextBest.routingScore) {
+  if (selected?.routingScore != null && nextBest?.routingScore != null && selected.routingScore !== nextBest.routingScore) {
     reasons.push(`所选服务商路由分数更高（${selected.routingScore.toFixed(2)} > ${nextBest.routingScore.toFixed(2)}）。`);
   }
-  if (!selected.degraded && alternatives.some((candidate) => candidate.degraded)) {
+  if (selected && !selected.degraded && alternatives.some((candidate) => candidate.degraded)) {
     reasons.push("其他候选带有降级信号，当前优先选择未降级候选。");
   }
   if (routeTrace.fallbackEligible) {
@@ -179,11 +226,11 @@ function getRequestStatusLabel(status: GatewayRequestStatus) {
 
 function DetailLine(props: { label: string; value: string }) {
   return (
-    <div style={{ display: "grid", gap: 4 }}>
-      <span className="nt-kicker" style={{ fontSize: "0.72rem" }}>
+    <div className="nt-stack nt-gap-1">
+      <span className="nt-kicker nt-text-2xs">
         {props.label}
       </span>
-      <span style={{ color: "rgba(190,199,217,0.88)", wordBreak: "break-word" }}>{props.value}</span>
+      <span className="nt-text-muted nt-break-word">{props.value}</span>
     </div>
   );
 }
@@ -191,16 +238,12 @@ function DetailLine(props: { label: string; value: string }) {
 function CandidateRow({ candidate, isSelected }: { candidate: GatewayRouteTraceCandidate; isSelected?: boolean }) {
   return (
     <NtPanel
-      style={{
-        display: "grid",
-        gap: 10,
-        borderColor: isSelected ? "rgba(34,211,238,0.28)" : "transparent",
-        background: isSelected ? "rgba(15,23,42,0.92)" : "rgba(13,18,32,0.72)",
-      }}
+      className="nt-stack nt-gap-2_5"
+      style={isSelected ? CANDIDATE_PANEL_SELECTED_STYLE : CANDIDATE_PANEL_STYLE}
     >
-      <div style={{ display: "flex", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
-        <strong style={{ color: "rgba(243,245,247,0.96)" }}>{candidate.providerLabel}</strong>
-        <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+      <div className="nt-flex nt-justify-between nt-gap-2_5 nt-wrap">
+        <strong className="nt-text-strong">{candidate.providerLabel}</strong>
+        <div className="nt-flex nt-gap-1_5 nt-wrap">
           <NtBadge tone="glass">{candidate.adapter}</NtBadge>
           <NtBadge tone="glass">{getSourceKindLabel(candidate.sourceProfile.sourceKind)}</NtBadge>
           {candidate.stickyPreferred ? <NtBadge tone="cyan">粘性</NtBadge> : null}
@@ -208,13 +251,7 @@ function CandidateRow({ candidate, isSelected }: { candidate: GatewayRouteTraceC
         </div>
       </div>
 
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))",
-          gap: 10,
-        }}
-      >
+      <div className="nt-autofit nt-gap-2_5" style={CANDIDATE_META_GRID_STYLE}>
         <DetailLine label="模型" value={candidate.resolvedModel ?? "—"} />
         <DetailLine label="协议族" value={candidate.protocolFamily} />
         <DetailLine label="优先级" value={candidate.priority != null ? String(candidate.priority) : "—"} />
@@ -228,9 +265,9 @@ function CandidateRow({ candidate, isSelected }: { candidate: GatewayRouteTraceC
       </div>
 
       {candidate.degradationReasons?.length ? (
-        <div style={{ display: "grid", gap: 4 }}>
+        <div className="nt-stack nt-gap-1">
           <span className="nt-kicker">降级原因</span>
-          <span style={{ color: "rgba(252,211,77,0.92)" }}>{candidate.degradationReasons.join(" / ")}</span>
+          <span className="nt-text-warn">{candidate.degradationReasons.join(" / ")}</span>
         </div>
       ) : null}
     </NtPanel>
@@ -251,63 +288,51 @@ function RequestEventRow(props: {
   })}`;
   return (
     <Link
+      className="nt-stack nt-gap-2_5 nt-row-tile"
       href={href}
-      style={{
-        display: "grid",
-        gap: 10,
-        padding: 14,
-        borderRadius: 18,
-        border: props.selected ? "1px solid rgba(34,211,238,0.28)" : "1px solid rgba(255,255,255,0.06)",
-        background: props.selected ? "rgba(15,23,42,0.92)" : "rgba(10,14,24,0.78)",
-        textDecoration: "none",
-      }}
+      style={props.selected ? REQUEST_ROW_SELECTED_STYLE : REQUEST_ROW_STYLE}
     >
-      <div style={{ display: "flex", justifyContent: "space-between", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+      <div className="nt-flex nt-justify-between nt-gap-2_5 nt-wrap nt-items-center">
+        <div className="nt-flex nt-gap-2 nt-wrap nt-items-center">
           <StatusBadge status={request.status} />
-          <span style={{ color: "rgba(243,245,247,0.96)", fontWeight: 600 }}>{request.id}</span>
+          <span className="nt-text-strong" style={REQUEST_ID_STYLE}>{request.id}</span>
         </div>
-        <span style={{ color: "rgba(190,199,217,0.76)" }}>{formatDate(request.createdAt)}</span>
+        <span className="nt-text-muted">{formatDate(request.createdAt)}</span>
       </div>
 
       <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "1.3fr 1.1fr 0.9fr 0.8fr 0.8fr",
-          gap: 12,
-          alignItems: "start",
-        }}
+        className="nt-gateway-request-grid"
       >
-        <div style={{ display: "grid", gap: 4 }}>
+        <div className="nt-stack nt-gap-1">
           <span className="nt-kicker">模型</span>
-          <span style={{ color: "rgba(214,219,233,0.9)" }}>
+          <span className="nt-text-muted">
             {request.requestedModel ?? "—"} → {request.resolvedModel ?? "—"}
           </span>
-          <span style={{ color: "rgba(140,151,173,0.82)" }}>{request.endpointKind}</span>
+          <span className="nt-text-soft">{request.endpointKind}</span>
         </div>
-        <div style={{ display: "grid", gap: 4 }}>
+        <div className="nt-stack nt-gap-1">
           <span className="nt-kicker">服务商</span>
-          <span style={{ color: "rgba(214,219,233,0.9)" }}>{getRequestProviderLabel(request)}</span>
-          <span style={{ color: "rgba(140,151,173,0.82)" }}>{request.providerAccountId ?? "—"}</span>
+          <span className="nt-text-muted">{getRequestProviderLabel(request)}</span>
+          <span className="nt-text-soft">{request.providerAccountId ?? "—"}</span>
         </div>
-        <div style={{ display: "grid", gap: 4 }}>
+        <div className="nt-stack nt-gap-1">
           <span className="nt-kicker">管线</span>
-          <span style={{ color: "rgba(214,219,233,0.9)" }}>
+          <span className="nt-text-muted">
             {getPipelineLabel(request.routeTrace?.selectedPipelineMode ?? null)}
           </span>
         </div>
-        <div style={{ display: "grid", gap: 4 }}>
+        <div className="nt-stack nt-gap-1">
           <span className="nt-kicker">耗时</span>
-          <span style={{ color: "rgba(214,219,233,0.9)" }}>{formatDurationMs(request.durationMs)}</span>
+          <span className="nt-text-muted">{formatDurationMs(request.durationMs)}</span>
         </div>
-        <div style={{ display: "grid", gap: 4 }}>
+        <div className="nt-stack nt-gap-1">
           <span className="nt-kicker">Token 用量</span>
-          <span style={{ color: "rgba(214,219,233,0.9)" }}>{formatCount(request.totalTokens)}</span>
+          <span className="nt-text-muted">{formatCount(request.totalTokens)}</span>
         </div>
       </div>
 
       {request.errorSummary ? (
-        <span style={{ color: "rgba(252,165,165,0.92)" }}>{request.errorSummary}</span>
+        <span className="nt-text-danger">{request.errorSummary}</span>
       ) : null}
     </Link>
   );
@@ -346,18 +371,18 @@ export default async function GatewayTracesPage({
     });
 
     return (
-      <div className="nt-shell" style={{ display: "grid", gap: 24, padding: "24px 0 40px" }}>
-        <section style={{ display: "grid", gap: 12 }}>
+      <div className="nt-shell nt-stack nt-gap-6" style={PAGE_SHELL_STYLE}>
+        <section className="nt-stack nt-gap-3">
           <span className="nt-kicker">运维 / AI 网关</span>
-          <h1 style={{ margin: 0, color: "rgba(243,245,247,0.98)", fontSize: "2rem", lineHeight: 1.1 }}>
+          <h1 className="nt-flush nt-text-strong nt-text-metric">
             请求追踪
           </h1>
         </section>
         <GatewayDependencyUnavailableCard notice={notice} />
-        <NtCard style={{ display: "grid", gap: 8 }}>
+        <NtCard className="nt-stack nt-gap-2">
           <span className="nt-kicker">请求事件明细</span>
-          <strong style={{ color: "rgba(243,245,247,0.96)" }}>当前无法连接 AI 网关</strong>
-          <span style={{ color: "rgba(190,199,217,0.76)" }}>
+          <strong className="nt-text-strong">当前无法连接 AI 网关</strong>
+          <span className="nt-text-muted">
             网关服务恢复后，刷新页面即可重新加载最近 {REQUEST_LIMIT} 条请求。
           </span>
         </NtCard>
@@ -407,56 +432,53 @@ export default async function GatewayTracesPage({
     }
   }
 
+  const selectedRouteTrace = selectedRequest?.routeTrace;
+  const selectedCandidate = selectedRouteTrace?.selectedCandidate ?? null;
+  const selectedCandidateQueue = Array.isArray(selectedRouteTrace?.candidateQueue)
+    ? selectedRouteTrace.candidateQueue
+    : [];
+  const selectedProviderAccountId = selectedCandidate?.providerAccountId ?? selectedRequest?.providerAccountId ?? null;
+
   return (
-    <div className="nt-shell" style={{ display: "grid", gap: 24, padding: "24px 0 40px" }}>
-      <section style={{ display: "grid", gap: 12 }}>
+    <div className="nt-shell nt-stack nt-gap-6" style={PAGE_SHELL_STYLE}>
+      <section className="nt-stack nt-gap-3">
         <span className="nt-kicker">运维 / AI 网关</span>
-        <h1 style={{ margin: 0, color: "rgba(243,245,247,0.98)", fontSize: "2rem", lineHeight: 1.1 }}>
+        <h1 className="nt-flush nt-text-strong nt-text-metric">
           请求追踪
         </h1>
       </section>
 
-      <section
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
-          gap: 14,
-        }}
-      >
-        <NtCard style={{ display: "grid", gap: 8 }}>
+      <section className="nt-autofit nt-gap-3_5" style={SUMMARY_GRID_STYLE}>
+        <NtCard className="nt-stack nt-gap-2">
           <span className="nt-kicker">样本数</span>
-          <strong style={{ fontSize: "1.9rem", color: "rgba(243,245,247,0.96)" }}>{filteredRequests.length}</strong>
-          <span style={{ color: "rgba(140,151,173,0.82)" }}>总计 {summary.totalRequests}</span>
+          <strong className="nt-text-strong" style={SUMMARY_VALUE_STYLE}>{filteredRequests.length}</strong>
+          <span className="nt-text-soft">总计 {summary.totalRequests}</span>
         </NtCard>
-        <NtCard style={{ display: "grid", gap: 8 }}>
+        <NtCard className="nt-stack nt-gap-2">
           <span className="nt-kicker">失败</span>
-          <strong style={{ fontSize: "1.9rem", color: "rgba(244,63,94,0.96)" }}>{failedCount}</strong>
-          <span style={{ color: "rgba(140,151,173,0.82)" }}>全量 {summary.failedCount}</span>
+          <strong className="nt-text-danger" style={SUMMARY_VALUE_STYLE}>{failedCount}</strong>
+          <span className="nt-text-soft">全量 {summary.failedCount}</span>
         </NtCard>
-        <NtCard style={{ display: "grid", gap: 8 }}>
+        <NtCard className="nt-stack nt-gap-2">
           <span className="nt-kicker">同协议直连</span>
-          <strong style={{ fontSize: "1.9rem", color: "rgba(34,197,94,0.96)" }}>{fastPathCount}</strong>
-          <span style={{ color: "rgba(140,151,173,0.82)" }}>当前结果集</span>
+          <strong className="nt-text-success" style={SUMMARY_VALUE_STYLE}>{fastPathCount}</strong>
+          <span className="nt-text-soft">当前结果集</span>
         </NtCard>
-        <NtCard style={{ display: "grid", gap: 8 }}>
+        <NtCard className="nt-stack nt-gap-2">
           <span className="nt-kicker">允许回退</span>
-          <strong style={{ fontSize: "1.9rem", color: "rgba(245,158,11,0.96)" }}>{fallbackEligibleCount}</strong>
-          <span style={{ color: "rgba(140,151,173,0.82)" }}>当前结果集</span>
+          <strong className="nt-text-warn" style={SUMMARY_VALUE_STYLE}>{fallbackEligibleCount}</strong>
+          <span className="nt-text-soft">当前结果集</span>
         </NtCard>
       </section>
 
-      <NtCard style={{ display: "grid", gap: 14 }}>
+      <NtCard className="nt-stack nt-gap-3_5">
         <form
           action="/ops/gateway/traces"
+          className="nt-stack nt-gap-3"
           method="get"
-          style={{
-            display: "grid",
-            gridTemplateColumns: "minmax(0, 1fr) auto auto",
-            gap: 12,
-            alignItems: "end",
-          }}
+          style={FILTER_FORM_STYLE}
         >
-          <label style={{ display: "grid", gap: 6 }}>
+          <label className="nt-stack nt-gap-1_5">
             <span className="nt-kicker">检索</span>
             <input
               className="nt-input"
@@ -465,7 +487,7 @@ export default async function GatewayTracesPage({
               placeholder="请求 ID / 模型 / 服务商 / 错误"
             />
           </label>
-          <label style={{ display: "grid", gap: 6 }}>
+          <label className="nt-stack nt-gap-1_5">
             <span className="nt-kicker">状态</span>
             <select className="nt-input" defaultValue={statusFilter} name="status">
               {STATUS_OPTIONS.map((option) => (
@@ -475,7 +497,7 @@ export default async function GatewayTracesPage({
               ))}
             </select>
           </label>
-          <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+          <div className="nt-flex nt-gap-2_5 nt-wrap">
             <button className="nt-btn nt-btn--primary" type="submit">
               查询
             </button>
@@ -487,16 +509,16 @@ export default async function GatewayTracesPage({
       </NtCard>
 
       <div className="nt-gateway-split-pane">
-        <NtCard style={{ display: "grid", gap: 14 }}>
-          <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap", alignItems: "center" }}>
-            <div style={{ display: "grid", gap: 4 }}>
+        <NtCard className="nt-stack nt-gap-3_5">
+          <div className="nt-flex nt-justify-between nt-gap-3 nt-wrap nt-items-center">
+            <div className="nt-stack nt-gap-1">
               <span className="nt-kicker">请求事件明细</span>
-              <strong style={{ color: "rgba(243,245,247,0.96)" }}>最近 {REQUEST_LIMIT} 条请求</strong>
+              <strong className="nt-text-strong">最近 {REQUEST_LIMIT} 条请求</strong>
             </div>
             <NtBadge tone="glass">{filteredRequests.length} 条</NtBadge>
           </div>
 
-          <div style={{ display: "grid", gap: 10 }}>
+          <div className="nt-stack nt-gap-2_5">
             {filteredRequests.length ? (
               filteredRequests.map((request) => (
                 <RequestEventRow
@@ -508,10 +530,10 @@ export default async function GatewayTracesPage({
                 />
               ))
             ) : (
-              <NtPanel style={{ display: "grid", gap: 8 }}>
+              <NtPanel className="nt-stack nt-gap-2">
                 <span className="nt-kicker">请求事件明细</span>
-                <strong style={{ color: "rgba(243,245,247,0.96)" }}>没有命中结果</strong>
-                <span style={{ color: "rgba(190,199,217,0.76)" }}>调整状态或关键字后再查。</span>
+                <strong className="nt-text-strong">没有命中结果</strong>
+                <span className="nt-text-muted">调整状态或关键字后再查。</span>
               </NtPanel>
             )}
           </div>
@@ -521,18 +543,12 @@ export default async function GatewayTracesPage({
           {selectedRequestNotice ? <GatewayDependencyUnavailableCard notice={selectedRequestNotice} /> : null}
           {selectedRequest ? (
             <>
-              <NtCard style={{ display: "grid", gap: 12 }}>
-                <div style={{ display: "grid", gap: 4 }}>
+              <NtCard className="nt-stack nt-gap-3">
+                <div className="nt-stack nt-gap-1">
                   <span className="nt-kicker">当前请求</span>
-                  <strong style={{ color: "rgba(243,245,247,0.96)" }}>{selectedRequest.id}</strong>
+                  <strong className="nt-text-strong">{selectedRequest.id}</strong>
                 </div>
-                <div
-                  style={{
-                    display: "grid",
-                    gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))",
-                    gap: 12,
-                  }}
-                >
+                <div className="nt-autofit" style={REQUEST_DETAIL_GRID_STYLE}>
                   <DetailLine label="状态" value={selectedRequest.status} />
                   <DetailLine label="创建时间" value={formatDate(selectedRequest.createdAt)} />
                   <DetailLine label="端点" value={selectedRequest.endpointKind} />
@@ -547,82 +563,80 @@ export default async function GatewayTracesPage({
                   <DetailLine label="Token 用量" value={formatCount(selectedRequest.totalTokens)} />
                 </div>
                 {selectedRequest.errorSummary ? (
-                  <NtPanel style={{ display: "grid", gap: 4 }}>
+                  <NtPanel className="nt-stack nt-gap-1">
                     <span className="nt-kicker">错误摘要</span>
-                    <span style={{ color: "rgba(252,165,165,0.92)" }}>{selectedRequest.errorSummary}</span>
+                    <span className="nt-text-danger">{selectedRequest.errorSummary}</span>
                   </NtPanel>
                 ) : null}
               </NtCard>
 
-              <NtCard style={{ display: "grid", gap: 10 }}>
+              <NtCard className="nt-stack nt-gap-2_5">
                 <span className="nt-kicker">路由判定</span>
                 {buildRouteDecisionReasons(selectedRequest).length ? (
                   buildRouteDecisionReasons(selectedRequest).map((reason) => (
-                    <span key={reason} style={{ color: "rgba(214,219,233,0.84)" }}>
+                    <span key={reason} className="nt-text-muted">
                       {reason}
                     </span>
                   ))
                 ) : (
-                  <span style={{ color: "rgba(190,199,217,0.76)" }}>当前没有额外路由说明。</span>
+                  <span className="nt-text-muted">当前没有额外路由说明。</span>
                 )}
               </NtCard>
 
-              <NtCard style={{ display: "grid", gap: 12 }}>
+              <NtCard className="nt-stack nt-gap-3">
                 <span className="nt-kicker">候选队列</span>
-                {selectedRequest.routeTrace?.candidateQueue?.length ? (
-                  selectedRequest.routeTrace.candidateQueue.map((candidate) => (
+                {selectedCandidateQueue.length ? (
+                  selectedCandidateQueue.map((candidate) => (
                     <CandidateRow
                       key={candidate.providerAccountId}
                       candidate={candidate}
-                      isSelected={
-                        candidate.providerAccountId === selectedRequest.routeTrace?.selectedCandidate.providerAccountId
-                      }
+                      isSelected={candidate.providerAccountId === selectedProviderAccountId}
                     />
                   ))
                 ) : (
-                  <span style={{ color: "rgba(190,199,217,0.76)" }}>当前请求没有候选队列数据。</span>
+                  <span className="nt-text-muted">当前请求没有候选队列数据。</span>
                 )}
               </NtCard>
 
-              <NtCard style={{ display: "grid", gap: 10 }}>
+              <NtCard className="nt-stack nt-gap-2_5">
                 <span className="nt-kicker">已选候选</span>
                 <DetailLine
                   label="服务商"
-                  value={selectedRequest.routeTrace?.selectedCandidate.providerLabel ?? "—"}
+                  value={selectedCandidate?.providerLabel ?? "—"}
                 />
                 <DetailLine
                   label="平台访问"
                   value={
-                    selectedRequest.routeTrace?.selectedCandidate.platformAccessId ??
-                    selectedRequest.routeTrace?.platformAccessId ??
+                    selectedCandidate?.platformAccessId ??
+                    selectedRouteTrace?.platformAccessId ??
                     "—"
                   }
                 />
                 <DetailLine
                   label="来源访问密钥"
                   value={
-                    selectedRequest.routeTrace?.selectedCandidate.sourceAccessKeyId ??
-                    selectedRequest.routeTrace?.sourceAccessKeyId ??
+                    selectedCandidate?.sourceAccessKeyId ??
+                    selectedRouteTrace?.sourceAccessKeyId ??
                     "—"
                   }
                 />
                 <DetailLine
                   label="真实凭证"
                   value={
-                    selectedRequest.routeTrace?.selectedCandidate.realCredentialRef ??
-                    selectedRequest.routeTrace?.realCredentialRef ??
+                    selectedCandidate?.realCredentialRef ??
+                    selectedRouteTrace?.realCredentialRef ??
                     "—"
                   }
                 />
                 <Link
                   className="nt-btn nt-btn--secondary"
-                  href={`/ops/gateway/providers?selected=${selectedRequest.routeTrace?.selectedCandidate.providerAccountId ?? ""}`}
+                  href={`/ops/gateway/providers?selected=${selectedProviderAccountId ?? ""}`}
                 >
                   打开服务商
                 </Link>
               </NtCard>
 
-              <NtCard style={{ display: "grid", gap: 10 }}>
+              <NtCard className="nt-stack nt-gap-2_5">
                 <span className="nt-kicker">访问凭证</span>
                 <DetailLine label="访问密钥" value={selectedRequest.accessKeyId ?? "—"} />
                 <DetailLine label="来源访问密钥" value={selectedRequest.sourceAccessKeyId ?? "—"} />
@@ -632,7 +646,7 @@ export default async function GatewayTracesPage({
                 <DetailLine label="会话" value={selectedRequest.sessionId ?? "—"} />
               </NtCard>
 
-              <NtCard style={{ display: "grid", gap: 10 }}>
+              <NtCard className="nt-stack nt-gap-2_5">
                 <span className="nt-kicker">保活与执行链</span>
                 <DetailLine
                   label="显式会话密钥"
@@ -657,7 +671,7 @@ export default async function GatewayTracesPage({
                 />
               </NtCard>
 
-              <NtCard style={{ display: "grid", gap: 10 }}>
+              <NtCard className="nt-stack nt-gap-2_5">
                 <span className="nt-kicker">请求物料</span>
                 <DetailLine
                   label="请求物料"
@@ -698,10 +712,10 @@ export default async function GatewayTracesPage({
               </NtCard>
             </>
           ) : (
-            <NtCard style={{ display: "grid", gap: 8 }}>
+            <NtCard className="nt-stack nt-gap-2">
               <span className="nt-kicker">当前请求</span>
-              <strong style={{ color: "rgba(243,245,247,0.96)" }}>还未选择</strong>
-              <span style={{ color: "rgba(190,199,217,0.76)" }}>从左侧事件列表点一条请求即可查看明细。</span>
+              <strong className="nt-text-strong">还未选择</strong>
+              <span className="nt-text-muted">从左侧事件列表点一条请求即可查看明细。</span>
             </NtCard>
           )}
         </div>

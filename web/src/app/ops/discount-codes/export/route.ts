@@ -18,6 +18,7 @@ export async function GET(request: Request) {
   const discountCodes = (await listOperatorDiscountCodes(
     {
       userId: session.user.id,
+      providerUserId: session.user.providerUserId ?? undefined,
       username: session.user.username,
     },
     {

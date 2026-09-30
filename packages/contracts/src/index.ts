@@ -5,6 +5,8 @@ export * from "./credential-pools";
 export * from "./personal-missions";
 export * from "./honor-projects";
 export * from "./heavy-chat";
+export * from "./loom-account";
+export * from "./loom-projection";
 
 export const featureModuleKeys = [
   "identity",

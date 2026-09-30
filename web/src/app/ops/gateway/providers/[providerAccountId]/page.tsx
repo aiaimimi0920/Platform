@@ -9,6 +9,7 @@ import { NtPanel } from "@/components/nt-primitives";
 import { isPlatformOperatorUserId, requirePlatformOperatorUserContext } from "@/lib/platform-session";
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import type { CSSProperties } from "react";
 
 import {
   buildQueryString,
@@ -19,6 +20,22 @@ import {
 import { deleteGatewayProviderAccountAction } from "../actions";
 import { ProviderCredentialManagementSection } from "../provider-credentials-ui";
 import { ProviderModelTieringSection } from "../provider-model-tiering-ui";
+
+const PAGE_SHELL_STYLE: CSSProperties = { padding: "24px 0 40px" };
+
+const DELETE_PROVIDER_BUTTON_STYLE: CSSProperties = { borderColor: "var(--neuro-danger-red)" };
+
+const SUCCESS_NOTICE_STYLE: CSSProperties = {
+  borderColor: "var(--neuro-signal-green)",
+  background: "var(--neuro-control)",
+};
+
+const ERROR_NOTICE_STYLE: CSSProperties = {
+  borderColor: "var(--neuro-danger-red)",
+  background: "var(--neuro-control)",
+};
+
+const CURRENT_SURFACE_BUTTON_STYLE: CSSProperties = { pointerEvents: "none", opacity: 0.92 };
 
 type ProviderDetailPageProps = {
   params: Promise<{ providerAccountId: string }>;
@@ -88,13 +105,13 @@ export default async function GatewayProviderDetailPage({
   const returnLabel = returnTo.startsWith("/ops/gateway/access") ? "返回 Access 控制" : "返回服务商";
 
   return (
-    <div className="nt-shell" style={{ display: "grid", gap: 24, padding: "24px 0 40px" }}>
-      <section style={{ display: "grid", gap: 12 }}>
+    <div className="nt-shell nt-stack nt-gap-6" style={PAGE_SHELL_STYLE}>
+      <section className="nt-stack nt-gap-3">
         <span className="nt-kicker">Operator / AI 网关 / 服务商详情</span>
-        <h1 style={{ margin: 0, color: "rgba(243,245,247,0.98)", fontSize: "2rem", lineHeight: 1.1 }}>
+        <h1 className="nt-flush nt-text-strong nt-text-metric">
           {entry.providerAccount.label}
         </h1>
-        <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+        <div className="nt-flex nt-wrap nt-gap-2_5">
           <Link className="nt-btn nt-btn--outline" href={returnTo}>
             {returnLabel}
           </Link>
@@ -102,8 +119,8 @@ export default async function GatewayProviderDetailPage({
             <input name="providerAccountId" type="hidden" value={providerAccountId} />
             <input name="redirectTo" type="hidden" value={returnTo} />
             <button
-              className="nt-btn nt-btn--outline"
-              style={{ borderColor: "rgba(244,63,94,0.34)", color: "#fecdd3" }}
+              className="nt-btn nt-btn--outline nt-text-danger"
+              style={DELETE_PROVIDER_BUTTON_STYLE}
               type="submit"
             >
               删除服务商
@@ -114,28 +131,24 @@ export default async function GatewayProviderDetailPage({
 
       {pageParams?.status && pageParams?.message ? (
         <NtPanel
-          style={{
-            display: "grid",
-            gap: 8,
-            borderColor: pageParams.status === "success" ? "rgba(34,197,94,0.22)" : "rgba(244,63,94,0.22)",
-            background: pageParams.status === "success" ? "rgba(8,39,24,0.7)" : "rgba(39,11,17,0.72)",
-          }}
+          className="nt-stack nt-gap-2"
+          style={pageParams.status === "success" ? SUCCESS_NOTICE_STYLE : ERROR_NOTICE_STYLE}
         >
           <span className="nt-kicker">{pageParams.status === "success" ? "操作完成" : "操作失败"}</span>
-          <span style={{ color: pageParams.status === "success" ? "#bbf7d0" : "#fecdd3" }}>
+          <span className={pageParams.status === "success" ? "nt-text-success" : "nt-text-danger"}>
             {pageParams.message}
           </span>
         </NtPanel>
       ) : null}
 
       {providerFamily && providerFamily.entries.length > 1 ? (
-        <NtPanel style={{ display: "grid", gap: 10 }}>
+        <NtPanel className="nt-stack nt-gap-2_5">
           <span className="nt-kicker">同服务商可路由入口</span>
-          <span style={{ color: "rgba(214,219,233,0.85)" }}>
+          <span className="nt-text-muted">
             当前 {providerFamily.familyLabel} 在控制面下包含 {providerFamily.entries.length} 个可路由入口。库存页按服务商身份聚合展示，
             详情页仍按单个 endpoint / 协议 / 商品 surface 展开治理。
           </span>
-          <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+          <div className="nt-flex nt-wrap nt-gap-2_5">
             {providerFamily.entries.map((variant) => {
               const variantHref = `/ops/gateway/providers/${encodeURIComponent(variant.providerAccount.id)}${buildQueryString({
                 returnTo,
@@ -146,7 +159,7 @@ export default async function GatewayProviderDetailPage({
                   <span
                     key={variant.providerAccount.id}
                     className="nt-btn nt-btn--primary"
-                    style={{ pointerEvents: "none", opacity: 0.92 }}
+                    style={CURRENT_SURFACE_BUTTON_STYLE}
                   >
                     {label} 当前
                   </span>

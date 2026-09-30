@@ -279,7 +279,7 @@ ENABLE_FIGMA_CAPTURE=true
       $ImageName,
       "npm",
       "run",
-      "dev",
+      "start",
       "--",
       "--hostname",
       "0.0.0.0"

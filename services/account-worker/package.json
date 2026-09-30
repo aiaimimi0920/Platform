@@ -11,7 +11,7 @@
     "start": "node dist/index.js",
     "dev": "tsx watch src/index.ts",
     "test": "node --test --import tsx \"src/**/*.test.ts\"",
-    "test:integration:required": "node -e \"console.log('No required integration suites for @neuro/account-worker')\""
+    "test:integration:required": "node --test --import tsx tests/outbox-ownership.integration.test.mjs"
   },
   "dependencies": {
     "@neuro/account-domain": "*",

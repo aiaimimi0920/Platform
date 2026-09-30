@@ -111,7 +111,7 @@ async function cycle(healthState: ReturnType<typeof createWorkerHealthState>) {
     try {
       const result = await handleEvent(event.eventName, event.payload);
       if (result === "processed") {
-        await markEventProcessed(event.id);
+        await markEventProcessed(event.id, event.attempts);
       } else {
         await markEventFailed(event.id, event.attempts, event.maxAttempts, "handler deferred processing");
       }

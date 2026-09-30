@@ -51,3 +51,11 @@ test("heavy chat older-page control preserves the reading position and keyboard 
     /\.nt-chat-app__load-earlier\s*\{[^}]*border-radius:\s*8px;[^}]*\}/s,
   );
 });
+
+test("heavy chat maps its independent surface to the canonical NeuroTerminal dark theme", () => {
+  assert.match(styles, /\.nt-chat-app\s*\{[\s\S]*color:\s*var\(--neuro-text/);
+  assert.match(styles, /\.nt-chat-app__topbar\s*\{[\s\S]*background:\s*color-mix\(in srgb, var\(--neuro-rail/);
+  assert.match(styles, /\.nt-chat-app-sidebar__new\s*\{[\s\S]*background:\s*var\(--neuro-signal-yellow/);
+  assert.match(styles, /\.nt-chat-app-message__avatar\s*\{[\s\S]*background:\s*var\(--neuro-signal-green/);
+  assert.match(styles, /prefers-reduced-motion/);
+});

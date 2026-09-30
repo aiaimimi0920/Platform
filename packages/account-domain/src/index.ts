@@ -3,6 +3,8 @@ export { redis } from "./db/redis";
 export { env } from "./env";
 
 export { identityRouter } from "./modules/identity/router";
+export { loomAccountRouter } from "./modules/loom-account/router";
+export { loomProjectionRouter } from "./modules/loom-projection/router";
 export { getUserSummary, upsertLinuxDoUser } from "./modules/identity/service";
 export {
   acceptMailgunInboundWebhook,

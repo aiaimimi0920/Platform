@@ -2,11 +2,44 @@
 import { NtInput, NtSelect, NtTextarea } from "@/components/nt-primitives";
 import type { GatewayAccessCatalogView } from "@/lib/account-client";
 import { acquireBodyOverlayLock } from "@/lib/overlay-lock";
-import { useEffect, useRef, useState, type CSSProperties } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+  type MouseEvent,
+} from "react";
 import { createPortal } from "react-dom";
 
 type BundlePlatformKeyView = GatewayAccessCatalogView["accessKeys"][number];
 type BundlePlatformKeyBalanceView = GatewayAccessCatalogView["balances"][number] | null;
+
+/*
+ * All the fixed positioning, backdrop blur and gradient shell now come from the shared
+ * `app-honor-*` / `nt-ops-access-dialog` chrome. The handful of values left below are pure
+ * one-off geometry, so they sit at module scope: an inline object literal in JSX would
+ * allocate a fresh object on every render of this client component.
+ */
+const DIALOG_TITLE_BLOCK_STYLE: CSSProperties = { maxWidth: 620 };
+
+const DIALOG_TITLE_STYLE: CSSProperties = { fontSize: "1.16rem" };
+
+const TOKEN_CODE_STYLE: CSSProperties = {
+  display: "block",
+  padding: "12px 14px",
+  borderRadius: 16,
+  background: "var(--neuro-control)",
+  border: "1px solid var(--neuro-line)",
+  fontSize: "0.84rem",
+};
+
+const FOOTER_STYLE: CSSProperties = { paddingTop: 6 };
+
+function stopPropagation(event: MouseEvent<HTMLDivElement>) {
+  event.stopPropagation();
+}
 
 function CloseIcon() {
   return (
@@ -71,7 +104,6 @@ export function BundlePlatformKeyDialog(props: {
   redirectTo: string;
   existingKey?: BundlePlatformKeyView | null;
   existingBalance?: BundlePlatformKeyBalanceView;
-  triggerButtonStyle?: CSSProperties;
 }) {
   const [open, setOpen] = useState(false);
   const triggerButtonRef = useRef<HTMLButtonElement | null>(null);
@@ -84,7 +116,7 @@ export function BundlePlatformKeyDialog(props: {
       : "";
   const defaultDisplayName = props.existingKey?.displayName ?? buildDraftDisplayName();
   const defaultBalanceStatus = props.existingBalance?.status ?? "active";
-  const defaultNote = noteFromMetadata(props.existingKey ?? null);
+  const defaultNote = useMemo(() => noteFromMetadata(props.existingKey ?? null), [props.existingKey]);
   const defaultInitialTotalTokens = props.billingMode === "token_prepaid" ? 1000000 : "";
   const defaultInitialTotalMessages = props.billingMode === "message_prepaid" ? 5000 : "";
 
@@ -124,6 +156,20 @@ export function BundlePlatformKeyDialog(props: {
     }
   }, [open]);
 
+  const openDialog = useCallback(() => setOpen(true), []);
+  const closeDialog = useCallback(() => setOpen(false), []);
+
+  const timePassDefaultValue = useMemo(
+    () =>
+      toDateTimeLocalValue(props.existingBalance?.unlimitedUntil ?? props.existingBalance?.periodEndsAt) ||
+      draftTimePassUntil,
+    [draftTimePassUntil, props.existingBalance?.periodEndsAt, props.existingBalance?.unlimitedUntil],
+  );
+  const visibleTokenValue = useMemo(
+    () => (props.existingKey ? codeValue(props.existingKey.token ?? props.existingKey.externalKey) : ""),
+    [props.existingKey],
+  );
+
   const dialog =
     open && typeof document !== "undefined"
       ? createPortal(
@@ -133,7 +179,7 @@ export function BundlePlatformKeyDialog(props: {
             <button
               aria-label="关闭平台密钥编辑器"
               className="app-honor-backdrop"
-              onClick={() => setOpen(false)}
+              onClick={closeDialog}
               type="button"
             />
             <div
@@ -141,7 +187,7 @@ export function BundlePlatformKeyDialog(props: {
               aria-modal="true"
               className="nt-ops-access-dialog"
               role="dialog"
-              onClick={(event) => event.stopPropagation()}
+              onClick={stopPropagation}
             >
               <form action={props.action} className="nt-ops-access-dialog__scroll">
                 <input type="hidden" name="redirectTo" value={props.redirectTo} />
@@ -151,20 +197,20 @@ export function BundlePlatformKeyDialog(props: {
                 <input type="hidden" name="resolvedTenantId" value={props.resolvedTenantId} />
                 {props.existingKey ? <input type="hidden" name="accessKeyId" value={props.existingKey.id} /> : null}
 
-                <div className="nt-flex nt-justify-between nt-items-start" style={{ gap: 12 }}>
-                  <div style={{ display: "grid", gap: 4, maxWidth: 620 }}>
+                <div className="nt-flex nt-justify-between nt-items-start nt-gap-3">
+                  <div className="nt-stack nt-gap-1" style={DIALOG_TITLE_BLOCK_STYLE}>
                     <span className="nt-kicker">平台密钥</span>
-                    <strong style={{ fontSize: "1.16rem", color: "rgba(245,247,250,0.96)" }}>
+                    <strong className="nt-text-strong" style={DIALOG_TITLE_STYLE}>
                       {props.bundleDisplayName}
                     </strong>
                   </div>
-                  <button ref={closeButtonRef} type="button" className="app-honor-close" onClick={() => setOpen(false)} aria-label="关闭">
+                  <button ref={closeButtonRef} type="button" className="app-honor-close" onClick={closeDialog} aria-label="关闭">
                     <CloseIcon />
                   </button>
                 </div>
 
-                <div style={{ display: "grid", gap: 12, gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))" }}>
-                  <label style={{ display: "grid", gap: 6 }}>
+                <div className="nt-autofit">
+                  <label className="nt-stack nt-gap-1_5">
                     <span className="nt-kicker">名称</span>
                     <NtInput
                       name="displayName"
@@ -175,8 +221,8 @@ export function BundlePlatformKeyDialog(props: {
                   </label>
                 </div>
 
-                <div style={{ display: "grid", gap: 12, gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))" }}>
-                  <label style={{ display: "grid", gap: 6 }}>
+                <div className="nt-autofit">
+                  <label className="nt-stack nt-gap-1_5">
                     <span className="nt-kicker">额度状态</span>
                     <NtSelect name="balanceStatus" defaultValue={defaultBalanceStatus}>
                       <option value="active">active</option>
@@ -188,33 +234,22 @@ export function BundlePlatformKeyDialog(props: {
                 </div>
 
                 {props.existingKey ? (
-                  <div style={{ display: "grid", gap: 6 }}>
+                  <div className="nt-stack nt-gap-1_5">
                     <span className="nt-kicker">当前凭证</span>
-                    <code
-                      style={{
-                        display: "block",
-                        padding: "12px 14px",
-                        borderRadius: 16,
-                        background: "rgba(7,11,17,0.82)",
-                        border: "1px solid rgba(255,255,255,0.08)",
-                        color: "rgba(245,247,250,0.92)",
-                        fontSize: "0.84rem",
-                        wordBreak: "break-all",
-                      }}
-                    >
-                      {codeValue(props.existingKey.token ?? props.existingKey.externalKey)}
+                    <code className="nt-text-strong nt-break-word" style={TOKEN_CODE_STYLE}>
+                      {visibleTokenValue}
                     </code>
                   </div>
                 ) : null}
 
                 {props.billingMode === "time_pass" ? (
-                  <div style={{ display: "grid", gap: 12, gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))" }}>
-                    <label style={{ display: "grid", gap: 6 }}>
+                  <div className="nt-autofit">
+                    <label className="nt-stack nt-gap-1_5">
                       <span className="nt-kicker">到期日</span>
                       <NtInput
                         name="timePassUntil"
                         type="datetime-local"
-                        defaultValue={toDateTimeLocalValue(props.existingBalance?.unlimitedUntil ?? props.existingBalance?.periodEndsAt) || draftTimePassUntil}
+                        defaultValue={timePassDefaultValue}
                         required={mode === "create"}
                       />
                     </label>
@@ -222,23 +257,23 @@ export function BundlePlatformKeyDialog(props: {
                 ) : null}
 
                 {props.billingMode === "token_prepaid" ? (
-                  <div style={{ display: "grid", gap: 12, gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))" }}>
+                  <div className="nt-autofit">
                     {mode === "create" ? (
-                      <label style={{ display: "grid", gap: 6 }}>
+                      <label className="nt-stack nt-gap-1_5">
                         <span className="nt-kicker">总 Token</span>
                         <NtInput min={1} name="initialTotalTokens" type="number" defaultValue={defaultInitialTotalTokens} required />
                       </label>
                     ) : (
                       <>
-                        <label style={{ display: "grid", gap: 6 }}>
+                        <label className="nt-stack nt-gap-1_5">
                           <span className="nt-kicker">当前总 Token</span>
                           <NtInput value={props.existingBalance?.totalTokens ?? ""} readOnly />
                         </label>
-                        <label style={{ display: "grid", gap: 6 }}>
+                        <label className="nt-stack nt-gap-1_5">
                           <span className="nt-kicker">剩余 Token</span>
                           <NtInput value={props.existingBalance?.remainingTokens ?? ""} readOnly />
                         </label>
-                        <label style={{ display: "grid", gap: 6 }}>
+                        <label className="nt-stack nt-gap-1_5">
                           <span className="nt-kicker">补充 Token</span>
                           <NtInput min={0} name="tokenDelta" type="number" placeholder="不补充可留空" />
                         </label>
@@ -248,23 +283,23 @@ export function BundlePlatformKeyDialog(props: {
                 ) : null}
 
                 {props.billingMode === "message_prepaid" ? (
-                  <div style={{ display: "grid", gap: 12, gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))" }}>
+                  <div className="nt-autofit">
                     {mode === "create" ? (
-                      <label style={{ display: "grid", gap: 6 }}>
+                      <label className="nt-stack nt-gap-1_5">
                         <span className="nt-kicker">总请求数</span>
                         <NtInput min={1} name="initialTotalMessages" type="number" defaultValue={defaultInitialTotalMessages} required />
                       </label>
                     ) : (
                       <>
-                        <label style={{ display: "grid", gap: 6 }}>
+                        <label className="nt-stack nt-gap-1_5">
                           <span className="nt-kicker">当前总请求数</span>
                           <NtInput value={props.existingBalance?.totalMessages ?? ""} readOnly />
                         </label>
-                        <label style={{ display: "grid", gap: 6 }}>
+                        <label className="nt-stack nt-gap-1_5">
                           <span className="nt-kicker">剩余请求数</span>
                           <NtInput value={props.existingBalance?.remainingMessages ?? ""} readOnly />
                         </label>
-                        <label style={{ display: "grid", gap: 6 }}>
+                        <label className="nt-stack nt-gap-1_5">
                           <span className="nt-kicker">补充请求数</span>
                           <NtInput min={0} name="messageDelta" type="number" placeholder="不补充可留空" />
                         </label>
@@ -273,13 +308,13 @@ export function BundlePlatformKeyDialog(props: {
                   </div>
                 ) : null}
 
-                <label style={{ display: "grid", gap: 6 }}>
+                <label className="nt-stack nt-gap-1_5">
                   <span className="nt-kicker">备注</span>
-                  <NtTextarea name="note" rows={3} defaultValue={defaultNote} placeholder="可选，记录平台侧用途说明。" />
+                  <NtTextarea className="nt-resize-y" name="note" rows={3} defaultValue={defaultNote} placeholder="可选，记录平台侧用途说明。" />
                 </label>
 
-                <div className="nt-flex nt-justify-end" style={{ gap: 10, paddingTop: 6 }}>
-                  <button type="button" className="nt-btn nt-btn--ghost" onClick={() => setOpen(false)}>
+                <div className="nt-flex nt-justify-end nt-gap-2_5" style={FOOTER_STYLE}>
+                  <button type="button" className="nt-btn nt-btn--ghost" onClick={closeDialog}>
                     取消
                   </button>
                   <button type="submit" className="nt-btn nt-btn--primary">
@@ -298,9 +333,12 @@ export function BundlePlatformKeyDialog(props: {
       <button
         ref={triggerButtonRef}
         type="button"
-        className={mode === "create" ? "nt-btn nt-btn--secondary" : "nt-btn nt-btn--ghost"}
-        style={props.triggerButtonStyle}
-        onClick={() => setOpen(true)}
+        className={
+          mode === "create"
+            ? "nt-btn nt-btn--secondary nt-flex-none nt-nowrap"
+            : "nt-btn nt-btn--ghost nt-flex-none nt-nowrap"
+        }
+        onClick={openDialog}
       >
         {mode === "create" ? "创建平台密钥" : "编辑平台密钥"}
       </button>

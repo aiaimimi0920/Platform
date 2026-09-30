@@ -32,11 +32,28 @@
   - 只恢复 `consumer_service = 'account'` 的 stale `processing` 事件。
   - 剩余 attempts 未耗尽时恢复为 `pending`，并立即可消费。
   - attempts 已耗尽时进入 `dead_letter`。
+  - 成功、重试和死信写回必须原子匹配 `id + consumer_service = account + status = processing + attempts`。
+  - `markEventProcessed(id, attempts)` 与 `markEventFailed(...)` 返回是否实际更新；失去领取权返回 `false`，不改写状态、错误或时间戳。
+  - `attempts` 在每次领取时单调递增；人工重放也不得重置它，否则旧 worker 可能重新获得相同序号。
 - `services/account-worker/src/env.ts`
   - `ACCOUNT_WORKER_PROCESSING_LEASE_TIMEOUT_MS`
   - `ACCOUNT_WORKER_PROCESSING_RECOVERY_LIMIT`
 - `services/account-worker/src/index.ts`
   - 每轮 poll 前先执行 stale recovery。
+  - 将领取时返回的 `event.attempts` 传入成功写回，失败分支沿用同一领取序号。
+
+聚焦验证：`src/outbox-ownership.test.ts` 覆盖写回条件和返回值；
+`tests/outbox-ownership.integration.test.mjs` 使用 PostgreSQL 临时表验证回收后、新领取后、
+终态后及不同 consumer 的旧写回不会修改数据，并保留当前领取者的退避和死信语义。
+后者已接入 account-worker 的 `test:integration:required`，必须通过隔离 fixture 提供
+`PLATFORM_ACCEPTANCE_MODE=required` 与 `ACCOUNT_DATABASE_URL`，不允许缺失数据库时静默跳过。
+此处只保护 outbox 状态所有权，不承诺外部邮件/Webhook 恰好一次投递；外部副作用仍需各 handler 的幂等策略。
+
+2026-09-30 聚焦验证：先在真实 PostgreSQL 复现旧 worker 覆盖 `pending` / `dead_letter`
+状态，再验证修复后 5 组数据库场景通过；account-worker 单元测试 `54/54`、类型检查、
+隔离目录编译、仓库与安全/fixture 契约 `21/21`、Neuro 通用规范契约均通过。
+`outbox.ts` 有效代码由 282 行增至 293 行；入口 `index.ts` 的 1013 行旧债未增长，
+仅补充已有调用参数。本轮没有部署、重启服务或生成完整 Platform release。
 
 后续可增强：
 

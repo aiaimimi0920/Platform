@@ -24,6 +24,7 @@ import {
   consumeDiscountCodeImportPreviewFlash,
   DISCOUNT_CODE_IMPORT_PREVIEW_FLASH_COOKIE,
 } from "@/lib/server-flash";
+import { formatPlatformDateTime } from "@/lib/platform-date-time";
 
 import type { DiscountCodeOperatorState } from "@neuro/contracts";
 
@@ -82,8 +83,22 @@ function stateClass(s: DiscountCodeOperatorState) {
   return "ops-status-dot--scheduled";
 }
 
+function stateLabel(s: DiscountCodeOperatorState) {
+  if (s === "activeWindow") return "当前生效";
+  if (s === "expiring") return "即将到期";
+  if (s === "expired") return "已过期";
+  if (s === "scheduled") return "未生效";
+  return "已停用";
+}
+
+function importPreviewStatusLabel(status: string) {
+  if (status === "create") return "新建";
+  if (status === "update") return "更新";
+  return "未变更";
+}
+
 function dt(v: string | null | undefined) {
-  return v ? new Date(v).toLocaleString("zh-CN") : "未设置";
+  return formatPlatformDateTime(v, "未设置");
 }
 
 export default async function DiscountCodeOpsPage({ searchParams }: PageProps) {
@@ -251,11 +266,11 @@ export default async function DiscountCodeOpsPage({ searchParams }: PageProps) {
                 </select>
               </label>
               <label className="ops-form__label">
-                Namespace
+                命名空间
                 <input className="ops-form__input" name="discountNamespace" defaultValue={discountNamespace} placeholder="例如 spring-campaign" />
               </label>
               <label className="ops-form__label">
-                Batch Label
+                批次标签
                 <input className="ops-form__input" name="discountBatchLabel" defaultValue={discountBatchLabel} placeholder="例如 2026-q1-a" />
               </label>
             </div>
@@ -264,7 +279,7 @@ export default async function DiscountCodeOpsPage({ searchParams }: PageProps) {
                 到期窗口（天）
                 <input className="ops-form__input" min={1} max={365} name="discountWindowDays" step={1} type="number" defaultValue={discountWindowDays} />
               </label>
-              <div style={{ display: "flex", gap: 10, alignItems: "end" }}>
+              <div className="ops-form__actions ops-form__actions--start">
                 <button className="ops-form__submit" type="submit">应用筛选</button>
                 <Link className="ops-inline-action" href="/ops/discount-codes">清空</Link>
               </div>
@@ -322,9 +337,9 @@ export default async function DiscountCodeOpsPage({ searchParams }: PageProps) {
                   <input className="ops-form__input" min={1} max={1000000} name="perUserLimit" placeholder="仅配额时使用" step={1} type="number" />
                 </label>
               </div>
-              <div style={{ display: "flex", gap: 10 }}>
+              <div className="ops-form__actions ops-form__actions--start">
                 <button className="ops-form__submit" type="submit">执行批量动作</button>
-                <Link className="ops-inline-action" href={exportHref}>导出当前筛选 CSV</Link>
+                <a className="ops-inline-action" download href={exportHref}>导出当前筛选 CSV</a>
               </div>
 
               <div className="ops-batch-list">
@@ -338,9 +353,9 @@ export default async function DiscountCodeOpsPage({ searchParams }: PageProps) {
                           <strong>{d.code}</strong>
                           <span style={{ marginLeft: 8, opacity: 0.5, fontSize: "0.78rem" }}>{d.id}</span>
                         </span>
-                        <span className={`ops-status-dot ${stateClass(st)}`}>{st}</span>
+                        <span className={`ops-status-dot ${stateClass(st)}`}>{stateLabel(st)}</span>
                         <span className={`ops-status-dot ${d.enabled ? "ops-status-dot--active" : "ops-status-dot--inactive"}`}>
-                          {d.enabled ? "Enabled" : "Disabled"}
+                          {d.enabled ? "已启用" : "已停用"}
                         </span>
                       </div>
                       <div style={{ padding: "6px 16px 12px", fontSize: "0.82rem", color: "var(--mg-text-muted)" }}>
@@ -357,15 +372,15 @@ export default async function DiscountCodeOpsPage({ searchParams }: PageProps) {
         {/* ── CSV Preview ── */}
         {csvPreview ? (
           <div className="ops-card">
-            <h2 className="ops-card__title">CSV Preview — Dry Run</h2>
+            <h2 className="ops-card__title">CSV 预览（试运行）</h2>
             <div className="ops-table-wrap">
               <table className="ops-table">
                 <thead>
                   <tr>
-                    <th>Total Rows</th>
-                    <th>Create</th>
-                    <th>Update</th>
-                    <th>Unchanged</th>
+                    <th>总行数</th>
+                    <th>新建</th>
+                    <th>更新</th>
+                    <th>未变更</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -384,13 +399,13 @@ export default async function DiscountCodeOpsPage({ searchParams }: PageProps) {
                   <div className="ops-batch-item__head">
                     <span><strong>{item.code}</strong> <span style={{ opacity: 0.5, fontSize: "0.78rem" }}>{item.discountCodeId}</span></span>
                     <span className={`ops-status-dot ${item.status === "create" ? "ops-status-dot--active" : item.status === "update" ? "ops-status-dot--scheduled" : "ops-status-dot--inactive"}`}>
-                      {item.status}
+                      {importPreviewStatusLabel(item.status)}
                     </span>
                   </div>
                   {item.fieldDiffs.length > 0 ? (
                     <div className="ops-table-wrap" style={{ padding: "0 16px 12px" }}>
                       <table className="ops-table">
-                        <thead><tr><th>Field</th><th>Before</th><th>After</th></tr></thead>
+                        <thead><tr><th>字段</th><th>变更前</th><th>变更后</th></tr></thead>
                         <tbody>
                           {item.fieldDiffs.map((fd) => (
                             <tr key={`${item.discountCodeId}-${String(fd.field)}`}>
@@ -437,10 +452,10 @@ export default async function DiscountCodeOpsPage({ searchParams }: PageProps) {
                 <input className="ops-form__input" name="importNote" placeholder="记录 CSV 来源" />
               </label>
             </div>
-            <div style={{ display: "flex", gap: 10 }}>
+            <div className="ops-form__actions ops-form__actions--start">
               <button className="ops-form__submit" type="submit">导入 CSV</button>
               <button className="ops-inline-action" formAction={previewOperatorDiscountCodesCsvAction} type="submit">先做预览</button>
-              <Link className="ops-inline-action" href={exportHref}>下载当前筛选 CSV</Link>
+              <a className="ops-inline-action" download href={exportHref}>下载当前筛选 CSV</a>
             </div>
           </form>
         </div>

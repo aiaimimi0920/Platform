@@ -5,7 +5,9 @@ import type {
   GatewayProviderSourceView,
 } from "@/lib/account-client";
 import { NtBadge, NtCard, NtPanel, type NtBadgeTone } from "@/components/nt-primitives";
+import { formatPlatformDateTime } from "@/lib/platform-date-time";
 import Link from "next/link";
+import type { CSSProperties } from "react";
 
 import { refreshGatewayProviderQuotaAction, updateGatewayProviderLumalabsContractAction } from "./actions";
 import {
@@ -45,17 +47,7 @@ function formatStaticPricingCoverage(entry: GatewayProviderInventoryEntryView["c
 }
 
 export function formatShanghaiDateTime(value: string | null) {
-  if (!value) {
-    return "—";
-  }
-  return new Intl.DateTimeFormat("zh-CN", {
-    timeZone: "Asia/Shanghai",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-  }).format(new Date(value));
+  return formatPlatformDateTime(value, "—");
 }
 
 export function buildQueryString(params: Record<string, string | null | undefined>) {
@@ -445,48 +437,74 @@ function buildProviderActionItems(entry: GatewayProviderInventoryEntryView) {
   return items;
 }
 
+/*
+ * Layout, gaps and color all run through the shared `nt-` utility layer now, so these
+ * constants hold only what the vocabulary has no class for: the auto-fit track minimums that
+ * differ from the 220px default, and the handful of one-off font sizes. Module scope means one
+ * allocation per process instead of one per render.
+ */
+const AUTOFIT_150_STYLE = { "--nt-autofit-min": "150px" } as CSSProperties;
+
+const AUTOFIT_160_STYLE = { "--nt-autofit-min": "160px" } as CSSProperties;
+
+const AUTOFIT_180_STYLE = { "--nt-autofit-min": "180px" } as CSSProperties;
+
+const INVENTORY_METRIC_STYLE: CSSProperties = { alignItems: "center" };
+
+const STAT_CARD_VALUE_STYLE: CSSProperties = { fontSize: "1.7rem" };
+
+const INVENTORY_METRIC_VALUE_STYLE: CSSProperties = { fontSize: "1.4rem" };
+
+const CARD_TITLE_STYLE: CSSProperties = { fontSize: "1.05rem" };
+
+const CARD_SUBTITLE_STYLE: CSSProperties = { fontSize: "0.9rem" };
+
+const CARD_IDENTIFIER_STYLE: CSSProperties = { fontSize: "0.8rem", wordBreak: "break-all" };
+
+const FIELD_HINT_STYLE: CSSProperties = { fontSize: "0.82rem" };
+
 export function StatCard(props: { label: string; value: number; tone?: NtBadgeTone }) {
   return (
-    <NtCard style={{ display: "grid", gap: 10 }}>
+    <NtCard className="nt-stack nt-gap-2_5">
       <NtBadge tone={props.tone ?? "glass"}>{props.label}</NtBadge>
-      <strong style={{ fontSize: "1.7rem", color: "rgba(243,245,247,0.96)" }}>{props.value}</strong>
+      <strong className="nt-text-strong" style={STAT_CARD_VALUE_STYLE}>{props.value}</strong>
     </NtCard>
   );
 }
 
 function DetailLine(props: { label: string; value: string | null }) {
   return (
-    <div style={{ display: "grid", gap: 4 }}>
-      <span className="nt-kicker" style={{ fontSize: "0.72rem" }}>
+    <div className="nt-stack nt-gap-1">
+      <span className="nt-kicker nt-text-2xs">
         {props.label}
       </span>
-      <span style={{ color: "rgba(243,245,247,0.88)", wordBreak: "break-word" }}>{props.value || "—"}</span>
+      <span className="nt-text-strong nt-break-word">{props.value || "—"}</span>
     </div>
   );
 }
 
 function InventoryMetric(props: { label: string; value: string | null; tone?: NtBadgeTone }) {
   return (
-    <NtCard style={{ display: "grid", gap: 4, padding: 12, alignItems: "center" }}>
+    <NtCard className="nt-stack nt-gap-1 nt-pad-3" style={INVENTORY_METRIC_STYLE}>
       <NtBadge tone={props.tone ?? "glass"}>{props.label}</NtBadge>
-      <strong style={{ color: "rgba(243,245,247,0.92)", fontSize: "1.4rem" }}>{props.value || "—"}</strong>
+      <strong className="nt-text-strong" style={INVENTORY_METRIC_VALUE_STYLE}>{props.value || "—"}</strong>
     </NtCard>
   );
 }
 
-function metricValueColor(tone: NtBadgeTone | undefined) {
-  if (tone === "danger") return "#fda4af";
-  if (tone === "warning") return "#fde68a";
-  if (tone === "success") return "#bbf7d0";
-  if (tone === "cyan") return "#a5f3fc";
-  return "rgba(243,245,247,0.94)";
+function metricValueToneClass(tone: NtBadgeTone | undefined) {
+  if (tone === "danger") return "nt-text-danger";
+  if (tone === "warning") return "nt-text-warn";
+  if (tone === "success") return "nt-text-success";
+  if (tone === "cyan") return "nt-text-info";
+  return "nt-text-strong";
 }
 
 function CompactMetric(props: { label: string; value: string | null; tone?: NtBadgeTone }) {
   return (
-    <NtPanel style={{ display: "grid", gap: 4, padding: 12 }}>
+    <NtPanel className="nt-stack nt-gap-1 nt-pad-3">
       <span className="nt-kicker">{props.label}</span>
-      <strong style={{ color: metricValueColor(props.tone), fontSize: "1.02rem" }}>{props.value || "—"}</strong>
+      <strong className={`${metricValueToneClass(props.tone)} nt-text-lg`}>{props.value || "—"}</strong>
     </NtPanel>
   );
 }
@@ -500,31 +518,25 @@ export function ProviderSummaryCard(props: {
   const effectiveStatus = providerHealth?.status ?? provider.status;
 
   return (
-    <NtCard style={{ display: "grid", gap: 14 }}>
-      <div style={{ display: "grid", gap: 8 }}>
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+    <NtCard className="nt-stack nt-gap-3_5">
+      <div className="nt-stack nt-gap-2">
+        <div className="nt-provider-badge-row nt-flex nt-gap-2 nt-wrap">
           <NtBadge tone={getStatusTone(effectiveStatus)}>{getStatusLabel(effectiveStatus)}</NtBadge>
           {providerQuota ? <NtBadge tone={getQuotaTone(providerQuota.status)}>{getQuotaLabel(providerQuota.status)}</NtBadge> : null}
           {providerHealth?.breakerOpen ? <NtBadge tone="danger">断路器开启</NtBadge> : null}
         </div>
-        <div style={{ display: "grid", gap: 4 }}>
-          <strong style={{ color: "rgba(243,245,247,0.96)", fontSize: "1.05rem" }}>{getProviderDisplayLabel(provider)}</strong>
-          <span style={{ color: "rgba(190,199,217,0.72)", fontSize: "0.9rem" }}>
+        <div className="nt-stack nt-gap-1">
+          <strong className="nt-text-strong" style={CARD_TITLE_STYLE}>{getProviderDisplayLabel(provider)}</strong>
+          <span className="nt-text-muted" style={CARD_SUBTITLE_STYLE}>
             {formatProviderVariantLabel(provider)}
           </span>
-          <span style={{ color: "rgba(148,163,184,0.76)", fontSize: "0.8rem", wordBreak: "break-all" }}>
+          <span className="nt-text-muted" style={CARD_IDENTIFIER_STYLE}>
             ID: {provider.id}
           </span>
         </div>
       </div>
 
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))",
-          gap: 10,
-        }}
-      >
+      <div className="nt-autofit" style={AUTOFIT_160_STYLE}>
         <CompactMetric
           label="可用总额度 / 总额度"
           value={formatQuotaRollup(providerQuota)}
@@ -550,7 +562,7 @@ export function ProviderSummaryCard(props: {
         />
       </div>
 
-      <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+      <div className="nt-flex nt-gap-2_5 nt-wrap">
         <Link className="nt-btn nt-btn--primary" href={props.detailHref}>
           进入详情
         </Link>
@@ -583,9 +595,9 @@ export function ProviderFamilySummaryCard(props: {
   const activeConcurrency = aggregateMetricCount(group.entries, (entry) => entry.providerHealth?.activeConcurrency);
 
   return (
-    <NtCard style={{ display: "grid", gap: 14 }}>
-      <div style={{ display: "grid", gap: 8 }}>
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+    <NtCard className="nt-stack nt-gap-3_5">
+      <div className="nt-stack nt-gap-2">
+        <div className="nt-provider-badge-row nt-flex nt-gap-2 nt-wrap">
           <NtBadge tone={getFamilyStatusTone(familyStatus)}>{getFamilyStatusLabel(familyStatus)}</NtBadge>
           {quotaStatus ? <NtBadge tone={getQuotaTone(quotaStatus)}>{getQuotaLabel(quotaStatus)}</NtBadge> : null}
           {sourceKinds.length === 1 ? (
@@ -594,28 +606,22 @@ export function ProviderFamilySummaryCard(props: {
             <NtBadge tone="glass">多来源</NtBadge>
           )}
         </div>
-        <div style={{ display: "grid", gap: 4 }}>
-          <strong style={{ color: "rgba(243,245,247,0.96)", fontSize: "1.05rem" }}>{group.familyLabel}</strong>
-          <span style={{ color: "rgba(190,199,217,0.72)", fontSize: "0.9rem" }}>
+        <div className="nt-stack nt-gap-1">
+          <strong className="nt-text-strong" style={CARD_TITLE_STYLE}>{group.familyLabel}</strong>
+          <span className="nt-text-muted" style={CARD_SUBTITLE_STYLE}>
             {group.entries.length} 个可路由入口
           </span>
         </div>
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+        <div className="nt-flex nt-gap-2 nt-wrap">
           {group.entries.map((entry) => (
-            <NtBadge key={entry.providerAccount.id} tone="glass">
+            <NtBadge key={entry.providerAccount.id} className="nt-provider-surface-chip" tone="glass">
               {formatProviderSurfaceLabel(entry.providerAccount)}
             </NtBadge>
           ))}
         </div>
       </div>
 
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))",
-          gap: 10,
-        }}
-      >
+      <div className="nt-autofit" style={AUTOFIT_160_STYLE}>
         <CompactMetric
           label="可用总额度 / 总额度"
           value={formatFamilyQuotaRollup(group.entries)}
@@ -637,11 +643,11 @@ export function ProviderFamilySummaryCard(props: {
         <CompactMetric label="实时并发数" value={formatMetricCount(activeConcurrency)} tone="cyan" />
       </div>
 
-      <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+      <div className="nt-flex nt-gap-2_5 nt-wrap">
         {detailLinks.map((link, index) => (
           <Link
             key={link.providerAccountId}
-            className={`nt-btn ${index === 0 ? "nt-btn--primary" : "nt-btn--outline"}`}
+            className={`nt-btn nt-provider-detail-link ${index === 0 ? "nt-btn--primary" : "nt-btn--outline"}`}
             href={link.href}
           >
             {link.label}
@@ -665,10 +671,10 @@ export function ProviderDetailCard(props: {
   const lumalabsResolved = resolveLumalabsContract(provider.payload);
 
   return (
-    <NtCard style={{ display: "grid", gap: 16 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
-        <div style={{ display: "grid", gap: 8 }}>
-          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+    <NtCard className="nt-stack nt-gap-4">
+      <div className="nt-flex nt-justify-between nt-gap-3 nt-wrap">
+        <div className="nt-stack nt-gap-2">
+          <div className="nt-provider-badge-row nt-flex nt-gap-2 nt-wrap">
             <NtBadge tone={getStatusTone(effectiveStatus)}>{getStatusLabel(effectiveStatus)}</NtBadge>
             <NtBadge tone={getSourceTone(provider.sourceProfile.sourceKind)}>
               {getSourceLabel(provider.sourceProfile.sourceKind)}
@@ -690,22 +696,16 @@ export function ProviderDetailCard(props: {
               模型静态价 {formatStaticPricingCoverage(costHints.staticPricingCoverage)}
             </NtBadge>
           </div>
-        <div style={{ display: "grid", gap: 4 }}>
-          <strong style={{ fontSize: "1rem", color: "rgba(243,245,247,0.96)" }}>{getProviderDisplayLabel(provider)}</strong>
-          <span style={{ color: "rgba(190,199,217,0.76)", fontSize: "0.92rem" }}>
+        <div className="nt-stack nt-gap-1">
+          <strong className="nt-credential-title nt-text-strong">{getProviderDisplayLabel(provider)}</strong>
+          <span className="nt-text-muted nt-text-md">
             {formatProviderVariantLabel(provider)}
           </span>
         </div>
         </div>
       </div>
 
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
-          gap: 12,
-        }}
-      >
+      <div className="nt-autofit">
         <DetailLine label="服务商 ID" value={provider.id} />
         <DetailLine label="服务商归属" value={serviceIdentity.label} />
         <DetailLine label="服务商归属 Key" value={serviceIdentity.key} />
@@ -714,13 +714,7 @@ export function ProviderDetailCard(props: {
         <DetailLine label="更新时间" value={formatShanghaiDateTime(provider.updatedAt)} />
       </div>
 
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))",
-          gap: 10,
-        }}
-      >
+      <div className="nt-autofit" style={AUTOFIT_150_STYLE}>
         <InventoryMetric
           label="路由分数"
           value={providerHealth?.routingScore?.toFixed(2) ?? "—"}
@@ -748,8 +742,8 @@ export function ProviderDetailCard(props: {
         />
       </div>
 
-      <NtPanel style={{ display: "grid", gap: 6 }}>
-        <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
+      <NtPanel className="nt-stack nt-gap-1_5">
+        <div className="nt-flex nt-justify-between nt-gap-3 nt-wrap">
           <span className="nt-kicker">服务商额度</span>
           <form action={refreshGatewayProviderQuotaAction}>
             <input name="redirectTo" type="hidden" value={redirectTo} />
@@ -761,73 +755,67 @@ export function ProviderDetailCard(props: {
         </div>
         {providerQuota ? (
           <>
-            <span style={{ color: "rgba(214,219,233,0.85)" }}>
+            <span className="nt-text-muted">
               当前状态：{getQuotaLabel(providerQuota.status)}
               {providerQuota.planType ? ` · 计划 ${providerQuota.planType}` : ""}
             </span>
-            <span style={{ color: "rgba(214,219,233,0.85)" }}>
+            <span className="nt-text-muted">
               代表性结论：{providerQuota.representativeClaim ?? "—"}
             </span>
-            <span style={{ color: "rgba(214,219,233,0.85)" }}>
+            <span className="nt-text-muted">
               最近检查：{formatShanghaiDateTime(providerQuota.checkedAt)}
             </span>
-            <span style={{ color: "rgba(214,219,233,0.85)" }}>
+            <span className="nt-text-muted">
               下次建议检查：{formatShanghaiDateTime(providerQuota.nextCheckAt)}
             </span>
-            <span style={{ color: "rgba(214,219,233,0.85)" }}>
+            <span className="nt-text-muted">
               最近重置点：{formatShanghaiDateTime(providerQuota.nextResetAt)}
             </span>
             {providerQuota.windows.length ? (
-              <div
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
-                  gap: 10,
-                }}
-              >
+              <div className="nt-autofit" style={AUTOFIT_180_STYLE}>
                 {providerQuota.windows.map((window) => (
-                  <NtCard key={`${provider.id}-${window.key}`} style={{ display: "grid", gap: 6, padding: 12 }}>
+                  <NtCard key={`${provider.id}-${window.key}`} className="nt-stack nt-gap-1_5 nt-pad-3">
                     <NtBadge tone={getQuotaTone(providerQuota.status)}>{window.label}</NtBadge>
-                    <span style={{ color: "rgba(214,219,233,0.85)" }}>已用：{formatQuotaPercent(window.usedPercent)}</span>
-                    <span style={{ color: "rgba(214,219,233,0.85)" }}>
+                    <span className="nt-text-muted">已用：{formatQuotaPercent(window.usedPercent)}</span>
+                    <span className="nt-text-muted">
                       剩余比：{window.remainingRatio != null ? `${Math.round(window.remainingRatio * 100)}%` : "—"}
                     </span>
-                    <span style={{ color: "rgba(214,219,233,0.85)" }}>
+                    <span className="nt-text-muted">
                       重置：{formatShanghaiDateTime(window.resetAt)}
                     </span>
                   </NtCard>
                 ))}
               </div>
             ) : (
-              <span style={{ color: "rgba(214,219,233,0.64)" }}>当前额度源未提供窗口明细。</span>
+              <span className="nt-text-muted">当前额度源未提供窗口明细。</span>
             )}
           </>
         ) : (
-          <span style={{ color: "rgba(214,219,233,0.64)" }}>当前服务商尚未声明可读取的额度接口。</span>
+          <span className="nt-text-muted">当前服务商尚未声明可读取的额度接口。</span>
         )}
       </NtPanel>
 
-      <NtPanel style={{ display: "grid", gap: 6 }}>
+      <NtPanel className="nt-stack nt-gap-1_5">
         <span className="nt-kicker">路由诊断</span>
-        <span style={{ color: "rgba(214,219,233,0.85)" }}>
+        <span className="nt-text-muted">
           最近健康检查：{formatShanghaiDateTime(providerHealth?.lastHealthCheckAt ?? null)}
         </span>
-        <span style={{ color: "rgba(214,219,233,0.85)" }}>
+        <span className="nt-text-muted">
           冷却截止：{formatShanghaiDateTime(providerHealth?.cooldownUntil ?? null)}
         </span>
-        <span style={{ color: "rgba(214,219,233,0.85)" }}>
+        <span className="nt-text-muted">
           最近错误：{providerHealth?.lastError ?? "—"}
         </span>
         {providerHealth?.degradationReasons?.length ? (
-          <span style={{ color: "rgba(252,211,77,0.92)" }}>
+          <span className="nt-text-warn">
             降级原因：{providerHealth.degradationReasons.join(" / ")}
           </span>
         ) : (
-          <span style={{ color: "rgba(214,219,233,0.64)" }}>当前无显式降级原因。</span>
+          <span className="nt-text-muted">当前无显式降级原因。</span>
         )}
       </NtPanel>
 
-      <NtPanel style={{ display: "grid", gap: 6 }}>
+      <NtPanel className="nt-stack nt-gap-1_5">
         <span className="nt-kicker">静态定价与流量摘要</span>
         {(() => {
           const coverage = costHints.staticPricingCoverage;
@@ -856,10 +844,10 @@ export function ProviderDetailCard(props: {
             costHints.lastRequestAt ? `最近请求：${formatShanghaiDateTime(costHints.lastRequestAt)}` : null,
           ].filter((line): line is string => Boolean(line));
           if (!costLines.length) {
-            return <span style={{ color: "rgba(214,219,233,0.64)" }}>暂无静态定价与流量摘要</span>;
+            return <span className="nt-text-muted">暂无静态定价与流量摘要</span>;
           }
           return costLines.map((line) => (
-            <span key={line} style={{ color: "rgba(214,219,233,0.85)" }}>
+            <span key={line} className="nt-text-muted">
               {line}
             </span>
           ));
@@ -867,21 +855,15 @@ export function ProviderDetailCard(props: {
       </NtPanel>
 
       {isLumalabs ? (
-        <NtPanel style={{ display: "grid", gap: 12 }}>
-          <div style={{ display: "grid", gap: 6 }}>
+        <NtPanel className="nt-stack nt-gap-3">
+          <div className="nt-stack nt-gap-1_5">
             <span className="nt-kicker">Luma Reverse-Web 合同</span>
-            <span style={{ color: "rgba(214,219,233,0.84)" }}>
+            <span className="nt-text-muted">
               当前 Luma surface 仍是 browser-backed reverse-web，不是官方 API。这里维护的是 capture-derived 视频 / 音频 action 与产物字段覆盖。
             </span>
           </div>
 
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
-              gap: 10,
-            }}
-          >
+          <div className="nt-autofit">
             {LUMALABS_CONTRACT_FIELD_DEFINITIONS.map((field) => (
               <DetailLine
                 key={field.key}
@@ -891,18 +873,12 @@ export function ProviderDetailCard(props: {
             ))}
           </div>
 
-          <form action={updateGatewayProviderLumalabsContractAction} style={{ display: "grid", gap: 12 }}>
+          <form action={updateGatewayProviderLumalabsContractAction} className="nt-stack nt-gap-3">
             <input name="providerAccountId" type="hidden" value={provider.id} />
             <input name="redirectTo" type="hidden" value={redirectTo} />
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
-                gap: 12,
-              }}
-            >
+            <div className="nt-autofit">
               {LUMALABS_CONTRACT_FIELD_DEFINITIONS.map((field) => (
-                <label key={field.key} style={{ display: "grid", gap: 6 }}>
+                <label key={field.key} className="nt-stack nt-gap-1_5">
                   <span className="nt-kicker">{field.label}</span>
                   <input
                     className="nt-input"
@@ -910,14 +886,14 @@ export function ProviderDetailCard(props: {
                     name={field.key}
                     placeholder={field.placeholder}
                   />
-                  <span style={{ color: "rgba(190,199,217,0.7)", fontSize: "0.82rem" }}>
+                  <span className="nt-text-muted" style={FIELD_HINT_STYLE}>
                     {field.description} 默认：{field.fallbackValue}
                   </span>
                 </label>
               ))}
             </div>
-            <div style={{ display: "flex", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
-              <span style={{ color: "rgba(190,199,217,0.76)" }}>
+            <div className="nt-flex nt-justify-between nt-gap-2_5 nt-wrap">
+              <span className="nt-text-muted">
                 留空表示不写显式 override，让运行时按平台默认 `ray-2 / music-v1` 合同回退。
               </span>
               <button className="nt-btn nt-btn--primary" type="submit">
@@ -928,16 +904,16 @@ export function ProviderDetailCard(props: {
         </NtPanel>
       ) : null}
 
-      <NtPanel style={{ display: "grid", gap: 6 }}>
+      <NtPanel className="nt-stack nt-gap-1_5">
         <span className="nt-kicker">下一步处理建议</span>
         {buildProviderActionItems(entry).length ? (
           buildProviderActionItems(entry).map((line) => (
-            <span key={line} style={{ color: "rgba(214,219,233,0.84)" }}>
+            <span key={line} className="nt-text-muted">
               {line}
             </span>
           ))
         ) : (
-          <span style={{ color: "rgba(214,219,233,0.64)" }}>当前服务商没有明显治理缺口。</span>
+          <span className="nt-text-muted">当前服务商没有明显治理缺口。</span>
         )}
       </NtPanel>
     </NtCard>

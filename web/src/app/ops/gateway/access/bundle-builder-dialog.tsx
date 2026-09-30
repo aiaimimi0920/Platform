@@ -7,7 +7,16 @@ import {
 import { NtInput, NtSelect } from "@/components/nt-primitives";
 import type { GatewayAccessCatalogView, GatewayProviderAccountView } from "@/lib/account-client";
 import { acquireBodyOverlayLock } from "@/lib/overlay-lock";
-import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ChangeEvent,
+  type CSSProperties,
+  type MouseEvent,
+} from "react";
 import { createPortal } from "react-dom";
 
 const billingModeOptions = [
@@ -15,6 +24,123 @@ const billingModeOptions = [
   { value: "time_pass", label: "按天数计费" },
   { value: "message_prepaid", label: "按请求数计费" },
 ] as const;
+
+/*
+ * The dialog chrome (fixed overlay, backdrop, gradient shell) comes from the shared
+ * `app-honor-*` / `nt-ops-access-dialog` classes. Everything left below is either one-off
+ * geometry or the sticky access-matrix table, so it lives in module-scope constants: an
+ * inline object literal in JSX would allocate on every render of this client component and
+ * defeat memoization on anything downstream. Colors resolve through neuro tokens only.
+ */
+const BUILDER_FORM_STYLE: CSSProperties = { gridTemplateRows: "auto auto minmax(0, 1fr) auto" };
+
+const DIALOG_HEADER_STYLE: CSSProperties = {
+  padding: "20px 24px",
+  borderBottom: "1px solid var(--neuro-line)",
+};
+
+const DIALOG_TITLE_STYLE: CSSProperties = { fontSize: "1.12rem" };
+
+const BUILDER_FIELDS_STYLE: CSSProperties = {
+  padding: "20px 24px 16px",
+  gridTemplateColumns: "minmax(0, 1.3fr) minmax(220px, 0.7fr)",
+  borderBottom: "1px solid var(--neuro-line)",
+};
+
+const FULL_SPAN_FIELD_STYLE: CSSProperties = { gridColumn: "1 / -1" };
+
+const KEY_PREFIX_CODE_STYLE: CSSProperties = {
+  display: "block",
+  padding: "12px 14px",
+  borderRadius: 16,
+  background: "var(--neuro-control)",
+  border: "1px solid var(--neuro-line)",
+};
+
+const MATRIX_SCROLL_STYLE: CSSProperties = { padding: "16px 24px 0", overflow: "auto" };
+
+const MATRIX_TABLE_STYLE: CSSProperties = {
+  width: "max-content",
+  borderCollapse: "collapse",
+  marginBottom: 16,
+};
+
+const MATRIX_CORNER_HEAD_STYLE: CSSProperties = {
+  position: "sticky",
+  top: 0,
+  left: 0,
+  zIndex: 2,
+  minWidth: 280,
+  padding: "12px 16px",
+  textAlign: "left",
+  background: "var(--neuro-surface)",
+  borderBottom: "1px solid var(--neuro-line)",
+  borderRight: "1px solid var(--neuro-line)",
+  color: "var(--neuro-text)",
+};
+
+const MATRIX_PROVIDER_HEAD_STYLE: CSSProperties = {
+  position: "sticky",
+  top: 0,
+  zIndex: 1,
+  width: 132,
+  maxWidth: 132,
+  padding: "12px 10px",
+  textAlign: "center",
+  background: "var(--neuro-surface)",
+  borderBottom: "1px solid var(--neuro-line)",
+  borderRight: "1px solid var(--neuro-line)",
+  color: "var(--neuro-text)",
+  whiteSpace: "nowrap",
+  overflow: "hidden",
+  textOverflow: "ellipsis",
+};
+
+const MATRIX_MODEL_CELL_STYLE: CSSProperties = {
+  position: "sticky",
+  left: 0,
+  zIndex: 1,
+  minWidth: 280,
+  padding: "12px 16px",
+  background: "var(--neuro-surface)",
+  borderBottom: "1px solid var(--neuro-line)",
+  borderRight: "1px solid var(--neuro-line)",
+  color: "var(--neuro-text)",
+  whiteSpace: "nowrap",
+};
+
+const MATRIX_VALUE_CELL_STYLE: CSSProperties = {
+  width: 132,
+  maxWidth: 132,
+  padding: "8px 10px",
+  textAlign: "center",
+  borderBottom: "1px solid var(--neuro-line)",
+  borderRight: "1px solid var(--neuro-line)",
+};
+
+const MATRIX_CHECKBOX_STYLE: CSSProperties = {
+  width: 18,
+  height: 18,
+  accentColor: "var(--neuro-signal-yellow)",
+};
+
+const EMPTY_MATRIX_STYLE: CSSProperties = { paddingBottom: 16 };
+
+const DIALOG_FOOTER_STYLE: CSSProperties = {
+  padding: "16px 24px 20px",
+  borderTop: "1px solid var(--neuro-line)",
+};
+
+type BundleMatrixColumn = { id: string; label: string };
+type BundleMatrixCell = { checkboxValue: string; title: string };
+type BundleMatrixRow = {
+  modelCode: string;
+  cells: Array<{ providerId: string; cell: BundleMatrixCell | null }>;
+};
+
+function stopPropagation(event: MouseEvent<HTMLDivElement>) {
+  event.stopPropagation();
+}
 
 function CloseIcon() {
   return (
@@ -88,6 +214,13 @@ export function BundleBuilderDialog(props: {
     }
   }, [open]);
 
+  const openDialog = useCallback(() => setOpen(true), []);
+  const closeDialog = useCallback(() => setOpen(false), []);
+  const handleBillingModeChange = useCallback(
+    (event: ChangeEvent<HTMLSelectElement>) => setBillingMode(event.target.value as BundleBillingMode),
+    [],
+  );
+
   const providerLabelMap = useMemo(
     () => new Map(props.providerAccounts.map((provider) => [provider.id, provider.label])),
     [props.providerAccounts],
@@ -122,6 +255,41 @@ export function BundleBuilderDialog(props: {
     [collator, modelMap],
   );
 
+  /*
+   * The matrix used to re-derive every column label, checkbox value and tooltip inside the
+   * render loop — one `Set` plus two `join`s per cell on each keystroke elsewhere in the
+   * dialog. Both are now derived once per access-row change.
+   */
+  const providerColumns = useMemo<BundleMatrixColumn[]>(
+    () => providerIds.map((providerId) => ({ id: providerId, label: providerLabelMap.get(providerId) ?? providerId })),
+    [providerIds, providerLabelMap],
+  );
+  const matrixRows = useMemo<BundleMatrixRow[]>(
+    () =>
+      modelCodes.map((modelCode) => {
+        const providerMap = modelMap.get(modelCode)!;
+        return {
+          modelCode,
+          cells: providerColumns.map((column) => {
+            const rows = providerMap.get(column.id) ?? [];
+            if (rows.length === 0) {
+              return { providerId: column.id, cell: null };
+            }
+            const endpoints = Array.from(new Set(rows.map((row) => row.endpointKind))).join(" / ");
+            return {
+              providerId: column.id,
+              cell: {
+                checkboxValue: rows.map((row) => row.id).join(","),
+                title: `${modelCode} / ${column.label} / ${endpoints || "access rows"} / ${rows.length} 条`,
+              },
+            };
+          }),
+        };
+      }),
+    [modelCodes, modelMap, providerColumns],
+  );
+  const keyPrefixPreview = useMemo(() => buildBundleDefaultKeyPrefixPreview(billingMode), [billingMode]);
+
   const dialog =
     open && typeof document !== "undefined"
       ? createPortal(
@@ -129,52 +297,44 @@ export function BundleBuilderDialog(props: {
             <button
               aria-label="关闭 Bundle 创建器"
               className="app-honor-backdrop"
-              onClick={() => setOpen(false)}
+              onClick={closeDialog}
               type="button"
             />
-            <div className="nt-ops-access-dialog nt-ops-access-dialog--wide" onClick={(event) => event.stopPropagation()}>
-            <form action={props.action} style={{ display: "grid", gridTemplateRows: "auto auto minmax(0, 1fr) auto" }}>
+            <div className="nt-ops-access-dialog nt-ops-access-dialog--wide" onClick={stopPropagation}>
+            <form action={props.action} className="nt-stack" style={BUILDER_FORM_STYLE}>
               <input type="hidden" name="redirectTo" value={props.redirectTo} />
               <input type="hidden" name="projectId" value={props.defaultProjectId} />
 
               <div
-                className="nt-flex nt-justify-between nt-items-center"
-                style={{ gap: 12, padding: "20px 24px", borderBottom: "1px solid rgba(255,255,255,0.08)" }}
+                className="nt-flex nt-justify-between nt-items-center nt-gap-3"
+                style={DIALOG_HEADER_STYLE}
               >
-                <div style={{ display: "grid", gap: 4 }}>
+                <div className="nt-stack nt-gap-1">
                   <span className="nt-kicker">Bundle</span>
-                  <strong style={{ fontSize: "1.12rem", color: "rgba(245,247,250,0.96)" }}>创建 Bundle</strong>
+                  <strong className="nt-text-strong" style={DIALOG_TITLE_STYLE}>创建 Bundle</strong>
                 </div>
                 <button
                   ref={closeButtonRef}
                   type="button"
                   className="app-honor-close"
-                  onClick={() => setOpen(false)}
+                  onClick={closeDialog}
                   aria-label="关闭"
                 >
                   <CloseIcon />
                 </button>
               </div>
 
-              <div
-                style={{
-                  display: "grid",
-                  gap: 12,
-                  padding: "20px 24px 16px",
-                  gridTemplateColumns: "minmax(0, 1.3fr) minmax(220px, 0.7fr)",
-                  borderBottom: "1px solid rgba(255,255,255,0.08)",
-                }}
-              >
-                <label style={{ display: "grid", gap: 6 }}>
+              <div className="nt-stack nt-gap-3" style={BUILDER_FIELDS_STYLE}>
+                <label className="nt-stack nt-gap-1_5">
                   <span className="nt-kicker">名称</span>
                   <NtInput name="displayName" placeholder="例如：Codex 按天数 Bundle" required />
                 </label>
-                <label style={{ display: "grid", gap: 6 }}>
+                <label className="nt-stack nt-gap-1_5">
                   <span className="nt-kicker">计费模式</span>
                   <NtSelect
                     name="billingMode"
                     value={billingMode}
-                    onChange={(event) => setBillingMode(event.target.value as BundleBillingMode)}
+                    onChange={handleBillingModeChange}
                   >
                     {billingModeOptions.map((mode) => (
                       <option key={mode.value} value={mode.value}>
@@ -183,147 +343,71 @@ export function BundleBuilderDialog(props: {
                     ))}
                   </NtSelect>
                 </label>
-                <div style={{ display: "grid", gap: 6, gridColumn: "1 / -1" }}>
+                <div className="nt-stack nt-gap-1_5" style={FULL_SPAN_FIELD_STYLE}>
                   <span className="nt-kicker">默认 Key 前缀</span>
-                  <code
-                    style={{
-                      display: "block",
-                      padding: "12px 14px",
-                      borderRadius: 16,
-                      background: "rgba(7,11,17,0.82)",
-                      border: "1px solid rgba(255,255,255,0.08)",
-                      color: "rgba(245,247,250,0.92)",
-                      fontSize: "0.92rem",
-                    }}
-                  >
-                    {buildBundleDefaultKeyPrefixPreview(billingMode)}
+                  <code className="nt-text-md nt-text-strong" style={KEY_PREFIX_CODE_STYLE}>
+                    {keyPrefixPreview}
                   </code>
                 </div>
               </div>
 
-              <div style={{ padding: "16px 24px 0", overflow: "auto" }}>
+              <div style={MATRIX_SCROLL_STYLE}>
                 {selectableRows.length > 0 ? (
-                  <table
-                    style={{
-                      width: "max-content",
-                      borderCollapse: "collapse",
-                      marginBottom: 16,
-                    }}
-                  >
+                  <table style={MATRIX_TABLE_STYLE}>
                     <thead>
                       <tr>
-                        <th
-                          style={{
-                            position: "sticky",
-                            top: 0,
-                            left: 0,
-                            zIndex: 2,
-                            minWidth: 280,
-                            padding: "12px 16px",
-                            textAlign: "left",
-                            background: "rgba(11,15,22,0.98)",
-                            borderBottom: "1px solid rgba(255,255,255,0.08)",
-                            borderRight: "1px solid rgba(255,255,255,0.08)",
-                            color: "rgba(245,247,250,0.94)",
-                          }}
-                        >
+                        <th style={MATRIX_CORNER_HEAD_STYLE}>
                           可用模型
                         </th>
-                        {providerIds.map((providerId) => (
+                        {providerColumns.map((column) => (
                           <th
-                            key={providerId}
-                            title={providerId}
-                            style={{
-                              position: "sticky",
-                              top: 0,
-                              zIndex: 1,
-                              width: 132,
-                              maxWidth: 132,
-                              padding: "12px 10px",
-                              textAlign: "center",
-                              background: "rgba(11,15,22,0.98)",
-                              borderBottom: "1px solid rgba(255,255,255,0.08)",
-                              borderRight: "1px solid rgba(255,255,255,0.08)",
-                              color: "rgba(245,247,250,0.94)",
-                              whiteSpace: "nowrap",
-                              overflow: "hidden",
-                              textOverflow: "ellipsis",
-                            }}
+                            key={column.id}
+                            title={column.id}
+                            style={MATRIX_PROVIDER_HEAD_STYLE}
                           >
-                            {providerLabelMap.get(providerId) ?? providerId}
+                            {column.label}
                           </th>
                         ))}
                       </tr>
                     </thead>
                     <tbody>
-                      {modelCodes.map((modelCode) => {
-                        const providerMap = modelMap.get(modelCode)!;
-                        return (
-                          <tr key={modelCode}>
+                      {matrixRows.map((row) => (
+                        <tr key={row.modelCode}>
+                          <td style={MATRIX_MODEL_CELL_STYLE}>
+                            {row.modelCode}
+                          </td>
+                          {row.cells.map((entry) => (
                             <td
-                              style={{
-                                position: "sticky",
-                                left: 0,
-                                zIndex: 1,
-                                minWidth: 280,
-                                padding: "12px 16px",
-                                background: "rgba(9,13,19,0.98)",
-                                borderBottom: "1px solid rgba(255,255,255,0.06)",
-                                borderRight: "1px solid rgba(255,255,255,0.08)",
-                                color: "rgba(245,247,250,0.96)",
-                                whiteSpace: "nowrap",
-                              }}
+                              key={`${row.modelCode}:${entry.providerId}`}
+                              style={MATRIX_VALUE_CELL_STYLE}
                             >
-                              {modelCode}
+                              {entry.cell ? (
+                                <input
+                                  type="checkbox"
+                                  name="platformAccessIds"
+                                  value={entry.cell.checkboxValue}
+                                  title={entry.cell.title}
+                                  style={MATRIX_CHECKBOX_STYLE}
+                                />
+                              ) : (
+                                <span className="nt-text-xs nt-text-muted">-</span>
+                              )}
                             </td>
-                            {providerIds.map((providerId) => {
-                              const rows = providerMap.get(providerId) ?? [];
-                              const endpoints = Array.from(new Set(rows.map((row) => row.endpointKind))).join(" / ");
-                              return (
-                                <td
-                                  key={`${modelCode}:${providerId}`}
-                                  style={{
-                                    width: 132,
-                                    maxWidth: 132,
-                                    padding: "8px 10px",
-                                    textAlign: "center",
-                                    borderBottom: "1px solid rgba(255,255,255,0.06)",
-                                    borderRight: "1px solid rgba(255,255,255,0.06)",
-                                  }}
-                                >
-                                  {rows.length > 0 ? (
-                                    <input
-                                      type="checkbox"
-                                      name="platformAccessIds"
-                                      value={rows.map((row) => row.id).join(",")}
-                                      title={`${modelCode} / ${providerLabelMap.get(providerId) ?? providerId} / ${endpoints || "access rows"} / ${rows.length} 条`}
-                                      style={{ width: 18, height: 18, accentColor: "#d9ff38" }}
-                                    />
-                                  ) : (
-                                    <span className="nt-text-xs nt-text-muted">-</span>
-                                  )}
-                                </td>
-                              );
-                            })}
-                          </tr>
-                        );
-                      })}
+                          ))}
+                        </tr>
+                      ))}
                     </tbody>
                   </table>
                 ) : (
-                  <div className="nt-text-sm nt-text-muted" style={{ paddingBottom: 16 }}>
+                  <div className="nt-text-sm nt-text-muted" style={EMPTY_MATRIX_STYLE}>
                     当前没有可建包的访问行。
                   </div>
                 )}
               </div>
 
               <div
-                className="nt-flex nt-justify-end nt-items-center"
-                style={{
-                  gap: 10,
-                  padding: "16px 24px 20px",
-                  borderTop: "1px solid rgba(255,255,255,0.08)",
-                }}
+                className="nt-flex nt-justify-end nt-items-center nt-gap-2_5"
+                style={DIALOG_FOOTER_STYLE}
               >
                 <SubmitButton />
               </div>
@@ -336,7 +420,7 @@ export function BundleBuilderDialog(props: {
 
   return (
     <>
-      <button ref={triggerButtonRef} type="button" className="nt-btn nt-btn--primary" onClick={() => setOpen(true)}>
+      <button ref={triggerButtonRef} type="button" className="nt-btn nt-btn--primary" onClick={openDialog}>
         创建 Bundle
       </button>
       {dialog}

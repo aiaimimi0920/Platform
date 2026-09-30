@@ -4,7 +4,15 @@ import type { BundleBillingMode } from "./bundle-key-prefix";
 import { NtInput, NtSelect } from "@/components/nt-primitives";
 import type { GatewayAccessCatalogView } from "@/lib/account-client";
 import { acquireBodyOverlayLock } from "@/lib/overlay-lock";
-import { useEffect, useRef, useState, type CSSProperties } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+  type MouseEvent,
+} from "react";
 import { createPortal } from "react-dom";
 
 const billingModeOptions: Array<{ value: BundleBillingMode; label: string }> = [
@@ -12,6 +20,19 @@ const billingModeOptions: Array<{ value: BundleBillingMode; label: string }> = [
   { value: "time_pass", label: "按天数计费" },
   { value: "message_prepaid", label: "按请求数计费" },
 ];
+
+/*
+ * Dialog chrome comes from the shared `app-honor-*` / `nt-ops-access-dialog` classes; only
+ * one-off geometry survives as inline style, and it lives at module scope so this client
+ * component does not allocate a fresh style object on every render.
+ */
+const DIALOG_TITLE_BLOCK_STYLE: CSSProperties = { maxWidth: 620 };
+
+const DIALOG_TITLE_STYLE: CSSProperties = { fontSize: "1.16rem" };
+
+function stopPropagation(event: MouseEvent<HTMLDivElement>) {
+  event.stopPropagation();
+}
 
 function CloseIcon() {
   return (
@@ -40,7 +61,6 @@ export function BundleSettingsDialog(props: {
   bundle: GatewayAccessCatalogView["bundles"][number];
   redirectTo: string;
   inferredBillingMode?: BundleBillingMode | null;
-  triggerButtonStyle?: CSSProperties;
 }) {
   const [open, setOpen] = useState(false);
   const triggerButtonRef = useRef<HTMLButtonElement | null>(null);
@@ -84,6 +104,11 @@ export function BundleSettingsDialog(props: {
     }
   }, [open]);
 
+  const openDialog = useCallback(() => setOpen(true), []);
+  const closeDialog = useCallback(() => setOpen(false), []);
+
+  const serializedMetadata = useMemo(() => stringifyMetadata(props.bundle.metadata), [props.bundle.metadata]);
+
   const dialog =
     open && typeof document !== "undefined"
       ? createPortal(
@@ -91,7 +116,7 @@ export function BundleSettingsDialog(props: {
             <button
               aria-label="关闭 Bundle 编辑器"
               className="app-honor-backdrop"
-              onClick={() => setOpen(false)}
+              onClick={closeDialog}
               type="button"
             />
             <div
@@ -99,7 +124,7 @@ export function BundleSettingsDialog(props: {
               aria-modal="true"
               className="nt-ops-access-dialog"
               role="dialog"
-              onClick={(event) => event.stopPropagation()}
+              onClick={stopPropagation}
             >
               <form action={props.action} className="nt-ops-access-dialog__scroll">
                 <input type="hidden" name="redirectTo" value={props.redirectTo} />
@@ -108,12 +133,12 @@ export function BundleSettingsDialog(props: {
                 <input type="hidden" name="slug" value={props.bundle.slug} />
                 <input type="hidden" name="status" value={props.bundle.status} />
                 <input type="hidden" name="description" value={props.bundle.description ?? ""} />
-                <input type="hidden" name="metadata" value={stringifyMetadata(props.bundle.metadata)} />
+                <input type="hidden" name="metadata" value={serializedMetadata} />
 
-                <div className="nt-flex nt-justify-between nt-items-start" style={{ gap: 12 }}>
-                  <div style={{ display: "grid", gap: 4, maxWidth: 620 }}>
+                <div className="nt-flex nt-justify-between nt-items-start nt-gap-3">
+                  <div className="nt-stack nt-gap-1" style={DIALOG_TITLE_BLOCK_STYLE}>
                     <span className="nt-kicker">Bundle</span>
-                    <strong style={{ fontSize: "1.16rem", color: "rgba(245,247,250,0.96)" }}>
+                    <strong className="nt-text-strong" style={DIALOG_TITLE_STYLE}>
                       编辑 Bundle
                     </strong>
                   </div>
@@ -121,19 +146,19 @@ export function BundleSettingsDialog(props: {
                     ref={closeButtonRef}
                     type="button"
                     className="app-honor-close"
-                    onClick={() => setOpen(false)}
+                    onClick={closeDialog}
                     aria-label="关闭"
                   >
                     <CloseIcon />
                   </button>
                 </div>
 
-                <div style={{ display: "grid", gap: 12, gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))" }}>
-                  <label style={{ display: "grid", gap: 6 }}>
+                <div className="nt-autofit">
+                  <label className="nt-stack nt-gap-1_5">
                     <span className="nt-kicker">名称</span>
                     <NtInput name="displayName" defaultValue={props.bundle.displayName} required />
                   </label>
-                  <label style={{ display: "grid", gap: 6 }}>
+                  <label className="nt-stack nt-gap-1_5">
                     <span className="nt-kicker">计费模式</span>
                     <NtSelect name="billingMode" defaultValue={defaultBillingMode}>
                       {billingModeOptions.map((mode) => (
@@ -145,8 +170,8 @@ export function BundleSettingsDialog(props: {
                   </label>
                 </div>
 
-                <div className="nt-flex nt-justify-end nt-items-center" style={{ gap: 10 }}>
-                  <button type="button" className="nt-btn nt-btn--ghost" onClick={() => setOpen(false)}>
+                <div className="nt-flex nt-justify-end nt-items-center nt-gap-2_5">
+                  <button type="button" className="nt-btn nt-btn--ghost" onClick={closeDialog}>
                     取消
                   </button>
                   <button type="submit" className="nt-btn nt-btn--primary">
@@ -165,9 +190,8 @@ export function BundleSettingsDialog(props: {
       <button
         ref={triggerButtonRef}
         type="button"
-        className="nt-btn nt-btn--ghost"
-        style={props.triggerButtonStyle}
-        onClick={() => setOpen(true)}
+        className="nt-btn nt-btn--ghost nt-flex-none nt-nowrap"
+        onClick={openDialog}
       >
         编辑 Bundle
       </button>

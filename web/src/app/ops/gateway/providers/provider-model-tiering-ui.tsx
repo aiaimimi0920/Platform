@@ -1,6 +1,15 @@
 "use client";
 
-import { useActionState, useEffect, useRef, useState } from "react";
+import {
+  useActionState,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ChangeEvent,
+  type CSSProperties,
+} from "react";
 import { useFormStatus } from "react-dom";
 
 import { useAppToast } from "@/components/app-toast-center";
@@ -20,24 +29,30 @@ const PLATFORM_TIER_OPTIONS = [
 
 type PlatformTierValue = (typeof PLATFORM_TIER_OPTIONS)[number]["value"];
 
-function cardStyle() {
-  return {
-    flex: "0 1 260px",
-    width: "min(100%, 280px)",
-    display: "grid",
-    gap: 14,
-    padding: 18,
-  } as const;
-}
+const MODEL_TIER_CARD_STYLE: CSSProperties = {
+  flex: "0 1 260px",
+  width: "min(100%, 280px)",
+  padding: 18,
+};
+
+const SAVE_BUTTON_PENDING_STYLE: CSSProperties = { opacity: 0.76 };
+
+const SAVE_BUTTON_READY_STYLE: CSSProperties = { opacity: 1 };
+
+const TIER_TOGGLE_STYLE: CSSProperties = { width: 18, height: 18 };
+
+const INLINE_TONE_STYLE: CSSProperties = { lineHeight: 1.5 };
+
+const TIERING_INTRO_STYLE: CSSProperties = { maxWidth: 860 };
 
 function SaveButton() {
   const { pending } = useFormStatus();
   return (
     <button
       type="submit"
-      className="nt-button nt-button--primary"
+      className="nt-btn nt-btn--primary"
       disabled={pending}
-      style={{ opacity: pending ? 0.76 : 1 }}
+      style={pending ? SAVE_BUTTON_PENDING_STYLE : SAVE_BUTTON_READY_STYLE}
     >
       {pending ? "保存中..." : "保存"}
     </button>
@@ -91,24 +106,36 @@ function ModelTieringCard(props: {
     });
   }, [pushToast, state]);
 
-  const inlineTone =
-    state.status === "success" ? "rgba(134,239,172,0.92)" : state.status === "error" ? "rgba(253,164,175,0.96)" : null;
+  const handlePlatformTierChange = useCallback((event: ChangeEvent<HTMLSelectElement>) => {
+    setPlatformTier(event.target.value as PlatformTierValue);
+  }, []);
+
+  const handleEnabledChange = useCallback((event: ChangeEvent<HTMLInputElement>) => {
+    setEnabled(event.target.checked);
+  }, []);
+
+  const inlineToneClass =
+    state.status === "success"
+      ? "nt-text-xs nt-text-success"
+      : state.status === "error"
+        ? "nt-text-xs nt-text-danger"
+        : null;
 
   return (
-    <NtCard key={item.model} className="nt-card--outlined" style={cardStyle()}>
+    <NtCard key={item.model} className="nt-card--outlined nt-stack nt-gap-3_5" style={MODEL_TIER_CARD_STYLE}>
       <div className="nt-stack nt-gap-1">
-        <strong style={{ fontSize: "1rem", color: "rgba(245,247,250,0.96)", wordBreak: "break-word" }}>{item.model}</strong>
+        <strong className="nt-credential-title nt-text-strong nt-break-word">{item.model}</strong>
       </div>
-      <form action={formAction} style={{ display: "grid", gap: 14 }}>
+      <form action={formAction} className="nt-stack nt-gap-3_5">
         <input type="hidden" name="redirectTo" value={redirectTo} />
         <input type="hidden" name="providerAccountId" value={providerAccountId} />
         <input type="hidden" name="model" value={item.model} />
-        <label style={{ display: "grid", gap: 6 }}>
+        <label className="nt-stack nt-gap-1_5">
           <span className="nt-kicker">评级选择</span>
           <NtSelect
             name="platformTier"
             value={platformTier}
-            onChange={(event) => setPlatformTier(event.target.value as PlatformTierValue)}
+            onChange={handlePlatformTierChange}
           >
             {PLATFORM_TIER_OPTIONS.map((option) => (
               <option key={option.value} value={option.value}>
@@ -117,19 +144,19 @@ function ModelTieringCard(props: {
             ))}
           </NtSelect>
         </label>
-        <label style={{ display: "grid", gap: 6 }}>
+        <label className="nt-stack nt-gap-1_5">
           <span className="nt-kicker">是否开启</span>
           <input
             type="checkbox"
             name="enabled"
             checked={enabled}
-            onChange={(event) => setEnabled(event.target.checked)}
-            style={{ width: 18, height: 18 }}
+            onChange={handleEnabledChange}
+            style={TIER_TOGGLE_STYLE}
           />
         </label>
         <SaveButton />
-        {state.message && inlineTone ? (
-          <span style={{ color: inlineTone, fontSize: "0.82rem", lineHeight: 1.5 }}>{state.message}</span>
+        {state.message && inlineToneClass ? (
+          <span className={inlineToneClass} style={INLINE_TONE_STYLE}>{state.message}</span>
         ) : null}
       </form>
     </NtCard>
@@ -143,6 +170,19 @@ export function ProviderModelTieringSection(props: {
   loadError?: string | null;
 }) {
   const { providerAccountId, redirectTo, tiering, loadError } = props;
+
+  const modelCards = useMemo(
+    () =>
+      (tiering?.models ?? []).map((item) => (
+        <ModelTieringCard
+          key={`${item.model}:${item.platformTier}:${item.enabled}`}
+          providerAccountId={providerAccountId}
+          redirectTo={redirectTo}
+          item={item}
+        />
+      )),
+    [providerAccountId, redirectTo, tiering],
+  );
 
   if (!tiering) {
     return (
@@ -160,25 +200,18 @@ export function ProviderModelTieringSection(props: {
     <NtPanel title="服务端模型定级">
       <div className="nt-stack nt-gap-4">
         <div className="nt-stack nt-gap-2">
-          <p className="nt-text-sm nt-text-muted" style={{ margin: 0, maxWidth: 860 }}>
+          <p className="nt-text-sm nt-text-muted nt-flush" style={TIERING_INTRO_STYLE}>
             模型列表优先来自服务商 `/models` 自动返回；若上游不提供，则回退到当前配置中写好的模型列表。每个模型只维护评级和启用状态。
           </p>
-          <div className="nt-flex" style={{ gap: 8, flexWrap: "wrap" }}>
+          <div className="nt-flex nt-gap-2 nt-wrap">
             <NtBadge tone="secondary">服务商 {tiering.providerLabel}</NtBadge>
             <NtBadge tone="secondary">模型数 {tiering.models.length}</NtBadge>
           </div>
         </div>
 
         {tiering.models.length ? (
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 14, alignItems: "flex-start" }}>
-            {tiering.models.map((item) => (
-              <ModelTieringCard
-                key={`${item.model}:${item.platformTier}:${item.enabled}`}
-                providerAccountId={providerAccountId}
-                redirectTo={redirectTo}
-                item={item}
-              />
-            ))}
+          <div className="nt-flex nt-wrap nt-gap-3_5 nt-items-start">
+            {modelCards}
           </div>
         ) : (
           <NtCard className="nt-card--outlined">

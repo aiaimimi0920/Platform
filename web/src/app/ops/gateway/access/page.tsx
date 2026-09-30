@@ -10,6 +10,7 @@ import { isPlatformOperatorUserId, requirePlatformOperatorUserContext } from "@/
 import { NtBadge, NtCard, NtPanel, type NtBadgeTone } from "@/components/nt-primitives";
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import type { CSSProperties } from "react";
 
 import {
   createGatewayAccessBundleMatrixAction,
@@ -30,6 +31,58 @@ type AccessPageProps = {
 };
 
 const gatewayBundleBillingModes = ["time_pass", "token_prepaid", "message_prepaid"] as const;
+
+/*
+ * Layout and color run through the shared `nt-` utility layer; these constants keep only what
+ * the vocabulary has no class for — the one-off geometry, the platform-key card tracks, the
+ * overrides that must beat the `.nt-btn` cascade — with every color resolved to a neuro token.
+ * Module scope means one allocation per process instead of one per render.
+ */
+const FALLBACK_HEADER_TEXT_STYLE: CSSProperties = { maxWidth: 760 };
+
+const HEADER_TEXT_STYLE: CSSProperties = { maxWidth: 720 };
+
+const STATUS_BANNER_SUCCESS_STYLE: CSSProperties = {
+  border: "1px solid var(--neuro-signal-green)",
+  background: "var(--neuro-control)",
+};
+
+const STATUS_BANNER_DANGER_STYLE: CSSProperties = {
+  border: "1px solid var(--neuro-danger-red)",
+  background: "var(--neuro-control)",
+};
+
+const CODE_VALUE_STYLE: CSSProperties = {
+  display: "block",
+  padding: "8px 10px",
+  borderRadius: 12,
+  background: "var(--neuro-control)",
+  border: "1px solid var(--neuro-line)",
+  wordBreak: "break-all",
+  fontSize: "0.84rem",
+};
+
+const DANGER_BUTTON_STYLE: CSSProperties = {
+  borderColor: "var(--neuro-danger-red)",
+  color: "var(--neuro-danger-text)",
+};
+
+const BUNDLE_DELETE_BUTTON_STYLE: CSSProperties = {
+  ...DANGER_BUTTON_STYLE,
+  flex: "0 0 auto",
+};
+
+const PLATFORM_KEY_GRID_STYLE: CSSProperties = {
+  gridTemplateColumns: "repeat(auto-fit, minmax(min(320px, 100%), 380px))",
+  justifyContent: "start",
+};
+
+const PLATFORM_KEY_CARD_STYLE: CSSProperties = {
+  padding: 16,
+  borderRadius: 20,
+  border: "1px solid var(--neuro-line)",
+  background: "var(--neuro-surface)",
+};
 
 function isGatewayBundleBillingMode(
   value: string | null | undefined,
@@ -81,18 +134,7 @@ function CodeValue({ value }: { value: string | null | undefined }) {
     return <span className="nt-text-sm nt-text-muted">—</span>;
   }
   return (
-    <code
-      style={{
-        display: "block",
-        padding: "8px 10px",
-        borderRadius: 12,
-        background: "rgba(6,10,18,0.82)",
-        border: "1px solid rgba(255,255,255,0.08)",
-        color: "rgba(245,247,250,0.9)",
-        wordBreak: "break-all",
-        fontSize: "0.84rem",
-      }}
-    >
+    <code className="nt-text-strong" style={CODE_VALUE_STYLE}>
       {value}
     </code>
   );
@@ -125,18 +167,13 @@ function StatusBanner({ status, message }: { status?: string; message?: string }
     return null;
   }
   return (
-    <NtCard
-      style={{
-        border: `1px solid ${status === "success" ? "rgba(74,222,128,0.25)" : "rgba(248,113,113,0.25)"}`,
-        background: status === "success" ? "rgba(15,28,18,0.82)" : "rgba(33,15,18,0.82)",
-      }}
-    >
-      <div className="nt-flex nt-justify-between nt-items-center" style={{ gap: 12, flexWrap: "wrap" }}>
+    <NtCard style={status === "success" ? STATUS_BANNER_SUCCESS_STYLE : STATUS_BANNER_DANGER_STYLE}>
+      <div className="nt-flex nt-justify-between nt-items-center nt-gap-3 nt-wrap">
         <div className="nt-stack nt-gap-1">
           <NtBadge tone={status === "success" ? "success" : "danger"}>
             {status === "success" ? "操作成功" : "操作失败"}
           </NtBadge>
-          <span style={{ color: "rgba(245,247,250,0.92)" }}>{message}</span>
+          <span className="nt-text-strong">{message}</span>
         </div>
         <Link href="/ops/gateway/access" className="nt-link">
           清除提示
@@ -176,9 +213,9 @@ export default async function AccessPage({ searchParams }: AccessPageProps) {
         <StatusBanner status={query.status} message={query.message} />
         <NtPanel>
           <div className="nt-stack nt-gap-4">
-            <div className="nt-stack nt-gap-1" style={{ maxWidth: 760 }}>
+            <div className="nt-stack nt-gap-1" style={FALLBACK_HEADER_TEXT_STYLE}>
               <span className="nt-kicker">Bundle</span>
-              <h1 style={{ margin: 0, color: "rgba(245,247,250,0.96)" }}>Bundle 与平台密钥</h1>
+              <h1 className="nt-flush nt-text-strong">Bundle 与平台密钥</h1>
               <span className="nt-text-sm nt-text-muted">
                 页面已降级为只读提示，避免 AI Gateway 离线时整页 500。
               </span>
@@ -243,10 +280,10 @@ export default async function AccessPage({ searchParams }: AccessPageProps) {
 
       <NtPanel>
         <div className="nt-stack nt-gap-4">
-          <div className="nt-flex nt-justify-between nt-items-start" style={{ gap: 16, flexWrap: "wrap" }}>
-            <div className="nt-stack nt-gap-1" style={{ maxWidth: 720 }}>
+          <div className="nt-flex nt-justify-between nt-items-start nt-gap-4 nt-wrap">
+            <div className="nt-stack nt-gap-1" style={HEADER_TEXT_STYLE}>
               <span className="nt-kicker">Bundle</span>
-              <h1 style={{ margin: 0, color: "rgba(245,247,250,0.96)" }}>Bundle 与平台密钥</h1>
+              <h1 className="nt-flush nt-text-strong">Bundle 与平台密钥</h1>
             </div>
             <BundleBuilderDialog
               action={createGatewayAccessBundleMatrixAction}
@@ -267,43 +304,27 @@ export default async function AccessPage({ searchParams }: AccessPageProps) {
                 <NtCard
                   key={bundle.id}
                   id={bundleAnchorId}
-                  className="nt-card--outlined"
-                  style={{ display: "grid", gap: 14, scrollMarginTop: 104 }}
+                  className="nt-card--outlined nt-stack nt-gap-3_5 nt-scroll-anchor"
                 >
                   <div className="nt-stack nt-gap-3">
-                    <div className="nt-stack nt-gap-1" style={{ minWidth: 0 }}>
+                    <div className="nt-stack nt-gap-1 nt-min-0">
                       <strong>{bundle.displayName}</strong>
                     </div>
-                    <div
-                      className="nt-flex"
-                      style={{
-                        gap: 8,
-                        flexWrap: "nowrap",
-                        alignItems: "center",
-                        overflowX: "auto",
-                        paddingBottom: 2,
-                      }}
-                    >
+                    <div className="nt-flex nt-gap-2 nt-items-center nt-scroll-x">
                       <BundleSettingsDialog
                         action={saveGatewayAccessBundleAction}
                         bundle={bundle}
                         redirectTo={bundleRedirectTo}
                         inferredBillingMode={resolvedBundleBillingMode}
-                        triggerButtonStyle={{ flex: "0 0 auto", whiteSpace: "nowrap" }}
                       />
-                      <form action={deleteGatewayAccessBundleAction} style={{ display: "flex", flex: "0 0 auto" }}>
+                      <form action={deleteGatewayAccessBundleAction} className="nt-flex nt-flex-none">
                         <input type="hidden" name="redirectTo" value="/ops/gateway/access" />
                         <input type="hidden" name="bundleId" value={bundle.id} />
                         <input type="hidden" name="displayName" value={bundle.displayName} />
                         <button
                           type="submit"
-                          className="nt-btn nt-btn--ghost"
-                          style={{
-                            flex: "0 0 auto",
-                            borderColor: "rgba(248,113,113,0.28)",
-                            color: "rgba(255,186,186,0.96)",
-                            whiteSpace: "nowrap",
-                          }}
+                          className="nt-btn nt-btn--ghost nt-nowrap"
+                          style={BUNDLE_DELETE_BUTTON_STYLE}
                         >
                           删除 Bundle
                         </button>
@@ -317,20 +338,10 @@ export default async function AccessPage({ searchParams }: AccessPageProps) {
                           resolvedProjectId={bundle.projectId ?? defaultProjectId}
                           resolvedTenantId={defaultTenantId}
                           redirectTo={bundleRedirectTo}
-                          triggerButtonStyle={{ flex: "0 0 auto", whiteSpace: "nowrap" }}
                         />
                       ) : null}
                     </div>
-                    <div
-                      className="nt-flex"
-                      style={{
-                        gap: 8,
-                        flexWrap: "nowrap",
-                        alignItems: "center",
-                        overflowX: "auto",
-                        paddingBottom: 2,
-                      }}
-                    >
+                    <div className="nt-flex nt-gap-2 nt-items-center nt-scroll-x">
                       <NtBadge
                         tone={
                           resolvedBundleBillingMode === "time_pass"
@@ -354,31 +365,14 @@ export default async function AccessPage({ searchParams }: AccessPageProps) {
 
                   <div className="nt-stack nt-gap-2">
                     {platformKeys.length > 0 ? (
-                      <div
-                        style={{
-                          display: "grid",
-                          gap: 12,
-                          gridTemplateColumns: "repeat(auto-fit, minmax(min(320px, 100%), 380px))",
-                          justifyContent: "start",
-                        }}
-                      >
+                      <div className="nt-stack nt-gap-3" style={PLATFORM_KEY_GRID_STYLE}>
                         {platformKeys.map((key) => {
                           const balance = balanceByKeyId.get(key.id) ?? null;
                           const keyBillingMode =
                             (isGatewayBundleBillingMode(balance?.balanceMode) ? balance?.balanceMode : resolvedBundleBillingMode) ?? null;
                           return (
-                            <div
-                              key={key.id}
-                              style={{
-                                display: "grid",
-                                gap: 10,
-                                padding: 16,
-                                borderRadius: 20,
-                                border: "1px solid rgba(255,255,255,0.08)",
-                                background: "rgba(7,11,17,0.74)",
-                              }}
-                            >
-                              <div className="nt-flex nt-justify-between nt-items-start" style={{ gap: 10 }}>
+                            <div key={key.id} className="nt-stack nt-gap-2_5" style={PLATFORM_KEY_CARD_STYLE}>
+                              <div className="nt-flex nt-justify-between nt-items-start nt-gap-2_5">
                                 <div className="nt-stack nt-gap-1">
                                   <strong>{displayPlatformKeyTitle(key.displayName)}</strong>
                                 </div>
@@ -388,10 +382,10 @@ export default async function AccessPage({ searchParams }: AccessPageProps) {
                                 <span className="nt-kicker">分发凭证</span>
                                 <CodeValue value={key.token ?? key.externalKey ?? null} />
                               </div>
-                              <div style={{ display: "grid", gap: 6 }}>
+                              <div className="nt-stack nt-gap-1_5">
                                 <div className="nt-kicker">额度</div>
                                 {balance ? (
-                                  <div style={{ display: "grid", gap: 4 }}>
+                                  <div className="nt-stack nt-gap-1">
                                     <span className="nt-text-sm nt-text-muted">{labelForBillingMode(balance.balanceMode)}</span>
                                     {platformKeyBalanceMeta(balance) ? (
                                       <span className="nt-text-xs nt-text-muted">{platformKeyBalanceMeta(balance)}</span>
@@ -404,7 +398,7 @@ export default async function AccessPage({ searchParams }: AccessPageProps) {
                               {noteFromMetadata(key.metadata) ? (
                                 <span className="nt-text-xs nt-text-muted">{noteFromMetadata(key.metadata)}</span>
                               ) : null}
-                              <div className="nt-flex nt-justify-end" style={{ gap: 10, flexWrap: "wrap" }}>
+                              <div className="nt-flex nt-justify-end nt-gap-2_5 nt-wrap">
                                 {keyBillingMode ? (
                                   <BundlePlatformKeyDialog
                                     action={saveGatewayBundlePlatformKeyAction}
@@ -418,18 +412,14 @@ export default async function AccessPage({ searchParams }: AccessPageProps) {
                                     existingBalance={balance}
                                   />
                                 ) : null}
-                                <form action={deleteGatewayBundlePlatformKeyAction} style={{ display: "flex" }}>
+                                <form action={deleteGatewayBundlePlatformKeyAction} className="nt-flex">
                                   <input type="hidden" name="redirectTo" value={bundleRedirectTo} />
                                   <input type="hidden" name="accessKeyId" value={key.id} />
                                   <input type="hidden" name="displayName" value={displayPlatformKeyTitle(key.displayName)} />
                                   <button
                                     type="submit"
-                                    className="nt-btn nt-btn--ghost"
-                                    style={{
-                                      borderColor: "rgba(248,113,113,0.28)",
-                                      color: "rgba(255,186,186,0.96)",
-                                      whiteSpace: "nowrap",
-                                    }}
+                                    className="nt-btn nt-btn--ghost nt-nowrap"
+                                    style={DANGER_BUTTON_STYLE}
                                   >
                                     删除平台密钥
                                   </button>
@@ -440,18 +430,8 @@ export default async function AccessPage({ searchParams }: AccessPageProps) {
                         })}
                       </div>
                     ) : (
-                      <div
-                        style={{
-                          display: "grid",
-                          gap: 10,
-                          padding: "16px 18px",
-                          borderRadius: 18,
-                          border: "1px dashed rgba(255,255,255,0.16)",
-                          color: "rgba(201,208,221,0.78)",
-                          background: "rgba(7,11,17,0.38)",
-                        }}
-                      >
-                        <strong style={{ color: "rgba(245,247,250,0.94)" }}>
+                      <div className="nt-stack nt-gap-2_5 nt-text-muted nt-dashed-tile">
+                        <strong className="nt-text-strong">
                           {resolvedBundleBillingMode
                             ? "当前 bundle 还没有平台密钥。"
                             : "当前 bundle 缺少正式计费模式，暂不能创建平台密钥。"}

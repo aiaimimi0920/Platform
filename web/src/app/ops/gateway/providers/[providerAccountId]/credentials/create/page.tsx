@@ -4,6 +4,7 @@ import { getOperatorGatewayProviderAccount } from "@/lib/account-client";
 import { isPlatformOperatorUserId, requirePlatformOperatorUserContext } from "@/lib/platform-session";
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import type { CSSProperties } from "react";
 
 import { ProviderCredentialCreateClient } from "../../../provider-credential-create-client";
 
@@ -14,6 +15,20 @@ type ProviderCredentialCreatePageProps = {
     message?: string;
     returnTo?: string;
   }>;
+};
+
+/*
+ * Layout runs through the shared `nt-` utilities; the only survivors are the page shell
+ * padding and the two token-colored status panel skins, hoisted to module scope.
+ */
+const PAGE_SHELL_STYLE: CSSProperties = { padding: "24px 0 40px" };
+const STATUS_PANEL_SUCCESS_STYLE: CSSProperties = {
+  borderColor: "var(--neuro-signal-green)",
+  background: "var(--neuro-control)",
+};
+const STATUS_PANEL_DANGER_STYLE: CSSProperties = {
+  borderColor: "var(--neuro-danger-red)",
+  background: "var(--neuro-control)",
 };
 
 function resolveReturnTo(value: string | undefined, providerAccountId: string) {
@@ -40,13 +55,13 @@ export default async function ProviderCredentialCreatePage({
   const returnTo = resolveReturnTo(query?.returnTo, providerAccountId);
 
   return (
-    <div className="nt-shell" style={{ display: "grid", gap: 24, padding: "24px 0 40px" }}>
-      <section style={{ display: "grid", gap: 12 }}>
+    <div className="nt-shell nt-stack nt-gap-6" style={PAGE_SHELL_STYLE}>
+      <section className="nt-stack nt-gap-3">
         <span className="nt-kicker">Operator / AI 网关 / 新增凭证</span>
-        <h1 style={{ margin: 0, color: "rgba(243,245,247,0.98)", fontSize: "2rem", lineHeight: 1.1 }}>
+        <h1 className="nt-flush nt-text-strong nt-text-metric">
           新增凭证
         </h1>
-        <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+        <div className="nt-flex nt-gap-2_5 nt-wrap">
           <Link className="nt-btn nt-btn--outline" href={returnTo}>
             返回服务商详情
           </Link>
@@ -55,15 +70,11 @@ export default async function ProviderCredentialCreatePage({
 
       {query?.status && query?.message ? (
         <NtPanel
-          style={{
-            display: "grid",
-            gap: 8,
-            borderColor: query.status === "success" ? "rgba(34,197,94,0.22)" : "rgba(244,63,94,0.22)",
-            background: query.status === "success" ? "rgba(8,39,24,0.7)" : "rgba(39,11,17,0.72)",
-          }}
+          className="nt-stack nt-gap-2"
+          style={query.status === "success" ? STATUS_PANEL_SUCCESS_STYLE : STATUS_PANEL_DANGER_STYLE}
         >
           <span className="nt-kicker">{query.status === "success" ? "操作完成" : "操作失败"}</span>
-          <span style={{ color: query.status === "success" ? "#bbf7d0" : "#fecdd3" }}>{query.message}</span>
+          <span className={query.status === "success" ? "nt-text-success" : "nt-text-danger"}>{query.message}</span>
         </NtPanel>
       ) : null}
 

@@ -937,3 +937,231 @@
     justify-content: space-between;
   }
 }
+
+/* NeuroTerminal chat theme: keep the independent chat surface inside the Platform shell. */
+.app-root--chat-app {
+  background: var(--neuro-bg, #06080d);
+  color: var(--neuro-text, #f7f8ef);
+}
+
+.nt-chat-app {
+  color: var(--neuro-text, #f7f8ef);
+  background: var(--neuro-bg, #06080d);
+}
+
+.nt-chat-app__topbar {
+  border-bottom-color: var(--neuro-line, rgba(255, 255, 255, 0.12));
+  background: color-mix(in srgb, var(--neuro-rail, #070a0f) 94%, transparent);
+}
+
+.nt-chat-app__logo {
+  color: var(--neuro-text, #f7f8ef);
+}
+
+.nt-chat-app__logo span,
+.nt-chat-app-sidebar__brand-mark {
+  border-radius: 10px;
+  background: var(--neuro-signal-green, #22c55e);
+  color: #061009;
+}
+
+.nt-chat-app__topnav a,
+.nt-chat-app__action-link {
+  color: var(--neuro-text-muted, #929a9f);
+}
+
+.nt-chat-app__topnav a:hover,
+.nt-chat-app__action-link:hover {
+  color: var(--neuro-signal-yellow, #d9ff38);
+}
+
+.nt-chat-app__mobile-menu,
+.nt-chat-app__account-chip {
+  border-color: var(--neuro-line, rgba(255, 255, 255, 0.12));
+  background: var(--neuro-control, #111720);
+  color: var(--neuro-text, #f7f8ef);
+}
+
+.nt-chat-app__body,
+.nt-chat-app__sidebar-shell,
+.nt-chat-app__mobile-drawer {
+  background: var(--neuro-bg, #06080d);
+}
+
+.nt-chat-app__sidebar-shell {
+  border-right-color: var(--neuro-line, rgba(255, 255, 255, 0.12));
+}
+
+.nt-chat-app-sidebar__brand,
+.nt-chat-app-sidebar__search,
+.nt-chat-app-sidebar__new,
+.nt-chat-app-sidebar__slot,
+.nt-chat-app-sidebar__project,
+.nt-chat-app-sidebar__thread,
+.nt-chat-app-sidebar__footer-link,
+.nt-chat-app-composer__shell,
+.nt-chat-app-home__trust-card,
+.nt-chat-app__conversation-head,
+.nt-chat-app-message__bubble,
+.nt-chat-app-message__reference,
+.nt-chat-app-message__status,
+.nt-chat-app-message__summary {
+  border-color: var(--neuro-line, rgba(255, 255, 255, 0.12));
+  background: var(--neuro-panel, #0e1218);
+  box-shadow: 0 14px 30px rgba(0, 0, 0, 0.22);
+}
+
+.nt-chat-app-sidebar__brand-copy strong,
+.nt-chat-app-sidebar__slot strong,
+.nt-chat-app-sidebar__project-copy strong,
+.nt-chat-app-sidebar__thread-copy strong,
+.nt-chat-app-sidebar__upgrade strong,
+.nt-chat-app-home__copy h1,
+.nt-chat-app__conversation-head h1,
+.nt-chat-app-home__trust-card strong,
+.nt-chat-app-message__summary strong,
+.nt-chat-app-message__reference strong,
+.nt-chat-app-composer__reference strong,
+.nt-chat-app-message__meta strong {
+  color: var(--neuro-text, #f7f8ef);
+}
+
+.nt-chat-app-sidebar__brand-copy span,
+.nt-chat-app-sidebar__empty,
+.nt-chat-app-sidebar__thread-copy small,
+.nt-chat-app-sidebar__project-copy small,
+.nt-chat-app-home__copy p,
+.nt-chat-app-home__trust-card p,
+.nt-chat-app__conversation-head p,
+.nt-chat-app-message__text,
+.nt-chat-app-message__status p,
+.nt-chat-app-message__reference span,
+.nt-chat-app-composer__reference span,
+.nt-chat-app__conversation-head p,
+.nt-chat-app-message__meta,
+.nt-chat-app-sidebar__slot span,
+.nt-chat-app-sidebar__upgrade span,
+.nt-chat-app-sidebar__history-label {
+  color: var(--neuro-text-muted, #929a9f);
+}
+
+.nt-chat-app-sidebar__search input,
+.nt-chat-app-composer__input {
+  color: var(--neuro-text, #f7f8ef);
+}
+
+.nt-chat-app-sidebar__search input::placeholder,
+.nt-chat-app-composer__input::placeholder {
+  color: color-mix(in srgb, var(--neuro-text-muted, #929a9f) 74%, transparent);
+}
+
+.nt-chat-app-sidebar__search kbd,
+.nt-chat-app-sidebar__upgrade,
+.nt-chat-app-composer__reference,
+.nt-chat-app-composer__tool,
+.nt-chat-app-message__action-control {
+  border-color: var(--neuro-line, rgba(255, 255, 255, 0.12));
+  background: var(--neuro-control, #111720);
+  color: var(--neuro-text-muted, #929a9f);
+}
+
+.nt-chat-app-sidebar__new {
+  border-color: color-mix(in srgb, var(--neuro-signal-yellow, #d9ff38) 46%, var(--neuro-line, rgba(255, 255, 255, 0.12)));
+  background: var(--neuro-signal-yellow, #d9ff38);
+  color: #101509;
+}
+
+.nt-chat-app-sidebar__new:hover,
+.nt-chat-app-composer__tool:hover,
+.nt-chat-app-message__action-control:hover:not(:disabled),
+.nt-chat-app__load-earlier:hover:not(:disabled) {
+  border-color: var(--neuro-signal-yellow, #d9ff38);
+  background: var(--neuro-control-hover, #18222c);
+  color: var(--neuro-text, #f7f8ef);
+}
+
+.nt-chat-app-sidebar__slot--active,
+.nt-chat-app-sidebar__project--active,
+.nt-chat-app-sidebar__thread--active,
+.nt-chat-app-composer__tool--active {
+  border-color: color-mix(in srgb, var(--neuro-signal-yellow, #d9ff38) 56%, var(--neuro-line, rgba(255, 255, 255, 0.12)));
+  background: color-mix(in srgb, var(--neuro-signal-yellow, #d9ff38) 12%, var(--neuro-panel, #0e1218));
+  color: var(--neuro-signal-yellow, #d9ff38);
+}
+
+.nt-chat-app-sidebar__thread-dot {
+  background: var(--neuro-signal-green, #22c55e);
+}
+
+.nt-chat-app__conversation-head {
+  border-left: 3px solid var(--neuro-signal-yellow, #d9ff38);
+}
+
+.nt-chat-app__load-earlier {
+  border-color: var(--neuro-line, rgba(255, 255, 255, 0.12));
+  background: var(--neuro-control, #111720);
+  color: var(--neuro-text, #f7f8ef);
+}
+
+.nt-chat-app-message__avatar {
+  background: var(--neuro-signal-green, #22c55e);
+  color: #061009;
+}
+
+.nt-chat-app-message__action-control:focus-visible,
+.nt-chat-app-composer__tool:focus-visible,
+.nt-chat-app__load-earlier:focus-visible,
+.nt-chat-app__mobile-menu:focus-visible,
+.nt-chat-app__account-chip:focus-visible {
+  outline: 2px solid var(--neuro-signal-yellow, #d9ff38);
+  outline-offset: 2px;
+}
+
+.nt-chat-app-message__bubble--user {
+  border-color: color-mix(in srgb, var(--neuro-signal-yellow, #d9ff38) 34%, var(--neuro-line, rgba(255, 255, 255, 0.12)));
+  background: color-mix(in srgb, var(--neuro-signal-yellow, #d9ff38) 12%, var(--neuro-panel, #0e1218));
+}
+
+.nt-chat-app-message__summary ul {
+  color: var(--neuro-text-muted, #929a9f);
+}
+
+.nt-chat-app-composer__notice-badge,
+.nt-chat-app-composer__notice-badge--warning,
+.nt-chat-app-composer__notice-badge--success,
+.nt-chat-app-composer__notice-badge--danger,
+.nt-chat-app-composer__notice-badge--cyan {
+  background: var(--neuro-control, #111720);
+  color: var(--neuro-text, #f7f8ef);
+}
+
+.nt-chat-app-composer__notice-badge--warning {
+  border-color: color-mix(in srgb, var(--neuro-signal-yellow, #d9ff38) 48%, var(--neuro-line, rgba(255, 255, 255, 0.12)));
+  color: var(--neuro-signal-yellow, #d9ff38);
+}
+
+.nt-chat-app-composer__notice-badge--success {
+  border-color: color-mix(in srgb, var(--neuro-signal-green, #22c55e) 48%, var(--neuro-line, rgba(255, 255, 255, 0.12)));
+  color: var(--neuro-green-text, #86efac);
+}
+
+.nt-chat-app-composer__notice-badge--danger {
+  border-color: color-mix(in srgb, var(--neuro-danger-red, #f43f5e) 48%, var(--neuro-line, rgba(255, 255, 255, 0.12)));
+  color: var(--neuro-danger-text, #fda4af);
+}
+
+.nt-chat-app-composer__notice-badge--cyan {
+  border-color: color-mix(in srgb, var(--neuro-info-blue, #06b6d4) 48%, var(--neuro-line, rgba(255, 255, 255, 0.12)));
+  color: var(--neuro-info-text, #67e8f9);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nt-chat-app *,
+  .nt-chat-app *::before,
+  .nt-chat-app *::after {
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
+}

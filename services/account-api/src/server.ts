@@ -17,6 +17,8 @@ import {
   env as accountEnv,
   honorProjectsRouter,
   identityRouter,
+  loomAccountRouter,
+  loomProjectionRouter,
   mailboxRouter,
   personalMissionsRouter,
   productShadowRouter,
@@ -87,6 +89,8 @@ export async function buildServer() {
   });
 
   await app.register(identityRouter);
+  await app.register(loomAccountRouter);
+  await app.register(loomProjectionRouter);
   await app.register(emailProviderIngressRouter);
   await app.register(emailProviderIngressOpsRouter);
   await app.register(emailNativeRouter);

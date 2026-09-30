@@ -654,7 +654,8 @@ export function SelectedAgentRecentCallbacksCard(props: {
   items: ReactNode;
 }) {
   return (
-    <Card className="app-stack" id="recent-callback-audits">
+    <Card className="app-stack" id="callback-audits">
+      <span id="recent-callback-audits" className="app-task-deep-link-target" aria-hidden="true" />
       <div className="app-task-card__header">
         <div>
           <p className="mg-subtitle">最近回调审计</p>

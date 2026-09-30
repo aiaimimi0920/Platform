@@ -12,6 +12,7 @@ import {
   deleteOperatorProductAction,
   upsertOperatorProductAction,
 } from "@/lib/platform-actions";
+import { formatPlatformDateTime } from "@/lib/platform-date-time";
 
 const operatorProductKinds: Array<{ value: ProductOperatorView["kind"]; label: string }> = [
   { value: "limitedTime", label: "限时" },
@@ -86,11 +87,6 @@ type ProductFormFieldsProps = {
   product: OperatorProductDraft;
   bundleOptions: OperatorProductBundleOption[];
 };
-
-function toLocaleDateTime(value: string | null | undefined) {
-  if (!value) return "暂无";
-  return new Date(value).toLocaleString("zh-CN");
-}
 
 function toBundleBillingModeLabel(mode: GatewayAccessGrantMode) {
   switch (mode) {
@@ -405,11 +401,12 @@ export function OperatorProductEditor({ product, redirectTo, bundleOptions }: Op
         <div>
           <h3 style={{ margin: 0, fontSize: "1rem", color: "rgba(235,241,245,0.92)" }}>{product.title}</h3>
           <p className="ops-empty" style={{ padding: 0, textAlign: "left", minHeight: 0, marginTop: 10 }}>
-            创建：{toLocaleDateTime(product.createdAt)}，最近更新：{toLocaleDateTime(product.updatedAt)}
+            创建：{formatPlatformDateTime(product.createdAt, "暂无")}，最近更新：
+            {formatPlatformDateTime(product.updatedAt, "暂无")}
           </p>
         </div>
         <span className={`ops-status-dot ops-status-dot--${product.active ? "active" : "inactive"}`}>
-          {product.active ? "Active" : "Inactive"}
+          {product.active ? "已启用" : "已停用"}
         </span>
       </div>
       <form action={upsertOperatorProductAction}>

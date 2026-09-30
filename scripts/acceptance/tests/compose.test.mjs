@@ -541,7 +541,7 @@ test("local and acceptance Web auth bypasses run only in explicit development mo
     assert.match(web, /DEV_AUTH_BYPASS_ENABLED:\s+["']?true["']?/);
     assert.doesNotMatch(web, /NODE_ENV:\s+["']?production["']?/);
   }
-  assert.match(localWeb, /command:\s+\["npm", "run", "dev"/);
+  assert.match(localWeb, /command:\s+\["npm", "run", "start", "--", "--hostname", "0\.0\.0\.0"\]/);
   assert.match(acceptanceWeb, /command:\s+\["npm", "run", "start", "--", "--hostname", "0\.0\.0\.0"\]/);
 
   const previewScript = await readFile(startWebPreviewFile, "utf8");
@@ -550,8 +550,9 @@ test("local and acceptance Web auth bypasses run only in explicit development mo
   assert.doesNotMatch(previewScript, /^NODE_ENV=production$/m);
   assert.match(
     previewScript,
-    /"npm",\s*\r?\n\s*"run",\s*\r?\n\s*"dev",\s*\r?\n\s*"--",\s*\r?\n\s*"--hostname",\s*\r?\n\s*"0\.0\.0\.0"/,
+    /"npm",\s*\r?\n\s*"run",\s*\r?\n\s*"start",\s*\r?\n\s*"--",\s*\r?\n\s*"--hostname",\s*\r?\n\s*"0\.0\.0\.0"/,
   );
+  assert.doesNotMatch(previewScript, /"run",\s*\r?\n\s*"dev"/);
   assert.match(previewScript, /System\.Threading\.Mutex/);
   assert.match(previewScript, /WaitOne\(\[TimeSpan\]::FromSeconds\(\$TimeoutSeconds\)\)/);
   assert.match(previewScript, /Remove-Item -LiteralPath \$envFile -Force/);

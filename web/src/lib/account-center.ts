@@ -11,6 +11,7 @@ import type {
   AccountCenterNavItem,
 } from "@/components/account-home/account-center-frame";
 import { currencyCatalog } from "@/lib/economy";
+import { formatPlatformDateTime } from "@/lib/platform-date-time";
 
 export type AccountCenterNavKey =
   | "dashboard"
@@ -31,11 +32,7 @@ export function formatAccountRate(rate: number): string {
 }
 
 export function formatAccountDateTime(value: string | null): string {
-  if (!value) {
-    return "未记录";
-  }
-
-  return new Date(value).toLocaleString("zh-CN");
+  return formatPlatformDateTime(value);
 }
 
 type BuildHudItemsOptions = {

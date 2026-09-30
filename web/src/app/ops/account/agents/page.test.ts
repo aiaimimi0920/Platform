@@ -43,3 +43,8 @@ test("P3-02: agent operations no longer silently replaces failed formal sources"
   assert.match(combinedSource, /label="智能体执行目录"/);
   assert.match(combinedSource, /label="回调健康摘要"/);
 });
+
+test("agent operations uses a localized empty selection state", () => {
+  assert.match(pageSource, /未选择智能体/);
+  assert.doesNotMatch(pageSource, /No Selection/);
+});

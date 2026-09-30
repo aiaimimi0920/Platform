@@ -28,6 +28,22 @@ type GatewayRequestAuditFilterInput = {
   limit?: number | null;
 };
 
+export function normalizeGatewayRequestAuditView(
+  request: GatewayRequestAuditView,
+): GatewayRequestAuditView {
+  if (!request.routeTrace || Array.isArray(request.routeTrace.candidateQueue)) {
+    return request;
+  }
+
+  return {
+    ...request,
+    routeTrace: {
+      ...request.routeTrace,
+      candidateQueue: [],
+    },
+  };
+}
+
 function buildGatewayRequestAuditFilterParams(input?: GatewayRequestAuditFilterInput) {
   const params = new URLSearchParams();
   if (!input) {
@@ -70,7 +86,7 @@ export async function listOperatorGatewayRequestAudits(
   const response = await gatewayRequest<{ requests: GatewayRequestAuditView[] }>(pathname, {
     userContext,
   });
-  return response.requests;
+  return response.requests.map(normalizeGatewayRequestAuditView);
 }
 
 export async function getOperatorGatewayRequestAuditSummary(
@@ -97,7 +113,7 @@ export async function getOperatorGatewayRequestAudit(
       userContext,
     },
   );
-  return response.requestAudit;
+  return normalizeGatewayRequestAuditView(response.requestAudit);
 }
 
 export async function getOperatorGatewayRequestArtifacts(

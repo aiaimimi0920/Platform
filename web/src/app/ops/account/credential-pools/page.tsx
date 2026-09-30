@@ -67,7 +67,7 @@ export default async function CredentialPoolsOpsPage({ searchParams }: Credentia
   }));
 
   const providerOptions = [
-    { value: "all", label: "全部 provider" },
+    { value: "all", label: "全部服务商" },
     ...credentialCatalog.providers.map((provider) => ({
       value: provider.key,
       label: `${provider.displayName} · ${provider.activeEntryCount} 个可用`,
@@ -133,17 +133,17 @@ export default async function CredentialPoolsOpsPage({ searchParams }: Credentia
           <aside className="app-announcement-ops__sidebar">
             <Card className="app-announcement-ops__sidebar-card">
               <div className="app-announcement-ops__sidebar-head">
-                <span className="mg-badge mg-badge--warning">Credential Pools</span>
+                <span className="mg-badge mg-badge--warning">凭证池</span>
                 <h2 style={{ margin: 0, fontSize: "2rem", lineHeight: 1.05 }}>多平台凭证池</h2>
                 <p style={{ margin: 0, color: "rgba(226,232,240,0.72)" }}>
-                  后台 owner：provider / terminal / batch / entry / assignment / repair / death。
+                  集中管理服务商、终端、批次、凭证、分配、修复与失效清理。
                 </p>
               </div>
 
               <form action="/ops/account/credential-pools" className="app-announcement-ops__form" method="get">
                 <div className="app-announcement-ops__field-grid app-mission-ops__field-grid">
                   <label className="app-announcement-ops__field">
-                    <span>Provider</span>
+                    <span>服务商</span>
                     <Select defaultValue={providerFilter} name="provider">
                       {providerOptions.map((option) => (
                         <option key={option.value} value={option.value}>{option.label}</option>
@@ -185,8 +185,8 @@ export default async function CredentialPoolsOpsPage({ searchParams }: Credentia
                     </div>
                     <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
                       <Badge variant="warning">{selectedService.providerKey}</Badge>
-                      <Badge variant="cyan">{filteredEntries.length} entries</Badge>
-                      <Badge variant="success">{filteredAssignments.length} assignments</Badge>
+                      <Badge variant="cyan">{filteredEntries.length} 个凭证</Badge>
+                      <Badge variant="success">{filteredAssignments.length} 个分配</Badge>
                     </div>
                   </div>
                   <div className="app-announcement-ops__actions" style={{ marginTop: "8px" }}>
@@ -222,14 +222,14 @@ export default async function CredentialPoolsOpsPage({ searchParams }: Credentia
                   </div>
                   <div className="app-announcement-ops__actions" style={{ marginTop: "8px" }}>
                     <Link className="mg-btn mg-btn--outline" href={benefitHandoffUrl}>
-                      继续在 benefits 查看服务
+                      返回羊毛派查看服务
                     </Link>
                   </div>
                 </Panel>
               ) : (
                 <Panel className="app-announcement-ops__provider-summary" style={{ marginTop: "12px", padding: "14px 18px" }}>
                   <strong>选择服务商聚焦</strong>
-                  <p style={{ margin: 0, color: "rgba(226,232,240,0.7)" }}>当前显示全部 provider，过滤后会有对应统计。</p>
+                  <p style={{ margin: 0, color: "rgba(226,232,240,0.7)" }}>当前显示全部服务商，筛选后会显示对应统计。</p>
                 </Panel>
               )}
 
@@ -241,7 +241,7 @@ export default async function CredentialPoolsOpsPage({ searchParams }: Credentia
                       <span className="mg-badge mg-badge--glass">{provider.activeEntryCount}</span>
                     </div>
                     <span className="app-announcement-ops__list-item-subtitle">
-                      terminal {provider.terminalCount} · assignment {provider.activeAssignmentCount}
+                      终端 {provider.terminalCount} · 有效分配 {provider.activeAssignmentCount}
                     </span>
                   </div>
                 ))}
@@ -254,12 +254,12 @@ export default async function CredentialPoolsOpsPage({ searchParams }: Credentia
               <div className="app-announcement-ops__editor-head">
                 <div className="app-announcement-ops__editor-copy">
                   <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
-                    <span className="mg-badge mg-badge--cyan">独立 owner</span>
-                    <Badge variant="warning">credential-pools</Badge>
+                    <span className="mg-badge mg-badge--cyan">独立生命周期</span>
+                    <Badge variant="warning">凭证池</Badge>
                   </div>
                   <h1 style={{ margin: 0, fontSize: "2rem", lineHeight: 1.05 }}>账号凭证池后台</h1>
                   <p style={{ margin: 0, color: "rgba(226,232,240,0.72)", maxWidth: "78ch" }}>
-                    `benefits` 现在只负责 family / service / grant；真正的凭证池生命周期、终端上传、修缮、冷却、无效、死亡清理都收口在这里。
+                    羊毛派只负责权益族、服务与用户授权；凭证生命周期、终端上传、修缮、冷却、失效与清理统一在这里管理。
                   </p>
                 </div>
               </div>
@@ -289,7 +289,7 @@ export default async function CredentialPoolsOpsPage({ searchParams }: Credentia
                 <div className="app-mission-ops__section-head">
                   <div>
                     <strong>终端签发与导入</strong>
-                    <p>终端令牌和 operator import 都走同一套 provider 框架。</p>
+                    <p>终端令牌与运维导入统一使用同一套服务商框架。</p>
                   </div>
                 </div>
 
@@ -298,7 +298,7 @@ export default async function CredentialPoolsOpsPage({ searchParams }: Credentia
                     <input name="redirectTo" type="hidden" value={redirectTo} />
                     <div className="app-announcement-ops__field-grid app-mission-ops__field-grid">
                       <label className="app-announcement-ops__field">
-                        <span>Provider</span>
+                        <span>服务商</span>
                         <Select defaultValue={providerFilter === "all" ? "platform_a" : providerFilter} name="providerKey">
                           {providerOptions.filter((option) => option.value !== "all").map((option) => (
                             <option key={option.value} value={option.value}>{option.label}</option>
@@ -323,7 +323,7 @@ export default async function CredentialPoolsOpsPage({ searchParams }: Credentia
                     <input name="redirectTo" type="hidden" value={redirectTo} />
                     <div className="app-announcement-ops__field-grid app-mission-ops__field-grid">
                       <label className="app-announcement-ops__field">
-                        <span>Provider</span>
+                        <span>服务商</span>
                         <Select defaultValue={providerFilter === "all" ? "platform_a" : providerFilter} name="providerKey">
                           {providerOptions.filter((option) => option.value !== "all").map((option) => (
                             <option key={option.value} value={option.value}>{option.label}</option>
@@ -339,7 +339,7 @@ export default async function CredentialPoolsOpsPage({ searchParams }: Credentia
                         <Input name="importNote" placeholder="导入来源 / 兼容说明 / 修缮背景" />
                       </label>
                       <label className="app-announcement-ops__field app-mission-ops__field--wide">
-                        <span>Entries JSON</span>
+                        <span>凭证条目 JSON</span>
                         <Textarea
                           name="entriesJson"
                           defaultValue={
@@ -470,7 +470,7 @@ export default async function CredentialPoolsOpsPage({ searchParams }: Credentia
                   <div className="app-mission-ops__section">
                     <div className="app-mission-ops__section-head">
                       <div>
-                        <strong>Assignments / Batches / Death Jobs</strong>
+                        <strong>分配 / 导入批次 / 失效清理</strong>
                         <p>用户分配与清理审计。</p>
                       </div>
                     </div>
@@ -498,7 +498,7 @@ export default async function CredentialPoolsOpsPage({ searchParams }: Credentia
                           <div>
                             <strong className="app-announcement-ops__list-item-title">{batch.label}</strong>
                             <span className="app-announcement-ops__list-item-subtitle">
-                              {batch.providerKey} · accepted {batch.acceptedCount} · inline {batch.inlineCount} / r2 {batch.r2Count}
+                              {batch.providerKey} · 接收 {batch.acceptedCount} · 内联 {batch.inlineCount} / R2 {batch.r2Count}
                             </span>
                           </div>
                         </div>
@@ -508,7 +508,7 @@ export default async function CredentialPoolsOpsPage({ searchParams }: Credentia
                           <div>
                             <strong className="app-announcement-ops__list-item-title">{job.credentialEntryId}</strong>
                             <span className="app-announcement-ops__list-item-subtitle">
-                              {job.status} · attempts {job.attempts}
+                              {job.status} · 尝试 {job.attempts}
                             </span>
                           </div>
                         </div>

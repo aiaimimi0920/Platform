@@ -1131,6 +1131,16 @@ export default async function TaskMarketPage({ searchParams }: PageProps) {
                   </div>
                 </div>
                 <div className="nt-task-market-task-grid">
+                  {filteredTaskBoard.length === 0 ? (
+                    <div className="nt-task-market-empty-state">
+                      <strong>暂无匹配任务</strong>
+                      <p className="mg-copy" style={{ margin: 0 }}>
+                        {searchQuery
+                          ? "没有任务符合当前搜索条件，请调整关键词后重试。"
+                          : "当前市场还没有任务，可点击“发布任务”创建第一条需求。"}
+                      </p>
+                    </div>
+                  ) : null}
                   {filteredTaskBoard.map((task) => {
                     const taskHref = `${buildTaskMarketHref({
                       panel: "publish",

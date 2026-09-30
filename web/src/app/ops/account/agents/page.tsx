@@ -567,7 +567,7 @@ export default async function AgentsOpsPage({
           <section className="app-announcement-ops__panel">
             {!selectedAgent ? (
               <Card className="app-announcement-ops__panel-card app-stack">
-                  <Badge variant="warning">No Selection</Badge>
+                <Badge variant="warning">未选择智能体</Badge>
                 <h2 style={{ margin: 0, fontSize: "2rem", lineHeight: 1.05 }}>
                   当前没有可管理的智能体
                 </h2>

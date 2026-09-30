@@ -14,6 +14,7 @@ Scope: this repository root and all subdirectories, excluding the external `AIRe
 - Production Dockerfiles must keep the Node base image pinned by digest through `NODE_IMAGE`; an image refresh requires all six Platform image builds to pass.
 - Version-tag releases must pass `npm run ci` and `npm run test:integration:required` before packaging. They must also consume the successful `Container Images` push run for the exact tag and commit, validate its six-image immutable digest lock and run attempt, and publish that lock plus its SHA-256 sidecar as release assets. Regular CI must retain the AI Gateway Vitest gate.
 - PostgreSQL schema runners must follow `docs/40-engineering/PostgreSQL迁移并发与事务基线.md`: hold a session-level, database-scoped advisory lock on the same client for the full runner, keep one ordinary migration per transaction, preserve the primary migration error during rollback/cleanup failures, and close the pool on every exit path. `CREATE INDEX CONCURRENTLY` is forbidden until an explicit no-transaction migration contract exists.
+- Account-worker outbox completion must atomically match the event ID, `consumer_service = 'account'`, `status = 'processing'`, and the claimed `attempts` value. Retry/replay must preserve monotonic attempts; stale workers must not overwrite recovered or newly claimed events. See `docs/40-engineering/Platform可靠性与可维护性优化路线.md` section 1.1.
 - Arbitration summary/workload endpoints must follow `docs/40-engineering/arbitration-metric-query-baseline.md`: use visibility-filtered scalar case projections and grouped evidence/attachment/round metrics, never reintroduce full evidence content, task rows, attachment payloads, or case timelines into statistics paths. Detail/list endpoints may continue using rich hydration.
 - Heavy Chat read paths must follow `docs/40-engineering/heavy-chat-read-query-baseline.md`: snapshot hydration batches slot-agent bindings, slot-project bindings, and bounded recent per-thread message pages with explicit `messagePages` metadata in owner-scoped queries, while Gateway history uses its own pre-sequence complete-message projection. UI pagination must remain separate from Gateway context and must not silently truncate either contract.
 - Production deployments must use immutable GHCR `sha-*` tags or digests, inject independent secrets, and retain prior digests as rollback targets. The local read-write `.neuro` Gateway mount is development-only.
@@ -47,6 +48,46 @@ The design system has been unified to a single visual language: industrial termi
 - Default canonical documentation location is `docs/` unless a feature-specific location is more appropriate.
 - When code and documentation both change, keep them synchronized in the same round of work.
 - Architecture and deployment baseline changes must update canonical docs and this `AGENTS.md` in the same round so future AI runs inherit the new rules automatically.
+
+## Neuro Incremental Code-Size Rule
+
+- When Platform is mounted in Neuro, the expanded common standard is
+  `../docs/DEVELOPMENT_STANDARD.md`. This section is self-contained because a
+  standalone Platform checkout cannot depend on parent-workspace instructions.
+- Effective code lines exclude blank lines, comment-only lines, and comment-only
+  multiline regions; code with an inline comment still counts. A local
+  language-aware checker, when present, is authoritative.
+- New handwritten production code, tests, scripts, and styles must use these
+  thresholds:
+  - target about 150 effective lines; 100-250 is preferred;
+  - 251-500 is acceptable for one clear responsibility;
+  - 501-700 is a soft-limit exception and requires a cohesion reason plus
+    protecting tests;
+  - a new file or new extraction result at 701-1500 is not complete and must be
+    split again;
+  - more than 1500 is a hard violation with no waiver.
+- Existing oversized files are grandfathered debt. Unrelated feature or bug-fix
+  work does not have to clean all historical files first.
+- Grandfathering does not permit new growth without boundaries. Put new
+  responsibilities in cohesive compliant modules and leave only minimal wiring
+  in existing large files. Narrow correctness/security/compatibility fixes may
+  remain in place; avoid net growth where practical and report unavoidable
+  growth plus the reason extraction would increase risk.
+- A file that was at most 700 lines before a task must not cross 700 because of
+  that task. When the task explicitly refactors a large file, every new or fully
+  migrated result must be at most 700 lines.
+- Generated or immutable third-party files are excluded only by explicit policy.
+  Never game the metric with comment padding, strings, minification, generated
+  code, renames, extension changes, or dumping grounds such as `common/utils`.
+- Before completion, measure affected files, preserve behavior with focused
+  tests, run directly dependent compile/typecheck/static gates and the official
+  formatter, then run any local size checker and `git diff --check`.
+- Review every new or materially changed file for input/auth/secret safety,
+  injection/traversal, bounded memory/queues, task/connection/process cleanup,
+  cancellation, blocking work, copying/allocation, N+1 access, and complexity.
+- Any stricter Platform checker, CI gate, or module rule overrides this common
+  floor. The Multi-Surface Modular Rule remains complementary and determines
+  the real architectural split boundaries.
 
 ## Documentation Tree Priority
 
@@ -173,6 +214,7 @@ The design system has been unified to a single visual language: industrial termi
   - `account-migrate` 必须同时覆盖 `@neuro/ai-gateway-domain` 与 `@neuro/account-domain`
   - 本地预览必须包含 Rust `gateway`
   - 旧 TypeScript 网关不得重新引回本地预览、兼容 profile 或默认 helper
+  - `deploy/docker-compose.local.yml` 与 `deploy/start-web-preview.ps1` 的 Web 服务必须运行镜像内已构建的 `next start`；镜像预览不挂载源码，不得改回没有热更新价值、会按页面重复编译的 `next dev`
 - 本地 Rust gateway 构建基线：
   - `Platform/deploy/docker-compose.local.yml` 的 `gateway` service 必须构建 sibling `../Gateway`，不得重新把 Rust Gateway source vendor 回 `Platform/`
   - `docker compose -f deploy/docker-compose.local.yml build gateway` 必须以 `../Gateway` 自身作为 build context
@@ -681,6 +723,14 @@ Default long-term deployment baseline:
   - `docs/30-product/任务后台、Agent Center与重度终端基线.md`
 
 ## Identity Entry
+
+- Loom 桌面登录继续复用现有 Linux.do 账号。设备批准与签名会话归
+  `packages/account-domain/src/modules/loom-account`，Web 通过受限 BFF 转发；
+  Hook 不持有中心账号凭据。后续遵循 `docs/30-product/Loom设备登录与账号边界.md`。
+- 二维码投射 v2 的邀请、绑定、版本元数据和短期地址归
+  `packages/account-domain/src/modules/loom-projection`；Web 只提供受限 BFF，
+  中心不接收明文图像。会话撤销与投射变更必须原子核验，对端撤销不能退出本机
+  账号。协议和容量遵循 `docs/30-product/Loom二维码投射中心协调.md`。
 
 - 当前正式首页默认就是登录入口，不是公开产品说明页。
 - 当前正式主会话登录方式只有一种：

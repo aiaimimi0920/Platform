@@ -258,8 +258,9 @@ export async function pollPendingEvents(limit = 10): Promise<PendingEvent[]> {
   }
 }
 
-export async function markEventProcessed(id: string) {
-  await pgPool.query(
+// attempts 在领取时递增；状态与序号必须一起校验，防止已回收的旧 worker 覆盖新领取者。
+export async function markEventProcessed(id: string, attempts: number) {
+  const result = await pgPool.query(
     `
       update outbox_events
       set
@@ -268,9 +269,13 @@ export async function markEventProcessed(id: string) {
         last_error = null,
         updated_at = now()
       where id = $1
+        and consumer_service = 'account'
+        and status = 'processing'
+        and attempts = $2
     `,
-    [id],
+    [id, attempts],
   );
+  return result.rowCount === 1;
 }
 
 export async function markEventFailed(
@@ -283,7 +288,7 @@ export async function markEventFailed(
   const isDeadLetter = attempts >= maxAttempts;
 
   if (isDeadLetter) {
-    await pgPool.query(
+    const result = await pgPool.query(
       `
         update outbox_events
         set
@@ -291,14 +296,17 @@ export async function markEventFailed(
           last_error = $2,
           updated_at = now()
         where id = $1
+          and consumer_service = 'account'
+          and status = 'processing'
+          and attempts = $3
       `,
-      [id, sanitizedError],
+      [id, sanitizedError, attempts],
     );
-    return;
+    return result.rowCount === 1;
   }
 
   const delaySeconds = computeBackoffSeconds(attempts);
-  await pgPool.query(
+  const result = await pgPool.query(
     `
       update outbox_events
       set
@@ -307,7 +315,11 @@ export async function markEventFailed(
         last_error = $3,
         updated_at = now()
       where id = $1
+        and consumer_service = 'account'
+        and status = 'processing'
+        and attempts = $4
     `,
-    [id, delaySeconds, sanitizedError],
+    [id, delaySeconds, sanitizedError, attempts],
   );
+  return result.rowCount === 1;
 }
