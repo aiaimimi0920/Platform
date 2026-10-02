@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import test from "node:test";
 
 import type { UserSummary } from "@neuro/contracts";
@@ -8,6 +9,11 @@ import { createRauthyIdentityRouter } from "../rauthy-http";
 import { RauthyRateLimitFixture } from "./rauthy-rate-limit-fixture";
 
 const issuer = "https://identity.example.test/auth/v1/";
+const totalRateLimitKey = "neuro:rauthy-upsert:v1:total";
+function identityRateLimitKey(subject: string) {
+  const digest = createHash("sha256").update(JSON.stringify([issuer, subject])).digest("hex");
+  return `neuro:rauthy-upsert:v1:POST/internal/identity/rauthy-upsert-identity:${digest}`;
+}
 process.env.AUTH_PROVIDER = "rauthy";
 process.env.RAUTHY_ISSUER_URL = issuer;
 process.env.DATABASE_URL ||= "postgresql://fixture:fixture@127.0.0.1:1/unused";
@@ -60,7 +66,9 @@ test("Rauthy official plugin HTTP hooks and bounded failure paths", async (t) =>
     assert.equal(a.calls.upsert + b.calls.upsert, 30);
     assert.equal(a.calls.feature + b.calls.feature, 30);
     assert.equal((await b.post("other-subject")).statusCode, 200);
-    assert.ok(fixture.calls.every((key) => !key.includes(issuer) && !key.includes("subject-a")));
+    assert.deepEqual([...fixture.entries.keys()].sort(), [
+      totalRateLimitKey, identityRateLimitKey("subject-a"), identityRateLimitKey("other-subject"),
+    ].sort());
     fixture.now = 20_000;
     assert.equal((await a.post()).headers["retry-after"], "40");
     fixture.now = 60_001;

@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { setTimeout as delay } from "node:timers/promises";
 import test from "node:test";
 
@@ -10,6 +11,11 @@ import { createRauthyIdentityRouter } from "../rauthy-http";
 import { createRauthyRateLimitConnection } from "../rauthy-rate-limit";
 
 const issuer = "https://identity.example.test/auth/v1/";
+const totalRateLimitKey = "neuro:rauthy-upsert:v1:total";
+function identityRateLimitKey(subject: string) {
+  const digest = createHash("sha256").update(JSON.stringify([issuer, subject])).digest("hex");
+  return `neuro:rauthy-upsert:v1:POST/internal/identity/rauthy-upsert-identity:${digest}`;
+}
 const url = process.env.LOOM_ACCOUNT_TEST_REDIS_URL;
 const prefix = "neuro:rauthy-upsert:v1:*";
 
@@ -82,7 +88,9 @@ test("real Redis: Rauthy official plugin budgets, ordering, expiry and lifecycle
     assert.equal((await b.post("subject-b")).statusCode, 200);
     const owned = await keys();
     assert.equal(owned.length, 3);
-    assert.ok(owned.every((key) => !key.includes(issuer) && !key.includes("subject-a")));
+    assert.deepEqual(owned.sort(), [
+      totalRateLimitKey, identityRateLimitKey("subject-a"), identityRateLimitKey("subject-b"),
+    ].sort());
   });
 
   await t.test("rejections preserve expiry and expired windows recover", async () => {
