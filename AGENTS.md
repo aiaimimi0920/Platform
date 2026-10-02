@@ -21,6 +21,18 @@ Scope: this repository root and all subdirectories, excluding the external `AIRe
 - Platform OpenTofu work must follow `docs/40-engineering/OpenTofu环境契约基线.md`: pin the CLI in `.opentofu-version`, declare child-module provider sources, commit separate staging/production multi-platform lock files, and keep backend bucket selection and credentials outside Git.
 - The OpenTofu portion of regular CI may run only `fmt`, `init -backend=false -lockfile=readonly`, and provider-schema `validate`; real `plan` / `apply` requires an explicitly authorized environment workflow and must never be inferred from validation success.
 
+## Rauthy OIDC Identity Boundary
+
+- Follow `docs/40-engineering/rauthy-oidc-integration.md` for the opt-in Rauthy path.
+- Bind fresh business accounts only by exact `(issuer, subject)`, including the issuer's trailing
+  slash. Do not migrate/delete old accounts or link by email/username implicitly.
+- Verify OIDC protocol checks and the ID-token signature before provisioning. Keep Rauthy
+  authentication separate from Platform wallets, entitlements, and Email-Native permissions.
+- Never pass a bare OIDC subject into the legacy `providerUserId` operator-allowlist path.
+  Rauthy operators must be explicitly authorized using the new Platform `users.id`.
+- Synthetic callback/PG tests do not prove live Rauthy deployment, application-token exchange,
+  or global logout/revocation; document these remaining boundaries honestly.
+
 ## Repository Security and Quality Gates
 
 - Follow `docs/40-engineering/repository-security-quality-baseline.md` for changes to repository automation or dependency controls.
@@ -724,7 +736,7 @@ Default long-term deployment baseline:
 
 ## Identity Entry
 
-- Loom 桌面登录继续复用现有 Linux.do 账号。设备批准与签名会话归
+- Loom 桌面登录复用当前配置的 Platform 主身份（默认 Linux.do，可显式切换 Rauthy）。设备批准与签名会话归
   `packages/account-domain/src/modules/loom-account`，Web 通过受限 BFF 转发；
   Hook 不持有中心账号凭据。后续遵循 `docs/30-product/Loom设备登录与账号边界.md`。
 - 二维码投射 v2 的邀请、绑定、版本元数据和短期地址归
@@ -733,8 +745,11 @@ Default long-term deployment baseline:
   账号。协议和容量遵循 `docs/30-product/Loom二维码投射中心协调.md`。
 
 - 当前正式首页默认就是登录入口，不是公开产品说明页。
-- 当前正式主会话登录方式只有一种：
-  - `Linux.do` 授权登录
+- 每个部署只选择一个正式主会话登录入口：
+  - 默认 `AUTH_PROVIDER=linuxdo` 使用 `Linux.do`
+  - 用户已授权的新路径 `AUTH_PROVIDER=rauthy` 使用 Rauthy OIDC，并创建新的业务账户
+  - 不同时开放两套平行主登录，也不自动迁移、绑定或删除旧账号
+  - 实施与验收边界见 `docs/40-engineering/rauthy-oidc-integration.md`
 - 当前允许新增的外部身份锚点是：
   - 已验证真实邮箱
   - 其正式用途是 `Email-Native` 调用入口与回执投递地址
@@ -743,11 +758,11 @@ Default long-term deployment baseline:
   - 邮箱注册
   - 邮箱密码登录
   - 手机号登录
-  - 第二套平行主会话账号来源
+  - 配置所选入口以外的平行主会话账号来源
 - 当前规则是：
-  - 用户首次通过 `Linux.do` 授权时，自动创建本地账户
-  - 本地账户与该 `Linux.do` 账号一对一绑定
-  - 后续平台身份默认以该绑定关系和内部 `users.id` 为准
+  - 首次通过所选登录入口认证后，创建本地业务账户
+  - Linux.do 路径按原 provider ID 绑定；Rauthy 路径只按精确 `(issuer, subject)` 绑定
+  - 平台业务身份始终使用内部 `users.id`，上游显示名和邮箱不是合并依据
   - 后续允许为该账户绑定经验证的真实邮箱，作为外部身份锚点与邮件调用入口
 
 ## UI Constraints

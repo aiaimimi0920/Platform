@@ -1,7 +1,12 @@
-# Identity 模块测试占位
+# Identity tests
 
-后续自动化测试应覆盖：
+- `rauthy-model.test.ts`: bounded claim parsing; exact issuer/provider gates;
+  HTTPS and explicit synthetic loopback policy; truthful optional email metadata
+- `rauthy.integration.test.ts`: isolated PostgreSQL transactions, concurrent
+  first sign-in, repeat/rename, rollback, no email/username/legacy linking,
+  old/new summary and profile paths, internal route auth and feature gates,
+  uniqueness and foreign-key constraints
 
-- Linux Do 首次登录创建用户
-- 再次登录更新头像、邮箱与登录时间
-- 模块关闭时接口返回 `MODULE_DISABLED`
+Run through `npm run test:integration:identity --workspace @neuro/account-domain`.
+The fixture creates its own temporary database and uses synthetic identities only.
+See `docs/40-engineering/rauthy-account-identity.md` for the trust boundary.
