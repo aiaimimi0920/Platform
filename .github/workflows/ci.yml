@@ -69,3 +69,29 @@ jobs:
       - name: Validate preview helper failure contracts
         shell: powershell
         run: .\scripts\tests\test-preview-helper-contract.ps1
+
+  integration:
+    name: Validate isolated integration suites
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build shared workspaces
+        run: npm run prepare:workspaces
+
+      - name: Run required integration suites
+        run: npm run test:integration:required

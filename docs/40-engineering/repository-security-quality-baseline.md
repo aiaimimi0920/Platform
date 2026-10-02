@@ -115,3 +115,11 @@ observation, not a claim about every deployed artifact. The
 also includes newer security fixes, so the patched dependency is retained even
 without a currently identified ImageResponse route. Do not suppress the audit
 finding or retain 16.3.3 merely because that route is absent.
+
+Ordinary Platform CI also runs the existing required-integration fixture in a
+separate 20-minute read-only hosted job. It uses ephemeral loopback PostgreSQL,
+fake Valkey and fake S3 with synthetic fixture credentials, never production
+services or Docker privileges. The fixture checks all declared workspace
+integration scripts and cleans its owned resources in its completion path;
+the isolated hosted runner bounds setup failures and timeout cleanup. Tag
+release integration checks remain unchanged.
