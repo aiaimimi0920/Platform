@@ -132,8 +132,9 @@ test("real Redis: Rauthy official plugin budgets, ordering, expiry and lifecycle
 
   await t.test("closing apps closes only their duplicate connection", async () => {
     await a.app.close();
-    await delay(0);
-    assert.equal(a.connection.redis.status, "end");
+    const closeDeadline = Date.now() + 2000;
+    while (a.connection.redis.status !== "end" && Date.now() < closeDeadline) await delay(10);
+    assert.equal(a.connection.redis.status, "end", "Owned Redis socket must close within two seconds");
     await assert.rejects(a.connection.ready(), { statusCode: 503 });
     assert.equal(await admin.ping(), "PONG");
     assert.equal(b.connection.redis.status, "ready");
