@@ -10,6 +10,47 @@
 （`dd61ac3c84d6b238108dc8438b53043b5177a662`）。本轮没有部署该服务或创建真实管理员。
 Linux.do 上游登录是可选来源；其缺邮箱问题不阻塞 Rauthy 标准新账号 OIDC 登录。
 
+## 跨机器、跨平台部署合同
+
+Rauthy 是可独立部署的认证微服务，可以位于另一台机器、另一个云平台或独立集群。
+Platform 主业务服务器通过 HTTPS/OIDC 使用它；同机不同进程只是可选部署方式，
+不是运行前提。两者无需共享 Docker 网络、文件、磁盘卷、数据库或浏览器 cookie 域。
+
+- Rauthy 独占认证数据、密码/MFA 材料及私有签名密钥，独立管理存储、密钥轮换与备份。
+  不向 Platform 开放认证数据库，也不把签名私钥挂载到业务服务器。
+- Platform 的 account-api 保留业务用户、权限、权益、钱包及自己的数据库/Redis。
+  Web 仅保存本应用的 OIDC 客户端凭据和独立 NEXTAUTH_SECRET；公开 JWKS 只提供验签公钥。
+  OIDC 客户端凭据不能替代 Platform 的内部服务 token，三类材料不可复用。
+- account-api 只需要精确 issuer 配置来约束受信 Web 提交的身份，不访问 Rauthy 数据库，
+  也不逐请求调用 Rauthy。业务授权仍使用 Platform 的 users.id 和业务规则。
+
+以下地址均为占位符，域名可属于不同运营平台，不要求共同父域：
+
+| 位置 | 配置或端点 | 归属 |
+| --- | --- | --- |
+| 独立身份平台 | https://login.identity.example/auth/v1/ | Rauthy 的精确 issuer |
+| Rauthy 公共发现 | https://login.identity.example/auth/v1/.well-known/openid-configuration | Web 登录时读取 |
+| Rauthy 公共 JWKS | https://login.identity.example/auth/v1/oidc/certs | Web 取得/缓存公钥，本地验签 |
+| 主业务平台 | https://app.business.example | Web 的 AUTH_URL 或兼容的 NEXTAUTH_URL |
+| OIDC 回调 | https://app.business.example/api/auth/callback/rauthy | 在 Rauthy 客户端准确登记，归 Web |
+
+Web 和 account-api 的 RAUTHY_ISSUER_URL 必须逐字相同，包含末尾斜线。
+AUTH_URL 与 NEXTAUTH_URL 同时提供时必须一致，不能填成登录平台地址。
+Web 到 Rauthy 的发现、token 和 JWKS 请求走外部 HTTPS；浏览器也须能访问登录平台
+和业务回调地址。反向代理应发布正确的外部域名/HTTPS scheme，并仅信任已配置代理的
+转发头。Rauthy 发现文档必须公布其外部 HTTPS 端点；不能公布容器 DNS、localhost
+或要求跨域重定向来取得 token。证书与主机名须正常验证，不能关闭 TLS 验证来连通。
+
+登录过程访问 IdP，使用公开 JWKS 在 Web 本地校验 ID token，再创建/读取业务账户。
+之后 Platform 验证自己的加密会话及到期时间，业务代码判断本地权限，不为每次请求
+向 Rauthy 做 introspection。JWKS 获取/缓存更新仍需要网络；新登录也需要可用的 IdP。
+已有未过期 Platform 会话在 IdP 暂时不可达时仍可本地验证，过期后必须重新登录，
+不能因断网延长会话或降级放行。这同时意味着上游撤销并非即时生效，限制见下文。
+
+SpringBok 应将 Rauthy 的部署位置与 Platform 分开建模，以 issuer、受信端点和 secret
+引用表达接入；不能把两者硬编码为同一主机、共享卷或共享认证数据库。
+部署计划仍需分别绑定版本/镜像、目标环境和数据恢复方案；本合同不创建这些资源。
+
 ## 配置开关
 
 默认 `AUTH_PROVIDER=linuxdo`，不加载 Rauthy 配置，也不调用 Rauthy。
@@ -84,7 +125,9 @@ node --test --import tsx src/auth.test.ts src/lib/rauthy-auth.test.ts src/rauthy
 真实 RSA/EC/Ed25519 密钥。所有发现/JWKS/token/内部账户请求均由合成响应拦截，没有
 真实 Rauthy、外部账号或真实凭据。涵盖错误签名/issuer/aud/nonce/exp、state、PKCE、
 授权码重放、不伪造邮箱、JWT 不向浏览器泄漏 access token、裸 sub 不继承旧管理员身份。
-这不是浏览器视觉测试或运行中的 Rauthy 服务器端到端验收。
+回调测试使用三个独立的合成 HTTPS origin（身份、Web、业务账户 API），并验证 IdP
+不可达时已有会话无需远程认证、过期会话拒绝、新登录不能完成。它不依赖 localhost，
+但仍不是真实跨机器网络、TLS、浏览器或运行中的 Rauthy 服务器端到端验收。
 
 账户域另有真实隔离 PostgreSQL 集成，验证唯一性、并发首登、重复登录、事务回滚、
 新身份资料读取与内部路由鉴权。具体命令见账户域 package.json 的 Rauthy 集成脚本。

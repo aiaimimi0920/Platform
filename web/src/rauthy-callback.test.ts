@@ -9,13 +9,16 @@ import { decode, encode } from "next-auth/jwt";
 
 test("real Auth.js OIDC callback with synthetic discovery, signed tokens, and business-account boundary", async (t) => {
   const issuer = "https://id.example.invalid/auth/v1/";
-  const origin = "http://127.0.0.1:3000";
+  const origin = "https://app.business.example";
+  const accountOrigin = "https://accounts.business.example";
+  assert.notEqual(new URL(issuer).origin, origin);
+  assert.notEqual(new URL(issuer).origin, accountOrigin);
   const environment = {
     NODE_ENV: "test", AUTH_PROVIDER: "rauthy", AUTH_URL: origin,
     RAUTHY_ISSUER_URL: issuer, RAUTHY_CLIENT_ID: "synthetic-platform",
     RAUTHY_CLIENT_SECRET: "synthetic-client-secret",
     NEXTAUTH_SECRET: "synthetic-independent-session-secret-for-tests",
-    ACCOUNT_INTERNAL_URL: "http://127.0.0.1:4000", INTERNAL_API_TOKEN: "synthetic-internal-token",
+    ACCOUNT_INTERNAL_URL: accountOrigin, INTERNAL_API_TOKEN: "synthetic-internal-token",
     PLATFORM_OPERATOR_USER_IDS: "synthetic-subject",
   };
   const previous = Object.fromEntries(Object.keys(environment).map((key) => [key, process.env[key]]));
@@ -28,9 +31,15 @@ test("real Auth.js OIDC callback with synthetic discovery, signed tokens, and bu
   const codes = new Map<string, { nonce: string; challenge: string; scenario: string }>();
   let sequence = 0;
   let jwksFetched = false;
+  let identityAvailable = true;
+  let identityRequests = 0;
   let config: AuthConfig;
   globalThis.fetch = async (input, init) => {
     const url = input instanceof Request ? input.url : input.toString();
+    if (new URL(url).origin === new URL(issuer).origin) {
+      identityRequests++;
+      if (!identityAvailable) throw new TypeError("Synthetic identity service unavailable");
+    }
     if (url === `${issuer}.well-known/openid-configuration`) {
       return Response.json({ issuer, authorization_endpoint: `${issuer}oidc/authorize`,
         token_endpoint: `${issuer}oidc/token`, userinfo_endpoint: `${issuer}oidc/userinfo`,
@@ -63,7 +72,7 @@ test("real Auth.js OIDC callback with synthetic discovery, signed tokens, and bu
       const idToken = await new SignJWT(claims).setProtectedHeader({ alg: "RS256", kid: publicJwk.kid }).sign(signingKey);
       return Response.json({ token_type: "Bearer", access_token: "synthetic-access-token", expires_in: 300, id_token: idToken });
     }
-    if (url === "http://127.0.0.1:4000/internal/identity/rauthy-upsert") {
+    if (url === accountOrigin + "/internal/identity/rauthy-upsert") {
       assert.equal(new Headers(init?.headers).get("x-internal-api-token"), environment.INTERNAL_API_TOKEN);
       const claims = JSON.parse(String(init?.body));
       persisted.push(claims);
@@ -135,6 +144,34 @@ test("real Auth.js OIDC callback with synthetic discovery, signed tokens, and bu
       const replay = await call(oldCookies, flow.route);
       assert.match(replay.headers.get("location")!, /error=/);
       assert.equal(persisted.length, 1);
+    });
+    await t.test("existing sessions stay local during an IdP outage; expiry and new login fail closed", async () => {
+      const flow = await start();
+      await call(flow.jar, flow.route);
+      const pendingLogin = await start();
+      const accountsBefore = persisted.length, requestsBefore = identityRequests;
+      identityAvailable = false;
+      try {
+        for (let n = 0; n < 3; n++) {
+          const session = await (await call(flow.jar, "session")).json();
+          assert.equal(session.user.id, "synthetic-platform-user");
+        }
+        assert.equal(identityRequests, requestsBefore);
+        assert.equal(persisted.length, accountsBefore);
+        const cookieName = [...flow.jar.keys()].find((key) => key.endsWith("session-token"))!;
+        const token = await decode({ token: flow.jar.get(cookieName), secret: environment.NEXTAUTH_SECRET, salt: cookieName });
+        flow.jar.set(cookieName, await encode({ token: { ...token, identityExpiresAt: Math.floor(Date.now() / 1000) - 1 },
+          secret: environment.NEXTAUTH_SECRET, salt: cookieName }));
+        assert.equal(await (await call(flow.jar, "session")).json(), null);
+        assert.equal(identityRequests, requestsBefore);
+        const failedLogin = await call(pendingLogin.jar, pendingLogin.route);
+        assert.match(failedLogin.headers.get("location")!, /error=/);
+        assert.ok(identityRequests > requestsBefore);
+        assert.equal(persisted.length, accountsBefore);
+        assert.equal(await (await call(pendingLogin.jar, "session")).json(), null);
+      } finally {
+        identityAvailable = true;
+      }
     });
     await t.test("local logout clears the platform session and expiry fails closed", async () => {
       const flow = await start();

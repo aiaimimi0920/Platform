@@ -24,6 +24,11 @@ Scope: this repository root and all subdirectories, excluding the external `AIRe
 ## Rauthy OIDC Identity Boundary
 
 - Follow `docs/40-engineering/rauthy-oidc-integration.md` for the opt-in Rauthy path.
+- Rauthy is an independently deployable identity service: it may run on another
+  machine or hosting platform, reached through its exact external HTTPS issuer.
+  Do not require shared hosts, files, databases, signing keys, or cookie domains.
+  Platform owns its business accounts and permissions; local session validation
+  must not be described as immediate upstream revocation.
 - Bind fresh business accounts only by exact `(issuer, subject)`, including the issuer's trailing
   slash. Do not migrate/delete old accounts or link by email/username implicitly.
 - Verify OIDC protocol checks and the ID-token signature before provisioning. Keep Rauthy
