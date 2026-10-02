@@ -1,3 +1,5 @@
+import { retainResponseDeadline } from "./internal-response-deadline";
+
 type FetchLike = (input: string | URL | Request, init?: RequestInit) => Promise<Response>;
 
 export type InternalRequestError = Error & {
@@ -253,15 +255,15 @@ function normalizeNetworkError(
   throw normalized;
 }
 
-function normalizeTimeoutError(
+function createTimeoutError(
   error: unknown,
   context?: { requestId: string; correlationId: string; targetService: InternalRequestTargetService },
-): never {
+): InternalRequestError {
   const message = error instanceof Error && error.message ? error.message : "Internal request timed out";
   const normalized = new Error(message) as InternalRequestError;
   normalized.code = "INTERNAL_REQUEST_TIMEOUT";
   applyInternalDependencyMetadata(normalized, context, "dependency");
-  throw normalized;
+  return normalized;
 }
 
 async function waitForRetry(delayMs: number): Promise<void> {
@@ -299,16 +301,23 @@ export async function fetchInternal(input: string, options: FetchInternalOptions
   for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), timeoutMs);
+    let responseOwnsDeadline = false;
     try {
-      return await fetchImpl(input, {
+      const response = await fetchImpl(input, {
         ...requestInit,
         headers,
         signal: controller.signal,
       });
+      const wrapped = retainResponseDeadline(response, controller.signal, () => clearTimeout(timeout), () => {
+        recordInternalRequestTelemetry(targetService, "timeoutCount");
+        return createTimeoutError(new Error("Internal response body timed out"), requestContext);
+      });
+      responseOwnsDeadline = true;
+      return wrapped;
     } catch (error) {
       if (isAbortError(error)) {
         recordInternalRequestTelemetry(targetService, "timeoutCount");
-        normalizeTimeoutError(error, requestContext);
+        throw createTimeoutError(error, requestContext);
       }
       if (!isRetryableFetchError(error)) {
         recordInternalRequestTelemetry(targetService, "networkErrorCount");
@@ -321,7 +330,7 @@ export async function fetchInternal(input: string, options: FetchInternalOptions
       recordInternalRequestTelemetry(targetService, "retryCount");
       await waitForRetry(retryDelaysMs[attempt] ?? 0);
     } finally {
-      clearTimeout(timeout);
+      if (!responseOwnsDeadline) clearTimeout(timeout);
     }
   }
 
