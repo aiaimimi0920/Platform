@@ -99,3 +99,19 @@ validation remain mandatory in the existing CI. Provider lock upgrades require
 explicit compatible-tool evaluation and reviewed lock regeneration until an
 updater supports this pinned toolchain. npm, Actions and Docker Dependabot jobs
 remain enabled. This is a documented automation gap, not vulnerability suppression.
+
+## Next.js security patch (2026-10-02)
+
+The Web workspace pins Next.js 16.3.8 and the npm-generated lock updates only
+Next and its matching `@next/*` packages. This remains on the existing 16.3 patch
+line and does not change application auth, routes or deployment configuration.
+
+[GHSA-vcvr-r3jv-pc5j](https://github.com/advisories/GHSA-vcvr-r3jv-pc5j)
+affects Node.js `next/og` ImageResponse with attacker-controlled SVG values and
+is fixed from 16.3.6. Source inspection found no `next/og`, `ImageResponse` or
+`@vercel/og` consumers in Platform Web; that is a source-level reachability
+observation, not a claim about every deployed artifact. The
+[16.3.8 release](https://github.com/vercel/next.js/releases/tag/v16.3.8)
+also includes newer security fixes, so the patched dependency is retained even
+without a currently identified ImageResponse route. Do not suppress the audit
+finding or retain 16.3.3 merely because that route is absent.
