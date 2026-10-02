@@ -84,3 +84,35 @@ Rauthy PostgreSQL suite passed 9/9 (eight cases plus the containing test), inclu
 Existing reputation and mailbox-player PostgreSQL suites also passed. Contracts,
 Backend Foundation and account-domain builds/typechecks passed. This is synthetic
 local evidence; it does not assert a production identity-provider rollout.
+
+## Rauthy upsert request budgets
+
+Only the new Rauthy upsert route uses `@fastify/rate-limit` and its official Redis
+store. Existing account routes and Loom budgets are unchanged. After internal
+service authentication and bounded claim/provider/issuer validation, a shared
+Redis budget allows 240 Rauthy upsert attempts per 60-second window per deployment.
+A second budget allows 30 attempts per exact issuer/subject tuple. Tuple keys are
+SHA-256 hashes of the JSON pair; raw issuer, subject and email are not Redis keys.
+
+The deployment budget executes first. When exhausted it returns 429 without
+allocating a new identity key. An identity-budget rejection still consumes the
+shared attempt budget; this is deliberately conservative. Both official Redis
+operations are atomic independently. `continueExceeding` and `exponentialBackoff`
+are false, so rejected attempts never extend the TTL. Both rejection paths return
+Redis-derived `Retry-After`, and neither reaches the feature lookup or account DB.
+
+The route owns a lazy Redis duplicate; Linux.do-only deployments and rejected
+requests do not open this connection. Valid first requests await one shared
+connection attempt. Connect, command and socket deadlines are one second, retries
+and offline queuing are disabled, and app shutdown closes the owned duplicate.
+Redis connection failures, command failures and blackholed sockets fail closed;
+there is no local-memory or allow-on-error fallback.
+
+Local HTTP tests inject an explicit command-boundary fixture. The PostgreSQL
+suite uses that same fixture only to isolate DB invariants; neither proves Redis
+Lua behavior. The required non-daemon `run-loom-account.mjs` suite additionally
+runs `rauthy-rate-limit.integration.test.ts` against its disposable real Redis,
+covering first use, 31st/241st request rejection, concurrent instances, key
+cardinality, expiry without renewal, command failures and connection cleanup.
+Local connection tests separately exercise a TCP blackhole before and after the
+real ioredis handshake. Production rollout still requires these CI gates.

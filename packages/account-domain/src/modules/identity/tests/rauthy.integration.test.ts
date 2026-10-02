@@ -4,6 +4,8 @@ import test from "node:test";
 import Fastify from "fastify";
 import { Pool } from "pg";
 
+import { RauthyRateLimitFixture } from "./rauthy-rate-limit-fixture";
+
 const issuer = "https://identity.example.test/auth/v1/";
 const databaseUrl = process.env.ACCOUNT_DATABASE_URL;
 
@@ -20,13 +22,22 @@ test("Rauthy fresh accounts, concurrency, rollback, summaries and internal bound
   const { pgPool: foundationPool, redis: foundationRedis } = await import("@neuro/backend-foundation");
   t.after(async () => { foundationRedis.disconnect(); await foundationPool.end(); });
   assert.equal(await foundationRedis.ping(), "PONG", "Redis fixture INFO must be a complete RESP bulk reply");
-  const { identityRouter } = await import("../router");
+  const { createRauthyIdentityRouter } = await import("../rauthy-http");
+  const { withInternalRequest } = await import("../../../platform/internal-auth");
   const { upsertRauthyUser } = await import("../rauthy-service");
   const { getPublicUserProfile, getUserSummary, updateUserProfile } = await import("../service");
-  const { setFeatureModuleEnabled } = await import("../../../platform/feature-modules/service");
+  const { requireModuleEnabled, setFeatureModuleEnabled } = await import("../../../platform/feature-modules/service");
   const app = Fastify();
   t.after(() => app.close());
-  await app.register(identityRouter);
+  // PostgreSQL coverage uses the RESP-only fixture; Lua budgets are exercised
+  // separately with real Redis and the HTTP rejection-order tests.
+  await app.register(createRauthyIdentityRouter({
+    authenticate: withInternalRequest,
+    redis: new RauthyRateLimitFixture().redis,
+    ready: async () => undefined,
+    requireIdentityEnabled: () => requireModuleEnabled("identity"),
+    upsert: upsertRauthyUser,
+  }));
   const login = (subject: string, extra = {}) => upsertRauthyUser({ issuer, subject, emailVerified: false, ...extra });
   const count = async (table: string) => Number((await pool.query(`select count(*) as count from ${table}`)).rows[0].count);
   const post = (payload: unknown, token: string | undefined = process.env.INTERNAL_API_TOKEN) => app.inject({

@@ -1,7 +1,7 @@
 import type { RauthyUpsertInput } from "@neuro/contracts";
 import { z } from "zod";
 
-import { BadRequestError, HttpError } from "@/platform/errors";
+import { BadRequestError, HttpError } from "../../platform/errors";
 
 const claimString = z.string().regex(/^[^\u0000-\u001f\u007f]+$/);
 export const rauthyUpsertSchema = z.object({
