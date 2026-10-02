@@ -71,3 +71,15 @@ test("Dependabot only configures supported updaters for the pinned toolchains", 
   assert.match(read("scripts/validate-tofu.mjs"), /-backend=false/);
   assert.match(read("scripts/validate-tofu.mjs"), /-lockfile=readonly/);
 });
+
+test("ordinary CI runs bounded isolated integration without production access", () => {
+  const workflow = read(".github/workflows/ci.yml");
+  const integration = workflow.slice(workflow.indexOf("  integration:\n"));
+  assert.match(integration, /runs-on: ubuntu-latest/);
+  assert.match(integration, /timeout-minutes: 20/);
+  assert.match(integration, /persist-credentials: false/);
+  assert.match(integration, /run: npm ci/);
+  assert.match(integration, /run: npm run prepare:workspaces/);
+  assert.match(integration, /run: npm run test:integration:required/);
+  assert.doesNotMatch(integration, /secrets\.|docker|privileged|continue-on-error|\|\| true|contents: write/);
+});
