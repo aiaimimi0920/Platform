@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { redirect } from "next/navigation";
 import { auth, signIn } from "@/auth";
 import { accountRequest } from "@/lib/account-request";
+import { getIdentityProvider } from "@/lib/identity-provider";
 import { isDevAuthBypassEnabled } from "@/lib/dev-auth";
 import { loomAuthorizationPath, parseLoomAccountAuthorization } from "@/lib/loom-account-authorization";
 import { requirePlatformUserContext } from "@/lib/platform-session";
@@ -20,7 +21,7 @@ export default async function LoomAuthorizePage({ searchParams }: {
   const fingerprint = createHash("sha256").update(Buffer.from(grant.publicKey, "base64")).digest("hex").slice(0, 16);
   async function login() {
     "use server";
-    await signIn("linuxdo", { redirectTo: returnPath });
+    await signIn(getIdentityProvider(), { redirectTo: returnPath });
   }
   async function localLogin() {
     "use server";
@@ -45,7 +46,7 @@ export default async function LoomAuthorizePage({ searchParams }: {
         <p>允许此设备通过 Loom 建立跨设备连接。设备授权最长保留 30 天，可从 Loom 退出登录。</p>
         <form action={approve}><button className="nt-btn nt-btn--primary" type="submit">确认登录此设备</button></form>
       </> : <>
-        <form action={login}><button className="nt-btn nt-btn--primary" type="submit">使用 Linux.do 登录</button></form>
+        <form action={login}><button className="nt-btn nt-btn--primary" type="submit">{getIdentityProvider() === "rauthy" ? "使用 Rauthy 登录" : "使用 Linux.do 登录"}</button></form>
         {isDevAuthBypassEnabled() && <form action={localLogin}><button className="nt-btn" type="submit">使用 Local Dev 登录</button></form>}
       </>}
       <p>如果不是你发起的请求，请关闭此页面。</p>

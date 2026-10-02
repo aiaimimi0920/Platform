@@ -1,4 +1,4 @@
-import { boolean, integer, pgTable, text, timestamp, uniqueIndex } from "drizzle-orm/pg-core";
+import { boolean, index, integer, pgTable, text, timestamp, uniqueIndex } from "drizzle-orm/pg-core";
 
 export const users = pgTable("users", {
   id: text("id").primaryKey(),
@@ -35,5 +35,26 @@ export const authIdentities = pgTable(
   },
   (table) => ({
     providerIdentityUnique: uniqueIndex("auth_identities_provider_identity_idx").on(table.provider, table.providerUserId),
+  }),
+);
+
+// OIDC claims are display metadata, never Email-Native grants or account-link keys.
+export const oidcIdentities = pgTable(
+  "oidc_identities",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    issuer: text("issuer").notNull(),
+    subject: text("subject").notNull(),
+    displayName: text("display_name"),
+    email: text("email"),
+    emailVerified: boolean("email_verified").notNull().default(false),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull(),
+    lastLoginAt: timestamp("last_login_at", { withTimezone: true }).notNull(),
+  },
+  (table) => ({
+    issuerSubjectUnique: uniqueIndex("oidc_identities_issuer_subject_idx").on(table.issuer, table.subject),
+    userIndex: index("oidc_identities_user_idx").on(table.userId),
   }),
 );

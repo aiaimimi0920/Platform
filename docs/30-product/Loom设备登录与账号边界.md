@@ -1,7 +1,9 @@
 # Loom 设备登录与账号边界
 
-Loom 是本机统一账号入口，继续使用 Platform 的 Linux.do 主账号身份。
-本功能没有新增账号来源。Hook 复用本机 Loom，不持有中心登录私钥。
+Loom 是本机统一账号入口，复用 Platform 当前配置的主账号身份：默认 Linux.do，
+可显式设置 `AUTH_PROVIDER=rauthy` 使用新的 Rauthy OIDC 入口。设备授权协议不增加平行账号
+来源，也不迁移旧账号。接入边界见[新身份接入基线](../40-engineering/rauthy-oidc-integration.md)。
+Hook 复用本机 Loom，不持有中心登录私钥。
 
 授权链路：Loom 生成 PKCE 与设备密钥 → 系统浏览器打开 `/loom/authorize` →
 现有网页登录 → 用户核对账号、设备与校验码后确认 → Loom 以 verifier 和设备
@@ -42,6 +44,6 @@ node scripts/testing/run-loom-account.mjs --daemon ..\release\Loom\qr-projection
 ```
 
 原生互通覆盖 BFF handler、账号服务、专用 Redis 和两个真实 Loom 进程；批准
-使用夹具账号，不代替完整账号 API / Web / Linux.do 授权验收。结果写入
+使用夹具账号，不代替完整账号 API / Web / 实际身份提供方授权验收。结果写入
 `output/loom-account`，仅包含检查名、候选摘要及进程 ID；临时凭据与进程自动清理。
-Linux.do 真实授权、Platform 正式发布及真实双机联网分别保留独立验收。
+实际 Linux.do 或 Rauthy 授权、Platform 正式发布及真实双机联网分别保留独立验收。

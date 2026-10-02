@@ -1,6 +1,7 @@
 import { auth } from "@/auth";
 import { LandingGate } from "@/components/home/landing-gate";
 import { SignInButton } from "@/components/sign-in-button";
+import { getIdentityProvider } from "@/lib/identity-provider";
 import { isDevAuthBypassEnabled } from "@/lib/dev-auth";
 import { cookies } from "next/headers";
 
@@ -24,6 +25,7 @@ function normalizeTerminalUid(source: string): string {
 }
 
 export default async function HomePage({ searchParams }: HomePageProps) {
+  const provider = getIdentityProvider();
   const session = await auth();
   const params = searchParams ? await searchParams : undefined;
   const cookieStore = await cookies();
@@ -43,7 +45,8 @@ export default async function HomePage({ searchParams }: HomePageProps) {
         <>
           <SignInButton
             className="app-entry__login-button"
-            label="使用 Linux.do 授权登录"
+            mode={provider}
+            label={provider === "rauthy" ? "使用 Rauthy 授权登录" : "使用 Linux.do 授权登录"}
           />
           {isDevAuthBypassEnabled() ? (
             <SignInButton
