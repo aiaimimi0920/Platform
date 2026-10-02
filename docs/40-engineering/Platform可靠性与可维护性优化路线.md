@@ -68,7 +68,10 @@
 
 - `web/src/lib/internal-request.ts`
   - `fetchInternal(...)`
-  - 默认 timeout：`15000ms`
+  - 默认 timeout：`15000ms`；每次尝试从发起请求到响应体 EOF 共用同一个 deadline，不能在收到 headers 后提前清除。
+  - 成功和非 2xx 响应体都受 deadline 约束；响应体超时取消上游 reader，并保留 service / requestId / correlationId 诊断。
+  - 收到响应后不再自动重试，包括半截 JSON、响应体网络错误和超时；完整但无效的 JSON 仍由调用方报告解析错误。
+  - EOF、无响应体和调用方取消 response body 都必须清除 timer；当前 API 不接受 caller AbortSignal。
   - 默认只重试 `GET`
   - 默认 retry delay：`200ms, 600ms`
   - network error 标准化为 `INTERNAL_REQUEST_NETWORK_ERROR`
