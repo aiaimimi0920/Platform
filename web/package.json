@@ -21,7 +21,7 @@
     "jose": "6.2.3"
   },
   "devDependencies": {
-    "@types/node": "^20.19.27",
+    "@types/node": "^26.5.0",
     "@types/react": "^19.2.2",
     "@types/react-dom": "^19.2.2",
     "typescript": "^5.8.3"
