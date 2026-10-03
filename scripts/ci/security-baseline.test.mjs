@@ -30,7 +30,9 @@ test("secret and workflow scanners have exact verified releases and fail closed"
   assert.equal([...install.matchAll(/sha256=[a-f0-9]{64}/g)].length, 2);
   const quality = read(".github/workflows/repository-quality.yml");
   assert.match(quality, /fetch-depth: 0/);
-  assert.match(quality, /gitleaks" git --redact=100 --no-banner --exit-code=1/);
+  assert.match(quality, /gitleaks" git --redact=100 --no-banner --exit-code=42/);
+  assert.match(quality, /scripts\/security_findings\.py gitleaks/);
+  assert.match(quality, /if-no-files-found: error/);
   assert.doesNotMatch(quality, /continue-on-error|\|\| true/);
 });
 
@@ -41,12 +43,13 @@ test("Dependabot tracks Actions with bounded pull requests", () => {
   assert.match(config, /open-pull-requests-limit: [1-5]/);
 });
 
-test("OSV scans the real workspace lock without suppressing vulnerabilities", () => {
+test("OSV validates complete workspace reports before advisory success", () => {
   const workflow = read(".github/workflows/dependency-security.yml");
-  assert.match(workflow, /--lockfile=\.\/package-lock\.json/);
-  assert.match(workflow, /fail-on-vuln: true/);
-  assert.match(workflow, /upload-sarif: true/);
-  assert.match(workflow, /ref: \$\{\{ github\.ref \}\}/);
+  assert.match(workflow, /--lockfile=\/github\/workspace\/package-lock\.json/);
+  assert.match(workflow, /--advisory/);
+  assert.match(workflow, /scripts\/osv_scan_summary\.py/);
+  assert.match(workflow, /wait-for-processing: true/);
+  assert.match(workflow, /default: true/);
   assert.doesNotMatch(workflow, /--config=|continue-on-error/);
   assert.ok(existsSync(resolve(root, "package-lock.json")));
 });
