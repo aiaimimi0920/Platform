@@ -31,6 +31,8 @@ jobs:
           node-version: "22"
       - name: Test repository security contract
         run: node --test scripts/ci/security-baseline.test.mjs
+      - name: Validate development CI and exact Action pin contracts
+        run: node --test --test-name-pattern='owns quick CI|pins every external|rejects unaudited' scripts/repository-contract.mjs
       - name: Lint workflow definitions
         shell: bash
         run: |

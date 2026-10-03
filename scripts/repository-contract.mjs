@@ -6,8 +6,9 @@ import { describe, it } from "node:test";
 
 const rootDir = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const ACTION_PINS = Object.freeze({
-  "github/codeql-action/init": ["v4", "db488ddef3bf6cb639b32c2e9a7c0a7ea8271d28"],
-  "github/codeql-action/analyze": ["v4", "db488ddef3bf6cb639b32c2e9a7c0a7ea8271d28"],
+  "github/codeql-action/init": ["v4", "2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2"],
+  "github/codeql-action/upload-sarif": ["v4.38.2", "2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2"],
+  "github/codeql-action/analyze": ["v4", "2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2"],
   "google/osv-scanner-action/.github/workflows/osv-scanner-reusable.yml": ["v2.5.1", "ffa0a5f39214d80778c9b494822d94d0d9668458"],
   "actions/checkout": ["v5", "fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09"],
   "actions/download-artifact": ["v8", "3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c"],
@@ -19,6 +20,11 @@ const ACTION_PINS = Object.freeze({
   "docker/setup-buildx-action": ["v4", "bb05f3f5519dd87d3ba754cc423b652a5edd6d2c"],
   "opentofu/setup-opentofu": ["v2", "a1320f892987e89d278cc92dc5adc984fb93aca4"],
   "softprops/action-gh-release": ["v3", "3d0d9888cb7fd7b750713d6e236d1fcb99157228"],
+});
+
+const ADDITIONAL_ACTION_PINS = Object.freeze({
+  "actions/checkout": [["v7.0.1", "3d3c42e5aac5ba805825da76410c181273ba90b1"]],
+  "actions/upload-artifact": [["v7.0.1", "043fb46d1a93c77aae656e7c1c64a875d1fc6a0a"]],
 });
 
 function read(relativePath) {
@@ -40,18 +46,19 @@ function pinnedAction(action) {
 }
 
 function assertExternalActionsPinned(workflow, relativePath) {
-  const actionLines = workflow.split(/\r?\n/).filter((line) => /^\s*uses:\s+/.test(line));
+  const actionLines = workflow.split(/\r?\n/).filter((line) => /^\s*(?:-\s+)?uses:\s+/.test(line));
 
   for (const line of actionLines) {
-    if (/^\s*uses:\s+\.\//.test(line)) continue;
-    const match = line.match(/^\s*uses:\s+([^@\s]+)@([^\s#]+)(?:\s+#\s+(\S+))?\s*$/);
+    if (/^\s*(?:-\s+)?uses:\s+\.\//.test(line)) continue;
+    const match = line.match(/^\s*(?:-\s+)?uses:\s+([^@\s]+)@([^\s#]+)(?:\s+#\s+(\S+))?\s*$/);
     assert(match, `Unable to parse Action reference in ${relativePath}: ${line.trim()}`);
     const [, action, revision, versionComment] = match;
     const pin = ACTION_PINS[action];
     assert(pin, `Action is not in the audited pin registry: ${action}`);
     assert.match(revision, /^[0-9a-f]{40}$/, `Action must use a full commit SHA: ${action}`);
-    assert.strictEqual(revision, pin[1], `Action SHA differs from the audited pin: ${action}`);
-    assert.strictEqual(versionComment, pin[0], `Action pin must retain its audited major comment: ${action}`);
+    const accepted = [pin, ...(ADDITIONAL_ACTION_PINS[action] ?? [])];
+    assert(accepted.some(([version, sha]) => sha === revision && version === versionComment),
+      `Action SHA/comment pair differs from the audited pins: ${action}`);
   }
 }
 
@@ -166,10 +173,15 @@ describe("independent Platform repository", () => {
 
     const workflowLines = workflow.split(/\r?\n/);
     assert.strictEqual(
-      workflowLines.filter((line) => line.trim() === "run: npm run ci").length,
+      workflowLines.filter((line) => line.trim() === "run: npm run ci:development").length,
       1,
       "Hosted CI must delegate orchestration to the root CI script exactly once",
     );
+    assert.strictEqual(packageMetadata.scripts["ci:development"],
+      packageMetadata.scripts.ci.replace("npm run audit:prod", "npm run audit:prod:advisory"),
+      "Development CI must retain every strict orchestration gate except the explicit audit report adapter");
+    assert(read(".github/workflows/release-platform-tag.yml").includes("npm run ci"),
+      "Tagged releases must retain the strict CI entrypoint");
     assert(!workflow.includes("npm test --workspace "), "Hosted CI must not duplicate workspace test orchestration");
   });
 
@@ -414,3 +426,17 @@ describe("independent Platform repository", () => {
     assert.deepStrictEqual(findings, []);
   });
 });
+
+testPinRejections();
+function testPinRejections() {
+  it("rejects unaudited Action revisions in both step and reusable-job syntax", () => {
+    for (const prefix of ["uses: ", "- uses: "]) {
+      assert.throws(() => assertExternalActionsPinned(
+        prefix + "actions/checkout@" + "0".repeat(40) + " # v5", "fixture.yml"));
+      assert.throws(() => assertExternalActionsPinned(
+        prefix + "actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v999", "fixture.yml"));
+      assert.throws(() => assertExternalActionsPinned(
+        prefix + "unreviewed/action@" + "0".repeat(40) + " # v1", "fixture.yml"));
+    }
+  });
+}
