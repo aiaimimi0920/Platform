@@ -63,7 +63,9 @@
     "test:e2e:acceptance": "playwright test --config playwright.config.ts",
     "test:vitest": "npm run test:vitest -ws --if-present --ignore-scripts",
     "test:debt": "npm run test:debt -ws --if-present",
-    "test:all": "npm run test && npm run test:vitest && npm run test:integration"
+    "test:all": "npm run test && npm run test:vitest && npm run test:integration",
+    "ci:development": "node --test scripts/acceptance/tests/cli-exit-code.test.mjs scripts/acceptance/tests/integration-fixture.test.mjs scripts/container-image-lock.test.mjs scripts/repository-contract.mjs scripts/smoke.mjs scripts/acceptance/tests/release-build.test.mjs scripts/acceptance/tests/release-smoke.test.mjs scripts/acceptance/tests/tofu-contract.test.mjs && npm run infra:tofu:validate && npm run audit:prod:advisory && npm run prepare:workspaces && npm run test:unit && npm run test:vitest && npm run typecheck:workspaces",
+    "audit:prod:advisory": "python3 scripts/run_dependency_audit.py npm --output .tmp/security-reports/npm-production -- npm audit --omit=dev --audit-level=high --json"
   },
   "devDependencies": {
     "@playwright/test": "1.62.1",
