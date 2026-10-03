@@ -22,14 +22,37 @@ def read_json(path):
             and path.stat().st_size <= 20 * 1024 * 1024, "invalid_scan_artifact")
     return json.loads(path.read_text(encoding="utf-8"), object_pairs_hook=unique)
 
-def classify_osv(document, sarif, scan_exit, report_exit, lockfiles, advisory):
+def workspace_links(lockfiles):
+    """Allow only versionless npm link records proven by the committed lock."""
+    links = set()
+    for path in lockfiles:
+        if not path.endswith("package-lock.json"):
+            continue
+        lock = read_json(Path(path))
+        entries = lock.get("packages", {})
+        declared = entries.get("", {}).get("workspaces", [])
+        require(isinstance(declared, list), "invalid_workspace_inventory")
+        for key, entry in entries.items():
+            if entry.get("link") is not True:
+                continue
+            target = entry.get("resolved")
+            require(isinstance(target, str) and target in declared
+                    and not target.startswith("/") and ".." not in target.split("/"),
+                    "invalid_workspace_link")
+            name = entries.get(target, {}).get("name")
+            require(isinstance(name, str) and key == "node_modules/" + name,
+                    "workspace_link_identity_mismatch")
+            links.add(("/github/workspace/" + path, name))
+    return links
+
+def classify_osv(document, sarif, scan_exit, report_exit, lockfiles, advisory, local_links=()):
     require(type(scan_exit) is int and type(report_exit) is int
             and scan_exit in {0, 1} and report_exit in {0, 1}, "scan_execution_failed")
     sources = document.get("results")
     require(isinstance(sources, list) and 0 < len(sources) <= 100, "missing_inventory")
     expected = {"/github/workspace/" + path for path in lockfiles}
     require(len(expected) == len(lockfiles) and bool(expected), "invalid_selected_inputs")
-    seen, packages, vulnerabilities = set(), 0, 0
+    seen, packages, vulnerabilities, workspace_records = set(), 0, 0, 0
     for source in sources:
         location = source.get("source", {})
         require(location.get("type") == "lockfile" and location.get("path") in expected,
@@ -41,6 +64,12 @@ def classify_osv(document, sarif, scan_exit, report_exit, lockfiles, advisory):
         require(packages <= LIMIT, "inventory_limit")
         for entry in entries:
             package = entry.get("package", {})
+            if package.get("version") == "" and package.get("ecosystem") == "npm":
+                require((location["path"], package.get("name")) in local_links
+                        and not entry.get("vulnerabilities") and not entry.get("groups"),
+                        "unproven_versionless_package")
+                workspace_records += 1
+                continue
             require(all(isinstance(package.get(key), str) and 0 < len(package[key]) <= 512
                         for key in ("name", "version", "ecosystem")), "invalid_package_identity")
             vulns = entry.get("vulnerabilities", [])
@@ -76,7 +105,8 @@ def classify_osv(document, sarif, scan_exit, report_exit, lockfiles, advisory):
                     require(notification.get("level") != "error", "sarif_error_diagnostic")
     coverage = validate_coverage(document, sarif)
     facts = {"analysis_complete": True, "report_valid": True,
-             "package_count": packages, "selected_lockfiles": len(seen),
+             "package_count": packages, "local_workspace_records": workspace_records,
+             "selected_lockfiles": len(seen),
              "vulnerability_records": vulnerabilities, "sarif_result_count": len(run["results"]),
              "scanner_exit": scan_exit, "reporter_exit": report_exit,
              "findings_observed": vulnerabilities > 0, "development_advisory": advisory,
@@ -112,14 +142,15 @@ def main():
     try:
         output(False)
         facts, status = classify_osv(read_json(args.json), read_json(args.sarif),
-            args.scan_exit, args.report_exit, args.lockfile, args.advisory)
+            args.scan_exit, args.report_exit, args.lockfile, args.advisory, workspace_links(args.lockfile))
         summarize(facts)
         output(True)
         print(json.dumps(facts, sort_keys=True))
         return status
-    except (OSError, ValueError, TypeError, KeyError, AttributeError, RecursionError):
+    except (OSError, ValueError, TypeError, KeyError, AttributeError, RecursionError) as error:
         print(json.dumps({"analysis_complete": False, "report_valid": False,
-                          "error_kind": "scan_execution_or_report_failure"}))
+                          "error_kind": str(error) if isinstance(error, ValueError)
+                          else "scan_execution_or_report_failure"}))
         return 2
 
 if __name__ == "__main__":

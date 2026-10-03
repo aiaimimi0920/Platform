@@ -69,6 +69,21 @@ class SummaryTests(unittest.TestCase):
         sarif["runs"][0]["invocations"] = [{"executionSuccessful": True,
             "toolExecutionNotifications": [{"level": "warning"}]}]
         self.assertEqual(self.classify(document, sarif)[1], 0)
+    def test_versionless_npm_links_require_committed_workspace_proof(self):
+        document, sarif = self.fixture()
+        source = document["results"][0]
+        row = {"package": {"name": "@local/workspace", "version": "", "ecosystem": "npm"}}
+        source["packages"].append(row)
+        locks = ["package-lock.json", "scripts/package-lock.json"]
+        with self.assertRaises(ValueError):
+            classify_osv(document, sarif, 1, 1, locks, True)
+        proof = {(source["source"]["path"], "@local/workspace")}
+        facts, status = classify_osv(document, sarif, 1, 1, locks, True, proof)
+        self.assertEqual((facts["local_workspace_records"], status), (1, 0))
+        row["vulnerabilities"] = [{"id": "GHSA-fixture"}]
+        with self.assertRaises(ValueError):
+            classify_osv(document, sarif, 1, 1, locks, True, proof)
+
     def test_clean_complete_inventory_is_zero(self):
         document, sarif = self.fixture()
         for source in document["results"]:
