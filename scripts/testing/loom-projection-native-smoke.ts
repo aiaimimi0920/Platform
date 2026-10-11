@@ -1,4 +1,4 @@
-// Exercise the local Hook contract against two actual, independently logged-in Loom processes.
+// Exercise the local Otter contract against two actual, independently logged-in Loom processes.
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { setTimeout as delay } from "node:timers/promises";
@@ -8,8 +8,8 @@ import { ProjectionRuntime, object, textField, type JsonObject } from "../../../
 export async function nativeProjectionLifecycle(a: ProjectionRuntime, b: ProjectionRuntime): Promise<string[]> {
   const source = new ProjectionClient(a);
   const receiver = new ProjectionClient(b);
-  const hookA = await source.pair("Projection Hook A");
-  const hookB = await receiver.pair("Projection Hook B");
+  const hookA = await source.pair("Projection Otter A");
+  const hookB = await receiver.pair("Projection Otter B");
   const post = (client: ProjectionClient, actor: Identity, kind: string, fields: JsonObject = {}, status = 200) =>
     client.post(actor, `v2/${kind}`, { kind, ...fields }, status);
   const eventually = async (operation: () => Promise<JsonObject | undefined>) => {

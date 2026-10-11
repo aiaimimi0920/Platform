@@ -1,6 +1,6 @@
 # Loom 二维码投射中心协调
 
-状态：中心服务与隔离 Redis / BFF 自动化已实现；Loom 本机投射 v2、Hook 接线、
+状态：中心服务与隔离 Redis / BFF 自动化已实现；Loom 本机投射 v2、Otter 接线、
 Iroh 传输及公网部署尚未完成。登录继续使用 Loom 的设备签名会话，主账号仍由
 Platform 的 Linux.do 身份体系提供。
 
@@ -13,7 +13,7 @@ Platform 的 Linux.do 身份体系提供。
 Web 的 `POST /api/loom/projections` 只转发到 account-api 的
 `POST /internal/loom-projections`。后者要求内部服务认证及 `identity` 能力开启。
 Web 不转发调用方 cookie、用户身份头、Authorization 或内部 token；Loom 在
-body 中携带设备签名证明。Hook 只调用本机 Loom，不持有中心账户私钥。
+body 中携带设备签名证明。Otter 只调用本机 Loom，不持有中心账户私钥。
 
 中心只保存正式图像的摘要、尺寸和字节数。后续图像通道由 Loom 负责，使用
 Iroh 的经过设备密钥认证的 QUIC 直连或加密中继。中心接口通过不能证明该图像

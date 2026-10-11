@@ -471,7 +471,7 @@ test("cleanup gives Compose the validated owner environment over conflicting hos
 
 test("acceptance Compose uses only Platform contexts, loopback ports, run-owned volumes, and no host credentials", async () => {
   const contents = await readFile(acceptanceComposeFile, "utf8");
-  assert.doesNotMatch(contents, /\.\.\/\.\.\/(?:Gateway|Loom|Tea|Hook)/i);
+  assert.doesNotMatch(contents, /\.\.\/\.\.\/(?:Gateway|Loom|Tea|Otter|Hook)/i);
   assert.doesNotMatch(contents, /USERPROFILE|[\\/]\.neuro/i);
   assert.match(contents, /context:\s+\.\.\/\.\./);
   for (const doubleName of ["gateway", "loom", "tea"]) {

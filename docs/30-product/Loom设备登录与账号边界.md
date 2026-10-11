@@ -3,7 +3,7 @@
 Loom 是本机统一账号入口，复用 Platform 当前配置的主账号身份：默认 Linux.do，
 可显式设置 `AUTH_PROVIDER=rauthy` 使用新的 Rauthy OIDC 入口。设备授权协议不增加平行账号
 来源，也不迁移旧账号。接入边界见[新身份接入基线](../40-engineering/rauthy-oidc-integration.md)。
-Hook 复用本机 Loom，不持有中心登录私钥。
+Otter 复用本机 Loom，不持有中心登录私钥。
 
 授权链路：Loom 生成 PKCE 与设备密钥 → 系统浏览器打开 `/loom/authorize` →
 现有网页登录 → 用户核对账号、设备与校验码后确认 → Loom 以 verifier 和设备

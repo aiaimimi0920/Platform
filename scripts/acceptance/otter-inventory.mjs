@@ -37,11 +37,11 @@ const runtimeExtensions = new Set([
   ".yaml",
   ".yml",
 ]);
-const hookPatterns = [
-  { kind: "sibling-path", pattern: /(?:^|[\\/])Hook(?:[\\/]|$)/i },
-  { kind: "environment", pattern: /\bHOOK_(?:URL|BASE_URL|TOKEN|API_KEY)\b/i },
-  { kind: "service-name", pattern: /\b(?:hook-service|hook_service)\b/i },
-  { kind: "endpoint", pattern: /https?:\/\/hook(?::|\/|\.)/i },
+const otterPatterns = [
+  { kind: "sibling-path", pattern: /(?:^|[\\/])(?:Otter|Hook)(?:[\\/]|$)/i },
+  { kind: "environment", pattern: /\b(?:OTTER|HOOK)_(?:URL|BASE_URL|TOKEN|API_KEY)\b/i },
+  { kind: "service-name", pattern: /\b(?:otter|hook)[_-]service\b/i },
+  { kind: "endpoint", pattern: /https?:\/\/(?:otter|hook)(?::|\/|\.)/i },
 ];
 const dependencySections = [
   "dependencies",
@@ -50,7 +50,7 @@ const dependencySections = [
   "peerDependencies",
   "bundledDependencies",
 ];
-const inventoryRelativePath = path.normalize("scripts/acceptance/hook-inventory.mjs");
+const inventoryRelativePath = path.normalize("scripts/acceptance/otter-inventory.mjs");
 
 function isRuntimeFile(fileName) {
   if (/\.(?:test|spec)\.[^.]+$/i.test(fileName)) return false;
@@ -86,8 +86,8 @@ function dependencyNames(packageJson) {
   return names;
 }
 
-function isHookDependency(name) {
-  return /^(?:@[^/]+\/)?hook(?:-client|-sdk|-service)?$/i.test(name);
+function isOtterDependency(name) {
+  return /^(?:@[^/]+\/)?(?:otter|hook)(?:-client|-sdk|-service)?$/i.test(name);
 }
 
 function lineNumberFor(contents, needle) {
@@ -100,7 +100,7 @@ function inspectFile({ contents, relativePath }) {
   const matches = [];
   const lines = contents.split(/\r?\n/);
   lines.forEach((line, index) => {
-    for (const { kind, pattern } of hookPatterns) {
+    for (const { kind, pattern } of otterPatterns) {
       if (pattern.test(line)) {
         matches.push({ file: relativePath, line: index + 1, kind });
         break;
@@ -111,7 +111,7 @@ function inspectFile({ contents, relativePath }) {
   if (path.basename(relativePath).toLowerCase() === "package.json") {
     try {
       const parsed = JSON.parse(contents);
-      for (const dependency of dependencyNames(parsed).filter(isHookDependency)) {
+      for (const dependency of dependencyNames(parsed).filter(isOtterDependency)) {
         matches.push({
           file: relativePath,
           line: lineNumberFor(contents, dependency),
@@ -133,21 +133,21 @@ async function readRuntimeText({ absolutePath, relativePath }) {
     buffer = await readFile(absolutePath);
   } catch (error) {
     throw new Error(
-      `Hook inventory could not read runtime file ${relativePath}: ${error instanceof Error ? error.message : String(error)}`,
+      `Otter inventory could not read runtime file ${relativePath}: ${error instanceof Error ? error.message : String(error)}`,
       { cause: error },
     );
   }
   if (buffer.includes(0)) {
-    throw new Error(`Hook inventory cannot inspect binary runtime file: ${relativePath}`);
+    throw new Error(`Otter inventory cannot inspect binary runtime file: ${relativePath}`);
   }
   try {
     return new TextDecoder("utf-8", { fatal: true }).decode(buffer);
   } catch (error) {
-    throw new Error(`Hook inventory runtime file is not valid UTF-8: ${relativePath}`, { cause: error });
+    throw new Error(`Otter inventory runtime file is not valid UTF-8: ${relativePath}`, { cause: error });
   }
 }
 
-export async function inspectHookInventory({ platformRoot = defaultPlatformRoot } = {}) {
+export async function inspectOtterInventory({ platformRoot = defaultPlatformRoot } = {}) {
   const resolvedPlatformRoot = path.resolve(platformRoot);
   const files = [];
   await walk(resolvedPlatformRoot, resolvedPlatformRoot, files);
@@ -160,7 +160,7 @@ export async function inspectHookInventory({ platformRoot = defaultPlatformRoot 
 
   return {
     schemaVersion: 1,
-    target: "Hook",
+    target: "Otter",
     status: matches.length === 0 ? "not-applicable" : "found-runtime-call-point",
     inspectedFileCount: files.length,
     matches,
@@ -169,7 +169,7 @@ export async function inspectHookInventory({ platformRoot = defaultPlatformRoot 
 
 if (process.argv[1] && path.resolve(process.argv[1]) === modulePath) {
   try {
-    const result = await inspectHookInventory();
+    const result = await inspectOtterInventory();
     console.log(JSON.stringify(result, null, 2));
     process.exitCode = result.status === "not-applicable" ? 0 : 1;
   } catch (error) {

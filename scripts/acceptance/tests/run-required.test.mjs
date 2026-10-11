@@ -116,18 +116,18 @@ test("required orchestration records a failed result when a command runner throw
   await readFile(result.manifest.results[0].evidencePath, "utf8");
 });
 
-test("required orchestration records Hook source inventory as not-applicable instead of passed", async () => {
-  const evidenceDir = await mkdtemp(path.join(os.tmpdir(), "platform-required-hook-inventory-"));
+test("required orchestration records Otter source inventory as not-applicable instead of passed", async () => {
+  const evidenceDir = await mkdtemp(path.join(os.tmpdir(), "platform-required-otter-inventory-"));
   const manifest = createAcceptanceManifest({
-    runId: "required-hook-inventory-test",
+    runId: "required-otter-inventory-test",
     evidenceDir,
   });
   const inventory = [
     {
-      id: "external-hook-inventory",
+      id: "external-otter-inventory",
       layer: "externalBoundary",
       command: process.execPath,
-      args: ["hook-inventory.mjs"],
+      args: ["otter-inventory.mjs"],
     },
   ];
 
@@ -143,7 +143,7 @@ test("required orchestration records Hook source inventory as not-applicable ins
         status: "passed",
         stdout: JSON.stringify({
           schemaVersion: 1,
-          target: "Hook",
+          target: "Otter",
           status: "not-applicable",
           inspectedFileCount: 12,
           matches: [],
@@ -176,7 +176,7 @@ test("required orchestration records Hook source inventory as not-applicable ins
   assert.equal(evidence.inventory.status, "not-applicable");
 });
 
-test("required orchestration keeps a discovered Hook runtime call point failed", async () => {
+test("required orchestration keeps a discovered Otter runtime call point failed", async () => {
   const evidenceDir = await mkdtemp(path.join(os.tmpdir(), "platform-required-hook-found-"));
   const manifest = createAcceptanceManifest({
     runId: "required-hook-found-test",
@@ -188,10 +188,10 @@ test("required orchestration keeps a discovered Hook runtime call point failed",
     evidenceDir,
     inventory: [
       {
-        id: "external-hook-inventory",
+        id: "external-otter-inventory",
         layer: "externalBoundary",
         command: process.execPath,
-        args: ["hook-inventory.mjs"],
+        args: ["otter-inventory.mjs"],
       },
     ],
     validateInventory: false,
@@ -202,7 +202,7 @@ test("required orchestration keeps a discovered Hook runtime call point failed",
         status: "failed",
         stdout: JSON.stringify({
           schemaVersion: 1,
-          target: "Hook",
+          target: "Otter",
           status: "found-runtime-call-point",
           inspectedFileCount: 12,
           matches: [{ file: "package.json", line: 4, kind: "dependency" }],
@@ -249,7 +249,7 @@ test("required inventory exposes stable required and external-boundary ids", asy
     "external-gateway",
     "external-loom",
     "external-tea",
-    "external-hook-inventory",
+    "external-otter-inventory",
   ]);
   assert.equal(validateRequiredInventory(createRequiredInventory()), true);
   assert.throws(

@@ -2,7 +2,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { recordSuiteResult, writeManifestAtomic } from "./manifest.mjs";
-import { inspectHookInventory } from "./hook-inventory.mjs";
+import { inspectOtterInventory } from "./otter-inventory.mjs";
 
 const moduleDir = path.dirname(fileURLToPath(import.meta.url));
 const defaultPlatformRoot = path.resolve(moduleDir, "../..");
@@ -51,7 +51,7 @@ export async function runLiveAcceptance({
   const results = [];
   for (const id of LIVE_SUITE_IDS) {
     if (id === "live-hook") {
-      const inventory = await inspectHookInventory({ platformRoot });
+      const inventory = await inspectOtterInventory({ platformRoot });
       const notApplicable = inventory.status === "not-applicable";
       results.push(
         await recordClassification(manifest, evidenceDir, {
@@ -60,8 +60,8 @@ export async function runLiveAcceptance({
           command: "source-dependency-inventory",
           exitCode: 0,
           skipReason: notApplicable
-            ? "No Platform-owned Hook runtime call point is present in the source and dependency inventory"
-            : "Platform-owned Hook references exist, but the conditional-live probe is not implemented",
+            ? "No Platform-owned Otter runtime call point is present in the source and dependency inventory"
+            : "Platform-owned Otter references exist, but the conditional-live probe is not implemented",
           inventory,
         }),
       );

@@ -39,7 +39,7 @@ Platform is an independent project that participates in the top-level Neuro work
 
 - `../Gateway/` owns the independently runnable AI API gateway runtime.
 - `../Loom/` owns the AI brain and orchestration runtime.
-- `../Hook/` owns foreground interaction such as screenshot and voice input.
+- `../Otter/` owns foreground interaction such as screenshot and voice input.
 - `Platform/` owns the website, account, quota, operator, and service-policy
   layer.
 
