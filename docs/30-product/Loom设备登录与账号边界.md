@@ -1,7 +1,7 @@
 # Loom 设备登录与账号边界
 
 Loom 是本机统一账号入口，继续使用 Platform 的 Linux.do 主账号身份。
-本功能没有新增账号来源。Hook 复用本机 Loom，不持有中心登录私钥。
+本功能没有新增账号来源。Otter 复用本机 Loom，不持有中心登录私钥。
 
 授权链路：Loom 生成 PKCE 与设备密钥 → 系统浏览器打开 `/loom/authorize` →
 现有网页登录 → 用户核对账号、设备与校验码后确认 → Loom 以 verifier 和设备

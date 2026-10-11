@@ -31,7 +31,7 @@ export const REQUIRED_SUITE_IDS = [
   "external-gateway",
   "external-loom",
   "external-tea",
-  "external-hook-inventory",
+  "external-otter-inventory",
 ];
 
 export const REQUIRED_ROOT_SCRIPTS = Object.freeze({
@@ -203,10 +203,10 @@ export function createRequiredInventory({
       timeoutMs: 5 * 60 * 1000,
     },
     {
-      id: "external-hook-inventory",
+      id: "external-otter-inventory",
       layer: "externalBoundary",
       command: process.execPath,
-      args: [path.join(platformRoot, "scripts", "acceptance", "hook-inventory.mjs")],
+      args: [path.join(platformRoot, "scripts", "acceptance", "otter-inventory.mjs")],
       cwd: platformRoot,
     },
   ];
@@ -260,11 +260,11 @@ async function recordRunnerFailure(manifest, spec, error) {
   return recordSuiteResult(manifest, result);
 }
 
-function parseHookInventoryOutput(value) {
+function parseOtterInventoryOutput(value) {
   if (typeof value !== "string" || !value.trim()) return null;
   try {
     const parsed = JSON.parse(value);
-    if (!parsed || parsed.target !== "Hook") return null;
+    if (!parsed || parsed.target !== "Otter") return null;
     if (![
       "not-applicable",
       "found-runtime-call-point",
@@ -275,22 +275,22 @@ function parseHookInventoryOutput(value) {
   }
 }
 
-async function classifyHookInventoryResult(spec, result) {
-  if (spec.id !== "external-hook-inventory") return result;
+async function classifyOtterInventoryResult(spec, result) {
+  if (spec.id !== "external-otter-inventory") return result;
 
   let evidenceDocument = null;
-  let inventory = parseHookInventoryOutput(result.stdout);
+  let inventory = parseOtterInventoryOutput(result.stdout);
   if (!inventory && result.evidencePath) {
     try {
       evidenceDocument = JSON.parse(await readFile(result.evidencePath, "utf8"));
-      inventory = parseHookInventoryOutput(evidenceDocument.stdout);
+      inventory = parseOtterInventoryOutput(evidenceDocument.stdout);
     } catch {
       // A missing or malformed evidence file is handled as a failed inventory below.
     }
   }
   if (!inventory && result.stdoutPath) {
     try {
-      inventory = parseHookInventoryOutput(await readFile(result.stdoutPath, "utf8"));
+      inventory = parseOtterInventoryOutput(await readFile(result.stdoutPath, "utf8"));
     } catch {
       // The command result remains failed when no parseable inventory is available.
     }
@@ -303,10 +303,10 @@ async function classifyHookInventoryResult(spec, result) {
     status: isNotApplicable ? "not-applicable" : "failed",
     exitCode: isNotApplicable ? 0 : commandExitCode === 0 ? 1 : commandExitCode,
     skipReason: isNotApplicable
-      ? "Source/dependency inventory found no Platform-owned Hook runtime call point"
+      ? "Source/dependency inventory found no Platform-owned Otter runtime call point"
       : inventory?.status === "found-runtime-call-point"
-        ? "Hook runtime call point found; required boundary inventory is not-applicable"
-        : "Hook inventory evidence is missing or malformed",
+        ? "Otter runtime call point found; required boundary inventory is not-applicable"
+        : "Otter inventory evidence is missing or malformed",
   };
 
   if (classified.evidencePath && (evidenceDocument || inventory)) {
@@ -342,7 +342,7 @@ export async function runRequiredAcceptance({
     const spec = normalizeSuiteSpec(rawSpec, { evidenceDir, platformRoot });
     try {
       const result = await runCommand(spec);
-      const classified = await classifyHookInventoryResult(spec, result);
+      const classified = await classifyOtterInventoryResult(spec, result);
       results.push(recordSuiteResult(manifest, classified));
     } catch (error) {
       results.push(await recordRunnerFailure(manifest, spec, error));

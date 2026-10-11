@@ -726,7 +726,7 @@ Default long-term deployment baseline:
 
 - Loom 桌面登录继续复用现有 Linux.do 账号。设备批准与签名会话归
   `packages/account-domain/src/modules/loom-account`，Web 通过受限 BFF 转发；
-  Hook 不持有中心账号凭据。后续遵循 `docs/30-product/Loom设备登录与账号边界.md`。
+  Otter 不持有中心账号凭据。后续遵循 `docs/30-product/Loom设备登录与账号边界.md`。
 - 二维码投射 v2 的邀请、绑定、版本元数据和短期地址归
   `packages/account-domain/src/modules/loom-projection`；Web 只提供受限 BFF，
   中心不接收明文图像。会话撤销与投射变更必须原子核验，对端撤销不能退出本机

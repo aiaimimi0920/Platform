@@ -123,14 +123,14 @@ test("not-applicable is an executed classification while required skipped and no
   });
 
   recordSuiteResult(manifest, {
-    id: "hook-inventory",
+    id: "otter-inventory",
     layer: "externalBoundary",
     status: "not-applicable",
     command: "node",
-    args: ["hook-inventory.mjs"],
+    args: ["otter-inventory.mjs"],
     exitCode: 0,
-    evidencePath: path.join(manifest.evidenceDir, "hook-inventory.json"),
-    skipReason: "Source inventory found no Platform-owned Hook call point",
+    evidencePath: path.join(manifest.evidenceDir, "otter-inventory.json"),
+    skipReason: "Source inventory found no Platform-owned Otter call point",
   });
   assert.equal(manifest.suites.externalBoundary.executed, 1);
   assert.equal(
@@ -199,14 +199,14 @@ test("required not-applicable results fail finalization while external-boundary 
     evidenceDir: path.join(os.tmpdir(), "platform-evidence"),
   });
   recordSuiteResult(external, {
-    id: "external-hook-inventory",
+    id: "external-otter-inventory",
     layer: "externalBoundary",
     status: "not-applicable",
     command: "source-inventory",
     args: [],
     exitCode: 0,
-    evidencePath: path.join(external.evidenceDir, "external-hook-inventory.json"),
-    skipReason: "Source inventory has no Platform-owned Hook call point",
+    evidencePath: path.join(external.evidenceDir, "external-otter-inventory.json"),
+    skipReason: "Source inventory has no Platform-owned Otter call point",
   });
   assert.equal(
     finalizeAcceptanceManifest(external, { requiredLayers: ["externalBoundary"] }).exitCode,
