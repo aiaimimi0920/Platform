@@ -1,9 +1,15 @@
 "use server";
 
 import { signIn, signOut } from "@/auth";
+import { getIdentityProvider } from "@/lib/identity-provider";
 
 export async function loginWithLinuxDo(): Promise<void> {
   await signIn("linuxdo", { redirectTo: "/?auth=success" });
+}
+
+export async function loginWithRauthy(): Promise<void> {
+  if (getIdentityProvider() !== "rauthy") throw new Error("Rauthy login is disabled");
+  await signIn("rauthy", { redirectTo: "/?auth=success" });
 }
 
 export async function loginWithLocalDev(): Promise<void> {

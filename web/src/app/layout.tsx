@@ -1,3 +1,4 @@
+import { getIdentityProvider } from "@/lib/identity-provider";
 import type { Metadata } from "next";
 
 import { auth } from "@/auth";
@@ -22,7 +23,7 @@ import "@/features/account-task-market/styles.css";
 
 export const metadata: Metadata = {
   title: "NeuroLoom",
-  description: "Linux.do-only account access terminal for NeuroLoom.",
+  description: "Account access terminal for NeuroLoom.",
 };
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
@@ -47,7 +48,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           <script src="https://mcp.figma.com/mcp/html-to-design/capture.js" async />
         ) : null}
         <AppShell
-          authActionSlot={session?.user?.id ? <SignOutButton /> : <SignInButton />}
+          authActionSlot={session?.user?.id ? <SignOutButton /> : <SignInButton mode={getIdentityProvider()} />}
           currentUserId={session?.user?.id ?? null}
           features={features}
           publicSurfaces={publicSurfaces}

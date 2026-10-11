@@ -10,18 +10,20 @@
     "build": "tsc -p tsconfig.json && tsc-alias -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "db:migrate": "node dist/scripts/migrate.js",
-    "test": "node --test --import tsx src/concurrency-guards.test.ts src/modules/email-native/model.test.ts src/modules/email-ingress/model.test.ts src/modules/mailbox/player/idempotency.test.ts src/modules/user-progression/task-scope.test.ts",
+    "test": "node --test --import tsx src/concurrency-guards.test.ts src/modules/email-native/model.test.ts src/modules/email-ingress/model.test.ts src/modules/mailbox/player/idempotency.test.ts src/modules/user-progression/task-scope.test.ts src/modules/identity/tests/rauthy-model.test.ts src/modules/identity/tests/rauthy-rate-limit.test.ts src/modules/identity/tests/rauthy-rate-limit-connection.test.ts",
     "pretest:integration": "npm run build --workspace @neuro/contracts && npm run build --workspace @neuro/backend-foundation",
-    "test:integration": "npm run test:integration:mailbox-player && npm run test:integration:reputation && npm run test:integration:loom-account",
+    "test:integration": "npm run test:integration:mailbox-player && npm run test:integration:reputation && npm run test:integration:loom-account && npm run test:integration:identity",
     "test:integration:required": "npm run test:integration",
     "test:integration:mailbox-player": "node --import tsx ../../scripts/testing/run-domain-integration.ts --test-file src/modules/mailbox/player/idempotency.integration.test.ts",
     "test:integration:loom-account": "node ../../scripts/testing/run-loom-account.mjs",
-    "test:integration:reputation": "node --import tsx ../../scripts/testing/run-domain-integration.ts --test-file src/modules/reputation/tests/invariants.integration.test.ts --extra-migration migrations/20260324_00_account_schema_bootstrap.sql --extra-migration migrations/20260324_01_account_read_indexes.sql"
+    "test:integration:reputation": "node --import tsx ../../scripts/testing/run-domain-integration.ts --test-file src/modules/reputation/tests/invariants.integration.test.ts --extra-migration migrations/20260324_00_account_schema_bootstrap.sql --extra-migration migrations/20260324_01_account_read_indexes.sql",
+    "test:integration:identity": "node --import tsx ../../scripts/testing/run-domain-integration.ts --test-file src/modules/identity/tests/rauthy.integration.test.ts --extra-migration migrations/20260324_00_account_schema_bootstrap.sql --extra-migration migrations/20260326_04_personal_missions.sql --extra-migration migrations/20260326_05_personal_mission_checkin_wagers.sql --extra-migration migrations/20260327_00_mailbox_game_ui_fields.sql --extra-migration migrations/20260329_00_user_profile_tagline.sql --extra-migration migrations/20260330_00_user_honor_showcased_agent_ids.sql --extra-migration migrations/20260330_01_user_honor_project_showcases.sql --extra-migration migrations/20260331_00_user_honor_issue_showcases.sql --extra-migration migrations/20260411_00_email_native_access.sql --extra-migration migrations/20261002_00_oidc_identities.sql"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.918.0",
     "@aws-sdk/s3-request-presigner": "^3.918.0",
     "@fastify/cors": "^11.1.0",
+    "@fastify/rate-limit": "10.3.0",
     "@neuro/backend-foundation": "*",
     "@neuro/contracts": "*",
     "drizzle-orm": "^0.45.2",

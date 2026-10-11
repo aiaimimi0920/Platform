@@ -10,6 +10,7 @@ const { values } = parseArgs({ options: { daemon: { type: "string" }, projection
 if (values.projection && !values.daemon) throw new Error("--projection requires --daemon");
 const tests = values.daemon ? ["scripts/testing/loom-account-native-smoke.ts"] : [
   "packages/account-domain/src/modules/loom-account/login.integration.test.ts",
+  "packages/account-domain/src/modules/identity/tests/rauthy-rate-limit.integration.test.ts",
   "packages/account-domain/src/modules/loom-projection/tests/lifecycle.integration.test.ts",
   "packages/account-domain/src/modules/loom-projection/tests/authorization.integration.test.ts",
   "packages/account-domain/src/modules/loom-projection/tests/discovery.integration.test.ts",

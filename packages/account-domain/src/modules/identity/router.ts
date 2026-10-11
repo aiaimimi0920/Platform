@@ -1,6 +1,7 @@
 import type { FastifyPluginAsync } from "fastify";
 import { z } from "zod";
 
+import { rauthyIdentityRouter } from "@/modules/identity/rauthy-router";
 import { getPublicUserProfile, getUserSummary, updateUserProfile, upsertLinuxDoUser } from "@/modules/identity/service";
 import { getFeatureSnapshot, requireModuleEnabled } from "@/platform/feature-modules/service";
 import { assertUserContext, withInternalRequest } from "@/platform/internal-auth";
@@ -24,6 +25,7 @@ const updateUserProfileSchema = z.object({
 });
 
 export const identityRouter: FastifyPluginAsync = async (app) => {
+  await app.register(rauthyIdentityRouter);
   // Public — no user context required
   app.get<{ Params: { username: string } }>(
     "/v1/public/users/:username",

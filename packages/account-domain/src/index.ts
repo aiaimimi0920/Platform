@@ -5,6 +5,7 @@ export { env } from "./env";
 export { identityRouter } from "./modules/identity/router";
 export { loomAccountRouter } from "./modules/loom-account/router";
 export { loomProjectionRouter } from "./modules/loom-projection/router";
+export { upsertRauthyUser } from "./modules/identity/rauthy-service";
 export { getUserSummary, upsertLinuxDoUser } from "./modules/identity/service";
 export {
   acceptMailgunInboundWebhook,
@@ -225,7 +226,7 @@ export {
 } from "./modules/user-progression/service";
 export type { UserProgressionMetricValues } from "./modules/user-progression/model";
 
-export { authIdentities, users } from "./modules/identity/schema";
+export { authIdentities, oidcIdentities, users } from "./modules/identity/schema";
 export { agentExecutionRouter } from "./modules/agent-execution/router";
 export {
   clearAgentExecutionOwnerReliefHandoffDefaultForOperator,

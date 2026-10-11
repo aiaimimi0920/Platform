@@ -9,6 +9,8 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 
 import { Client } from "pg";
 
+import { installCliExitCodeGuard } from "./cli-exit-code.mjs";
+
 const defaultPlatformRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const defaultFixtureRoot = path.join(defaultPlatformRoot, ".runtime", "acceptance", "integration-fixture");
 const defaultS3Bucket = "platform-integration";
@@ -434,14 +436,19 @@ function parseArgs(argv = process.argv.slice(2)) {
   return { fixtureRoot, runId };
 }
 
-if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+export async function runIntegrationCli(getOptions = parseArgs) {
+  const setExitCode = installCliExitCodeGuard();
   try {
-    const options = parseArgs();
+    const options = getOptions();
     const summary = await runRequiredIntegrationFixture(options);
     console.log(JSON.stringify(summary));
-    process.exitCode = summary.exitCode;
+    setExitCode(summary.exitCode);
   } catch (error) {
     console.error(error instanceof Error ? error.message : String(error));
-    process.exitCode = 1;
+    setExitCode(1);
   }
+}
+
+if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  await runIntegrationCli();
 }

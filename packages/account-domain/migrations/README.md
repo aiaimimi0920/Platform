@@ -34,3 +34,6 @@ Current boundary:
 - `20260326_04_personal_missions.sql` adds the unified `personal_mission_definitions / personal_mission_claims` tables, seeds the first personal mission catalog, and migrates development-era签到/日常/周常领取记录 out of the retired `daily_* / weekly_*` tables.
 - `20260327_01_mailbox_favorites_and_delete.sql` adds `mailbox_messages.favorited_at` plus prune-friendly indexes, so mailbox favorites can pin to the top of the inbox while automatic overflow cleanup skips favorited mail instead of deleting it first.
 - `20260327_08_agent_execution_owner_relief_handoff_follow_up_profile.sql` extends owner-relief typed handoff defaults and handoff sessions with `follow_up_profile`, so `/ops/agent-callbacks` can persist whether a handoff is inspect-only, should be resolved after review, or is expected to reopen owner relief after the follow-up.
+- `20261002_00_oidc_identities.sql` adds fresh Rauthy OIDC identities keyed by exact
+  `(issuer, subject)`, with user foreign keys and truthful email claim metadata.
+  It does not link, modify or delete legacy identities or accounts.

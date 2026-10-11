@@ -1,6 +1,6 @@
 "use client";
 
-import { loginWithLinuxDo, loginWithLocalDev } from "@/lib/auth-actions";
+import { loginWithLinuxDo, loginWithLocalDev, loginWithRauthy } from "@/lib/auth-actions";
 import { useCallback } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -13,14 +13,14 @@ export function SignInButton({
   label,
 }: {
   className?: string;
-  mode?: "linuxdo" | "local-dev";
+  mode?: "linuxdo" | "rauthy" | "local-dev";
   label?: string;
 }) {
   const markResumeTransition = useCallback(() => {
     document.cookie = `${LANDING_RESUME_COOKIE}=1; Max-Age=600; Path=/; SameSite=Lax`;
   }, []);
-  const action = mode === "local-dev" ? loginWithLocalDev : loginWithLinuxDo;
-  const text = label || (mode === "local-dev" ? "使用本地开发账号登录" : "使用 Linux Do 登录");
+  const action = mode === "local-dev" ? loginWithLocalDev : mode === "rauthy" ? loginWithRauthy : loginWithLinuxDo;
+  const text = label || (mode === "local-dev" ? "使用本地开发账号登录" : mode === "rauthy" ? "使用 Rauthy 登录" : "使用 Linux Do 登录");
   return (
     <form action={action} onSubmit={markResumeTransition}>
       <Button className={className} type="submit" variant="primary">

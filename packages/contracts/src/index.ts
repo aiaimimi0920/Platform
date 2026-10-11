@@ -310,7 +310,9 @@ export type UserSnapshot = {
 
 export type UserSummary = {
   id: string;
-  provider: "linuxdo";
+  provider: "linuxdo" | "rauthy";
+  providerIssuer?: string;
+  displayName?: string | null;
   providerUserId: string;
   username: string;
   email: string | null;
@@ -4175,6 +4177,8 @@ export type DispatchDecisionView = {
   assignmentMode: "application" | "agentProposal";
   decidedAt: string;
 };
+
+export type { RauthyUpsertInput, RauthyUpsertResult } from "./rauthy-identity";
 
 export type LinuxDoUpsertInput = {
   id: string;

@@ -12,6 +12,7 @@ import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 import { db } from "@/db/client";
 import * as schema from "@/db/schema";
 import { env } from "@/env";
+import { findLoginIdentityForUser } from "@/modules/identity/repository";
 import { authIdentities, users } from "@/modules/identity/schema";
 import { getUserProgressionSnapshot } from "@/modules/user-progression/service";
 import { getCorePlatformSummary } from "@/platform/core-integration/service";
@@ -183,11 +184,15 @@ async function mapUserSummary(args: {
   tx?: DbTx;
   user: typeof users.$inferSelect;
   providerUserId: string;
+  provider?: UserSummary["provider"];
+  providerIssuer?: string;
+  displayName?: string | null;
   features?: FeatureSnapshot | null;
 }): Promise<UserSummary> {
   return {
     id: args.user.id,
-    provider: "linuxdo",
+    provider: args.provider ?? "linuxdo",
+    ...(args.providerIssuer ? { providerIssuer: args.providerIssuer, displayName: args.displayName ?? null } : {}),
     providerUserId: args.providerUserId,
     username: args.user.username,
     email: args.user.email,
@@ -407,22 +412,8 @@ export async function upsertLinuxDoUser(profile: LinuxDoUpsertInput): Promise<Us
 }
 
 export async function getUserSummary(userId: string, features?: FeatureSnapshot | null): Promise<UserSummary | null> {
-  const [row] = await db
-    .select({
-      identity: authIdentities,
-      user: users,
-    })
-    .from(authIdentities)
-    .innerJoin(users, eq(authIdentities.userId, users.id))
-    .where(and(eq(authIdentities.provider, "linuxdo"), eq(authIdentities.userId, userId)));
-
-  if (!row) return null;
-
-  return mapUserSummary({
-    user: row.user,
-    providerUserId: row.identity.providerUserId,
-    features,
-  });
+  const identity = await findLoginIdentityForUser(userId);
+  return identity ? mapUserSummary({ ...identity, features }) : null;
 }
 
 export async function getPublicUserProfile(username: string): Promise<PublicUserProfile | null> {
@@ -534,20 +525,6 @@ export async function updateUserProfile(
     return null;
   }
 
-  const [identity] = await db
-    .select()
-    .from(authIdentities)
-    .where(and(eq(authIdentities.provider, "linuxdo"), eq(authIdentities.userId, userId)))
-    .limit(1);
-
-  if (!identity) {
-    return null;
-  }
-
   const features = await getFeatureSnapshot();
-  return mapUserSummary({
-    user: row,
-    providerUserId: identity.providerUserId,
-    features,
-  });
+  return getUserSummary(userId, features);
 }

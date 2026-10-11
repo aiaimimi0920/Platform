@@ -27,6 +27,7 @@ type EmbeddedPostgresConstructor = new (options: {
   password: string;
   port: number;
   persistent: boolean;
+  postgresFlags: string[];
 }) => EmbeddedPostgresInstance;
 
 type PgCtlPackageModule = {
@@ -222,7 +223,7 @@ async function startFakeRedisServer() {
     }
     if (command === "INFO") {
       const payload = "# Server\r\nredis_version:7.2.0\r\n\r\n";
-      socket.write(`$${Buffer.byteLength(payload)}\r\n${payload}`);
+      socket.write(`$${Buffer.byteLength(payload)}\r\n${payload}\r\n`);
       return;
     }
     if (command === "GET") {
@@ -472,6 +473,7 @@ export async function createCoreIntegrationContext(
     password: POSTGRES_PASSWORD,
     port,
     persistent: false,
+    postgresFlags: ["-k", ""],
   });
 
   await postgres.initialise();

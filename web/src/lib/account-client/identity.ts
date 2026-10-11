@@ -2,6 +2,7 @@ import type {
   InternalUserContext,
   LinuxDoUpsertInput,
   LinuxDoUpsertResult,
+  RauthyUpsertInput,
   PublicUserProfile,
   ReputationBreakdown,
   ReputationHistoryPoint,
@@ -25,6 +26,12 @@ export async function upsertLinuxDoUser(profile: LinuxDoUpsertInput): Promise<Li
   return accountRequest<LinuxDoUpsertResult>("/internal/identity/linuxdo-upsert", {
     method: "POST",
     body: profile,
+  });
+}
+
+export async function upsertRauthyUser(profile: RauthyUpsertInput): Promise<{ user: UserSummary }> {
+  return accountRequest<{ user: UserSummary }>("/internal/identity/rauthy-upsert", {
+    method: "POST", body: profile,
   });
 }
 
